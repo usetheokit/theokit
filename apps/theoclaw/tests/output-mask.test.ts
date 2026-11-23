@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EmailAdapter } from '@theokit/gateway-email'
 import { LineAdapter } from '@theokit/gateway-line'
 
-import { installOutputMask } from '../src/channels/output-mask.js'
-import type { MaskableStream, OutputMask } from '../src/channels/output-mask.js'
-import { TheoClawConfigError } from '../src/control-plane/errors.js'
+import { installOutputMask } from '../src/control-client/masked-entry.js'
+import type { MaskableStream, OutputMask } from '../src/control-client/masked-entry.js'
+import { ConfigurationError } from '@theokit/sdk'
 
 /** A stream that keeps every byte written to it. */
 function capturingStream(): MaskableStream & { readonly bytes: () => Buffer; readonly text: () => string } {
@@ -203,12 +203,13 @@ describe('installOutputMask', () => {
     expect(capture.text()).toBe('<[redacted]>')
   })
 
-  it('calls the callback of a write that is held back whole', () => {
+  it('calls the callback of a write that is held back whole', async () => {
     const capture = capturingStream()
     mask = installOutputMask(['mail-pass-456'], [capture])
     const done = vi.fn()
 
     capture.write('mail-pa', done)
+    await new Promise((resolve) => process.nextTick(resolve))
 
     expect(done).toHaveBeenCalledTimes(1)
     expect(capture.text()).toBe('')
@@ -258,14 +259,14 @@ describe('installOutputMask', () => {
   it('refuses the same stream listed twice', () => {
     const capture = capturingStream()
 
-    expect(() => installOutputMask(['x-secret'], [capture, capture])).toThrow(TheoClawConfigError)
+    expect(() => installOutputMask(['x-secret'], [capture, capture])).toThrow(ConfigurationError)
   })
 
   it('refuses to install twice on the same stream', () => {
     const capture = capturingStream()
     mask = installOutputMask(['x-secret'], [capture])
 
-    expect(() => installOutputMask(['x-secret'], [capture])).toThrow(TheoClawConfigError)
+    expect(() => installOutputMask(['x-secret'], [capture])).toThrow(ConfigurationError)
   })
 
   it('calls the write callback', () => {

@@ -1,5 +1,4 @@
-import type { ThinkingLevel } from '../agent/failover.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import type { ThinkingLevel } from '../agent/create-agent.js'
 import { type CompactSettings, runCompact } from '../channels/compact-command.js'
 import { STEER_IDLE_REPLY, STEERED_REPLY } from '../channels/reply-handler.js'
 import type { TurnRunner } from '../control-plane/turn.js'
@@ -61,7 +60,7 @@ export function webchatTurnFor(options: WebchatCommandOptions): (chatId: string)
         options.withChatAgent(event, async (lease) => {
           try {
             if (turnsOf(chatId).size === 0) return STEER_IDLE_REPLY
-            await lease.agent.send(note, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+            await lease.agent.send(note, { queueMode: 'steer' })
             return STEERED_REPLY
           } finally {
             lease.release()

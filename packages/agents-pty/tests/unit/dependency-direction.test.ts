@@ -31,6 +31,10 @@ describe('dependency direction', () => {
     ).toBeUndefined()
   })
 
+  it('@theokit/sdk-pty is required at a version that has the confined backend', () => {
+    expect(pkg.dependencies?.['@theokit/sdk-pty']).toMatch(/^>=0\.([4-9]|\d{2,})\./)
+  })
+
   it('asks the consumer for nothing — a peerless install is the point', () => {
     // The whole reason this package exists is that the native step should be opt-in. A peer here
     // would put the choice back on every consumer's manifest.

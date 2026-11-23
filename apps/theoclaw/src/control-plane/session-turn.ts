@@ -6,7 +6,6 @@ import {
 } from '@theokit/agents/bridge'
 
 import { toSdkMessage, toSdkTimelineEvent, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { createEventMask } from './event-mask.js'
 import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
@@ -57,7 +56,7 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
  * throws; the session store decides what an interrupted or failed turn answers.
  */
 export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptions): Promise<TurnOutcome> {
-  const run = await agent.send(options.message, { ...untrustedContentSendOptions(), signal: options.signal })
+  const run = await agent.send(options.message, { signal: options.signal })
   options.onRun(run)
   const mask = createEventMask(options.secrets ?? [], options.emit)
   const streamedError = await emitTimeline(run, { ...options, emit: mask.emit })

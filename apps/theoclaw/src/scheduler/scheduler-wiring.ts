@@ -16,7 +16,6 @@ import {
 import { gatewayDeliverPort } from '@theokit/gateway-agent'
 import type { CustomTool } from '@theokit/sdk'
 
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { createContainer } from '../agent-container.js'
 import type { TurnAgent } from '../agent-port.js'
 import { type ChannelLoop, maskSecrets } from '../channels/channel-loop.js'
@@ -62,7 +61,7 @@ function handleOf(agent: TurnAgent): Parameters<Parameters<typeof agentRunPort>[
     agentId: 'theoclaw-scheduled-run',
     send: async (message, options) => {
       if (typeof message !== 'string') throw new Error('a scheduled run sends its prompt as text')
-      const run = await agent.send(message, { ...options, ...untrustedContentSendOptions() })
+      const run = await agent.send(message, options)
       return {
         wait: async () => {
           const outcome = await run.wait()
@@ -84,10 +83,7 @@ function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPo
   const { withAgent } = createContainer<TurnAgent>({
     factory: () => buildRunAgent(runAgentToolOptions(tools)),
   })
-  return agentRunPort(
-    (work) => withAgent((agent) => work(handleOf(agent))),
-    { sendOptions: untrustedContentSendOptions() },
-  )
+  return agentRunPort((work) => withAgent((agent) => work(handleOf(agent))))
 }
 
 /**

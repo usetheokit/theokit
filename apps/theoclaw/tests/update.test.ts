@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { plistPath } from '../src/daemon-launchd.js'
+import { definitionPath } from '../src/daemon.js'
 import { channelBranch, update } from '../src/update.js'
 import { cleanScratch, commit, git, harness, installLaunchAgent, installUnit, installedAt, snapshot, world } from './support/update-world.js'
 
@@ -126,7 +126,7 @@ describe('theoclaw update', () => {
     expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw'), 'utf8').trim()).toBe(c1)
 
     const bare = harness(w, { platform: 'darwin', uid: 501 })
-    rmSync(plistPath('theoclaw', w.home))
+    rmSync(definitionPath('darwin', 'theoclaw', w.home))
     commit(w.upstream, 'again', '2\n')
     git(w.upstream, 'push', '-q', 'origin', 'main')
     expect(await update({}, bare.io, bare.runner)).toBe(0)

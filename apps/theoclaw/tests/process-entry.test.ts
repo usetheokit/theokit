@@ -125,6 +125,26 @@ describe('the process entry', () => {
     expect(harness.exit).toHaveBeenCalledWith(0)
   })
 
+  it('drains the runners before it closes the control plane, and a runner failure is written', async () => {
+    const order: string[] = []
+    const harness = shutdownHarness(
+      async () => {
+        order.push('runners')
+        throw new Error('drain failed')
+      },
+      async () => {
+        order.push('control plane')
+      },
+    )
+
+    harness.signals.emit('SIGTERM')
+
+    await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
+    expect(order).toEqual(['runners', 'control plane'])
+    expect(harness.lines).toEqual(['theoclaw: stopping the runners failed: drain failed'])
+    expect(harness.exit).toHaveBeenCalledWith(1)
+  })
+
   it('unconfigured platform answers 404 and unstarted answers 503', async () => {
     const router = routerOf({
       routes: new Map([['line', spyRoute()]]),

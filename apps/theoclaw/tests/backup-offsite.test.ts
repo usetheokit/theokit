@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { backupInstance, downloadBackup, restoreInstance, uploadBackup } from '../src/backup/backup.js'
-import { takeInstanceLock } from '../src/backup/instance-lock.js'
+import { takeInstanceLock } from '../src/instance.js'
 
 const roots: string[] = []
 afterEach(() => { vi.unstubAllGlobals(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -15,7 +15,7 @@ it('snapshots committed WAL sessions while running, uploads offsite and restores
   const state = join(root, 'state'), workspace = join(root, 'workspace')
   mkdirSync(state); mkdirSync(workspace)
   const db = new DatabaseSync(join(state, 'sessions'))
-  const lock = takeInstanceLock(state)
+  const lock = await takeInstanceLock(state)
   try {
     db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE sessions (word TEXT); INSERT INTO sessions VALUES ('remember-me')")
     const objects = new Map<string, Uint8Array>()
@@ -45,7 +45,7 @@ it('snapshots committed WAL sessions while running, uploads offsite and restores
       expect(check.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
       expect(check.prepare('SELECT word FROM sessions').all()).toEqual([{ word: 'remember-me' }])
     } finally { check.close() }
-  } finally { db.close(); lock.release() }
+  } finally { db.close(); await lock.release() }
 })
 
 it('does not publish a completion manifest after an upload failure', async () => {
@@ -113,7 +113,7 @@ it.each([false, true])('preserves deleted-row gaps and references to surviving r
     INSERT INTO session_references VALUES (2);
     DELETE FROM sessions WHERE rowid = 1;
   `)
-  const lock = live ? takeInstanceLock(state) : undefined
+  const lock = live ? await takeInstanceLock(state) : undefined
   if (!live) db.close()
   try {
     const env = { THEOCLAW_STATE_DIR: state, THEOCLAW_WORKSPACE: workspace, XDG_CONFIG_HOME: join(root, 'config') }
@@ -126,5 +126,5 @@ it.each([false, true])('preserves deleted-row gaps and references to surviving r
       expect(check.prepare('SELECT sessions.word FROM session_references JOIN sessions ON sessions.rowid = session_references.session_rowid').all())
         .toEqual([{ word: 'surviving' }])
     } finally { check.close() }
-  } finally { if (live) db.close(); lock?.release() }
+  } finally { if (live) db.close(); await lock?.release() }
 })

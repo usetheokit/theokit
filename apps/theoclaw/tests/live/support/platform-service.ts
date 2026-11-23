@@ -3,9 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-import { unitPath } from '../../../src/daemon.js'
 import { runCommand } from '../../../src/run-command.js'
-import { plistPath } from '../../../src/daemon-launchd.js'
+import { definitionPath } from '../../../src/daemon.js'
 
 /**
  * What the live daemon test asks of the platform's service, one answer per backend (B-692): whether
@@ -24,7 +23,7 @@ export interface PlatformService {
 const HOME = homedir()
 
 const systemd: PlatformService = {
-  definitionExists: (label) => Promise.resolve(existsSync(unitPath(label, HOME))),
+  definitionExists: (label) => Promise.resolve(existsSync(definitionPath('linux', label, HOME))),
   isRunning: async (label) => (await runCommand('systemctl', ['--user', 'is-active', `${label}.service`])).stdout.trim() === 'active',
   log: (label) => {
     try {
@@ -36,7 +35,7 @@ const systemd: PlatformService = {
 }
 
 const launchd: PlatformService = {
-  definitionExists: (label) => Promise.resolve(existsSync(plistPath(label, HOME))),
+  definitionExists: (label) => Promise.resolve(existsSync(definitionPath('darwin', label, HOME))),
   isRunning: async (label) => {
     const answer = await runCommand('launchctl', ['print', `gui/${process.getuid?.() ?? 0}/${label}`])
     return answer.code === 0 && /^\s*state = running$/m.test(answer.stdout)

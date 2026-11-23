@@ -1,4 +1,5 @@
-import type { SandboxMode } from '@theokit/agents/sandbox'
+import { DockerSandbox } from '@theokit/agents/sandbox'
+import type { DockerRunner, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
@@ -49,4 +50,49 @@ export function readSandboxSessions(env: Readonly<Record<string, string | undefi
 export function sandboxModeForSession(chosen: SandboxMode, sessions: SandboxSessions, sessionKey: string): SandboxMode {
   if (sessions === 'all' || sessionKey === MAIN_SESSION_KEY) return chosen
   return chosen === 'read-only' ? 'read-only' : 'workspace-write'
+}
+
+/** Every container theoclaw makes carries `theoclaw.sandbox=1` and its session under `theoclaw.session`. */
+export const SANDBOX_LABEL = 'theoclaw.sandbox'
+export const SESSION_LABEL = 'theoclaw.session'
+
+/** The values `THEOCLAW_SANDBOX_BACKEND` accepts, in the order the refusal names them. */
+export const SANDBOX_BACKENDS = ['bwrap', 'docker'] as const
+export type SandboxBackendName = (typeof SANDBOX_BACKENDS)[number]
+
+/** `THEOCLAW_SANDBOX_BACKEND`: unset or blank is `bwrap`; anything but `bwrap` or `docker` is refused. */
+export function readSandboxBackend(env: Readonly<Record<string, string | undefined>>): SandboxBackendName {
+  const value = env.THEOCLAW_SANDBOX_BACKEND?.trim() ?? ''
+  if (value === '') return 'bwrap'
+  if ((SANDBOX_BACKENDS as readonly string[]).includes(value)) return value as SandboxBackendName
+  throw new TheoClawConfigError(`THEOCLAW_SANDBOX_BACKEND must be one of ${SANDBOX_BACKENDS.join(', ')}; got "${value}"`, {
+    variable: 'THEOCLAW_SANDBOX_BACKEND',
+  })
+}
+
+/** What a test injects: the `docker` process. */
+export interface DockerBackendDeps {
+  readonly dockerRunner?: DockerRunner
+}
+
+/**
+ * A `DockerSandbox` over `workDir` honoring `mode`. `workspace-write` mounts it read-write; `read-only`
+ * mounts it read-only (`readOnlyWorkspace`). Every container carries theoclaw's labels so `sandbox list`
+ * names it, and `keepLast` keeps the session's latest one after it exits and removes the earlier ones.
+ * The container has no way to be unconfined, so `danger-full-access` is refused, never downgraded.
+ */
+export function createDockerBackend(mode: SandboxMode, workDir: string, deps: DockerBackendDeps = {}, session: string = MAIN_SESSION_KEY): SandboxBackend {
+  if (mode === 'danger-full-access') {
+    throw new TheoClawConfigError(
+      'THEOCLAW_SANDBOX_BACKEND=docker cannot honor THEOCLAW_SANDBOX=danger-full-access: a container is always confined; choose workspace-write or read-only, or THEOCLAW_SANDBOX_BACKEND=bwrap',
+      { variable: 'THEOCLAW_SANDBOX_BACKEND' },
+    )
+  }
+  return new DockerSandbox({
+    workDir,
+    ...(deps.dockerRunner === undefined ? {} : { runner: deps.dockerRunner }),
+    readOnlyWorkspace: mode === 'read-only',
+    labels: { [SANDBOX_LABEL]: '1', [SESSION_LABEL]: session },
+    keepLast: { key: session },
+  })
 }

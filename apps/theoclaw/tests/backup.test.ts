@@ -3,8 +3,8 @@
  * `theoclaw restore`. Child processes are real processes, so a pid is a real holder.
  */
 import { type ChildProcess, spawn } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,12 +12,11 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  chmodSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -28,18 +27,14 @@ import {
   type Manifest,
   restoreInstance,
 } from '../src/backup/backup.js'
-import {
-  claimInstance,
-  InstanceLockedError,
-  instanceLockPath,
-  takeInstanceLock,
-} from '../src/backup/instance-lock.js'
-import { NO_PROFILE } from '../src/instance.js'
+import { InstanceLockedError } from '@theokit/sdk/persistence'
+
+import { claimInstance, NO_PROFILE, removeOwnLockSync, takeInstanceLock } from '../src/instance.js'
 import { waitFor } from './fakes.js'
 
 const APP_DIR = fileURLToPath(new URL('..', import.meta.url))
 const TSX_LOADER = import.meta.resolve('tsx')
-const LOCK_MODULE = join(APP_DIR, 'src', 'backup', 'instance-lock.ts')
+const SDK_PERSISTENCE = import.meta.resolve('@theokit/sdk/persistence')
 
 const scratch: string[] = []
 const children: ChildProcess[] = []
@@ -64,10 +59,12 @@ async function deadPid(): Promise<number> {
 }
 
 /** A lock left by a process that is gone, as a crash leaves it. */
-async function staleLock(stateDir: string): Promise<string> {
-  const nonce = randomBytes(16).toString('hex')
-  writeFileSync(instanceLockPath(stateDir), `${await deadPid()}\n${nonce}\n`, { mode: 0o600 })
-  return nonce
+async function staleLock(stateDir: string): Promise<void> {
+  writeFileSync(
+    `${resolve(stateDir)}.instance.lock`,
+    JSON.stringify({ pid: await deadPid(), nonce: 'a'.repeat(32) }),
+    { mode: 0o600 },
+  )
 }
 
 interface LockChild {
@@ -80,18 +77,20 @@ interface LockChild {
 
 /** A child process that takes the instance lock and holds it until `end()`. */
 function lockChild(stateDir: string, startGate?: string): LockChild {
-  const script = join(tempDir(), 'take.ts')
+  const script = join(tempDir(), 'take.mts')
   writeFileSync(
     script,
     [
-      `import { existsSync } from "node:fs";`,
-      `import { takeInstanceLock } from ${JSON.stringify(LOCK_MODULE)};`,
+      `import { existsSync, mkdirSync } from "node:fs";`,
+      `import { dirname, resolve } from "node:path";`,
+      `import { acquireInstanceLock } from ${JSON.stringify(SDK_PERSISTENCE)};`,
+      `mkdirSync(dirname(resolve(process.argv[2])), { recursive: true });`,
       `const gate = process.argv[3];`,
       `while (gate !== undefined && !existsSync(gate)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2);`,
-      `let release = () => {};`,
-      `try { release = takeInstanceLock(process.argv[2]).release; process.stdout.write("took\\n"); }`,
+      `let release = async () => {};`,
+      `try { const lock = await acquireInstanceLock(process.argv[2]); release = () => lock.release(); process.stdout.write("took\\n"); }`,
       `catch (error) { process.stdout.write("refused " + error.message + "\\n"); }`,
-      `process.stdin.on("end", () => { release(); process.exit(0); });`,
+      `process.stdin.on("end", () => { release().then(() => process.exit(0)); });`,
       `process.stdin.resume();`,
     ].join('\n'),
   )
@@ -128,23 +127,23 @@ interface RaceChild {
  * answer and holds the lock until the round's `done` file exists.
  */
 function raceChild(root: string, rounds: number): RaceChild {
-  const script = join(tempDir(), 'race.ts')
+  const script = join(tempDir(), 'race.mts')
   writeFileSync(
     script,
     [
       `import { existsSync } from "node:fs";`,
       `import { join } from "node:path";`,
-      `import { takeInstanceLock } from ${JSON.stringify(LOCK_MODULE)};`,
+      `import { acquireInstanceLock } from ${JSON.stringify(SDK_PERSISTENCE)};`,
       `const pause = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2);`,
       `for (let round = 0; round < Number(process.argv[3]); round += 1) {`,
       `  const dir = join(process.argv[2], "round-" + round);`,
       `  process.stdout.write("ready\\n");`,
       `  while (!existsSync(join(dir, "go"))) pause();`,
-      `  let release = () => {};`,
-      `  try { release = takeInstanceLock(join(dir, "state")).release; process.stdout.write("took\\n"); }`,
+      `  let release = async () => {};`,
+      `  try { const lock = await acquireInstanceLock(join(dir, "state")); release = () => lock.release(); process.stdout.write("took\\n"); }`,
       `  catch (error) { process.stdout.write("refused " + error.message + "\\n"); }`,
       `  while (!existsSync(join(dir, "done"))) pause();`,
-      `  release();`,
+      `  await release();`,
       `}`,
     ].join('\n'),
   )
@@ -190,33 +189,41 @@ async function race(
 }
 
 describe('the instance lock (FR-010)', () => {
-  it('a second take of a held lock is refused naming the pid', () => {
+  it('the exit-time removal deletes a lock this process holds and leaves one taken over by another pid', async () => {
     const stateDir = join(tempDir(), 'state')
-    const lock = takeInstanceLock(stateDir)
-    expect(() => takeInstanceLock(stateDir)).toThrow(InstanceLockedError)
-    expect(() => takeInstanceLock(stateDir)).toThrow(`is held by process ${process.pid}`)
-    lock.release()
-    takeInstanceLock(stateDir).release()
+    const lock = await takeInstanceLock(stateDir)
+    removeOwnLockSync(lock.path)
+    expect(existsSync(lock.path)).toBe(false)
+    writeFileSync(lock.path, JSON.stringify({ pid: await deadPid(), nonce: 'b'.repeat(32) }))
+    removeOwnLockSync(lock.path)
+    expect(existsSync(lock.path)).toBe(true)
+    removeOwnLockSync(join(tempDir(), 'absent.lock'))
   })
 
-  it('lives beside the state directory, written 0600, and copies into no backup of it', () => {
+  it('a second take of a held lock is refused naming the pid', async () => {
+    const stateDir = join(tempDir(), 'state')
+    const lock = await takeInstanceLock(stateDir)
+    await expect(takeInstanceLock(stateDir)).rejects.toThrow(InstanceLockedError)
+    await expect(takeInstanceLock(stateDir)).rejects.toThrow(`pid ${process.pid}`)
+    await lock.release()
+    await (await takeInstanceLock(stateDir)).release()
+  })
+
+  it('lives beside the state directory, copies into no backup of it, and is gone after release', async () => {
     const root = tempDir()
-    const lock = takeInstanceLock(join(root, 'state'))
+    const lock = await takeInstanceLock(join(root, 'state'))
     expect(lock.path).toBe(join(root, 'state.instance.lock'))
-    expect(readFileSync(lock.path, 'utf8')).toMatch(/^\d+\n[0-9a-f]{32}\n$/)
     expect(existsSync(join(root, 'state'))).toBe(false)
-    lock.release()
+    await lock.release()
     expect(readdirSync(root)).toEqual([])
   })
 
   it('a lock whose process is gone is taken over', async () => {
     const stateDir = join(tempDir(), 'state')
-    takeInstanceLock(stateDir).release()
-    const stale = await staleLock(stateDir)
-    const lock = takeInstanceLock(stateDir)
-    expect(lock.nonce).not.toBe(stale)
-    expect(readFileSync(lock.path, 'utf8')).toBe(`${process.pid}\n${lock.nonce}\n`)
-    lock.release()
+    await staleLock(stateDir)
+    const lock = await takeInstanceLock(stateDir)
+    expect(JSON.parse(readFileSync(lock.path, 'utf8')).pid).toBe(process.pid)
+    await lock.release()
   })
 
   it('a start is refused naming the pid while a backup holds the lock', async () => {
@@ -225,12 +232,12 @@ describe('the instance lock (FR-010)', () => {
     const holder = lockChild(stateDir)
     expect(await holder.answer).toBe('took')
     const env: NodeJS.ProcessEnv = { THEOCLAW_STATE_DIR: stateDir }
-    expect(() => claimInstance(NO_PROFILE, env)).toThrow(`is held by process ${holder.pid}`)
+    await expect(claimInstance(NO_PROFILE, env)).rejects.toThrow(`pid ${holder.pid}`)
     await holder.end()
-    claimInstance(NO_PROFILE, env)?.()
+    await (await claimInstance(NO_PROFILE, env))?.release()
   })
 
-  it("a start refused by a restore's lock leaves an absent state target absent", () => {
+  it("a start refused by a restore's lock leaves an absent state target absent", async () => {
     const home = tempDir()
     const directory = join(home, 'profile')
     const stateDirectory = join(directory, 'state')
@@ -245,75 +252,17 @@ describe('the instance lock (FR-010)', () => {
         THEOCLAW_WORKSPACE: join(directory, 'workspace'),
       },
     }
-    let restore: { release(): void } | undefined
-    // The start is paused before its lock; a restore takes the lock in that window.
-    const start = () =>
-      claimInstance(
-        instance,
-        {},
-        { beforeLock: () => (restore = takeInstanceLock(stateDirectory)) },
-      )
-    expect(start).toThrow(InstanceLockedError)
-    expect(existsSync(stateDirectory)).toBe(false)
+    const holder = lockChild(stateDirectory)
+    expect(await holder.answer).toBe('took')
+    await expect(claimInstance(instance, {})).rejects.toThrow(InstanceLockedError)
     expect(existsSync(instance.workspace)).toBe(false)
-    restore?.release()
+    expect(existsSync(stateDirectory)).toBe(false)
+    await holder.end()
   })
 
-  it('a start with no state directory takes no lock', () => {
-    expect(claimInstance(NO_PROFILE, {})).toBeUndefined()
-    expect(claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: '  ' })).toBeUndefined()
-  })
-
-  it("a delayed taker of a lock generation already taken over refuses and leaves the new holder's lock in place", async () => {
-    const stateDir = join(tempDir(), 'state')
-    await staleLock(stateDir)
-    let holders = 0
-    let taken: { nonce: string; release(): void } | undefined
-    // B reads the stale generation and is paused; A takes over, C is refused against A's live lock.
-    const takerB = () =>
-      takeInstanceLock(stateDir, {
-        beforeTakeover: () => {
-          if (taken !== undefined) return
-          taken = takeInstanceLock(stateDir)
-          holders += 1
-          expect(() => takeInstanceLock(stateDir)).toThrow(InstanceLockedError)
-        },
-      })
-    expect(takerB).toThrow(`is held by process ${process.pid}`)
-    expect(holders).toBe(1)
-    expect(readFileSync(instanceLockPath(stateDir), 'utf8')).toBe(
-      `${process.pid}\n${taken!.nonce}\n`,
-    )
-    taken!.release()
-  })
-
-  it('a takeover file left for a dead generation does not block taking over a later stale lock', async () => {
-    const stateDir = join(tempDir(), 'state')
-    const gone = await staleLock(stateDir)
-    // A taker of generation `gone` crashed holding its takeover file; a later generation is stale too.
-    writeFileSync(`${instanceLockPath(stateDir)}.takeover-${gone}`, '1\n')
-    await staleLock(stateDir)
-    const lock = takeInstanceLock(stateDir)
-    lock.release()
-    expect(readdirSync(join(stateDir, '..'))).toEqual([])
-  })
-
-  it('a takeover that never finished on the current generation is refused naming both files', async () => {
-    const stateDir = join(tempDir(), 'state')
-    const nonce = await staleLock(stateDir)
-    writeFileSync(`${instanceLockPath(stateDir)}.takeover-${nonce}`, '1\n')
-    expect(() => takeInstanceLock(stateDir)).toThrow(
-      /takeover-[0-9a-f]{32} says a takeover of it never finished; .*delete both files/,
-    )
-  })
-
-  it('a release removes the claim file a process that is gone left behind', async () => {
-    const stateDir = join(tempDir(), 'state')
-    const left = `${instanceLockPath(stateDir)}.claim-${await deadPid()}-${randomBytes(16).toString('hex')}`
-    takeInstanceLock(stateDir).release()
-    writeFileSync(left, 'x')
-    takeInstanceLock(stateDir).release()
-    expect(existsSync(left)).toBe(false)
+  it('a start with no state directory takes no lock', async () => {
+    expect(await claimInstance(NO_PROFILE, {})).toBeUndefined()
+    expect(await claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: '  ' })).toBeUndefined()
   })
 
   it('two processes racing for the lock: exactly one takes it, 20 times (concurrent test)', async () => {
@@ -334,8 +283,8 @@ describe('the instance lock (FR-010)', () => {
       (stateDir, answers, racers) => {
         const winners = racers.filter((_, index) => answers[index] === 'took')
         expect(winners).toHaveLength(1)
-        expect(readFileSync(instanceLockPath(stateDir), 'utf8').split('\n')[0]).toBe(
-          String(winners[0]!.pid),
+        expect(JSON.parse(readFileSync(`${stateDir}.instance.lock`, 'utf8')).pid).toBe(
+          winners[0]!.pid,
         )
       },
     )
@@ -464,7 +413,7 @@ describe('theoclaw backup (FR-008)', () => {
     expect(await holder.answer).toBe('took')
     const dir = join(tempDir(), 'backup')
     await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
-      `is held by process ${holder.pid}`,
+      `pid ${holder.pid}`,
     )
     expect(existsSync(dir)).toBe(false)
     await holder.end()
@@ -614,7 +563,7 @@ describe('theoclaw restore (FR-009)', () => {
     const profile = join(home, '.theokit', 'profiles', 'restored')
     expect(readdirSync(join(profile, 'workspace', '.theoclaw', 'sessions'))).toHaveLength(3)
     expect(readFileSync(join(profile, 'state', 'pairing.json'), 'utf8')).toContain('paired')
-    expect(existsSync(instanceLockPath(join(profile, 'state')))).toBe(false)
+    expect(existsSync(`${join(profile, 'state')}.instance.lock`)).toBe(false)
   })
 
   it("restore re-homes the session transcripts under the new workspace's own name", async () => {
@@ -666,7 +615,7 @@ describe('theoclaw restore (FR-009)', () => {
     const holder = lockChild(target.state)
     expect(await holder.answer).toBe('took')
     await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
-      `is held by process ${holder.pid}`,
+      `pid ${holder.pid}`,
     )
     expect(existsSync(target.workspace)).toBe(false)
     await holder.end()
@@ -702,8 +651,8 @@ describe('theoclaw restore (FR-009)', () => {
     child.stdout!.on('data', (chunk: Buffer) => (output += chunk.toString()))
     await waitFor(() => output.includes('copying'), 30_000, 'the backup to start copying')
 
-    expect(() => claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: source.state })).toThrow(
-      `is held by process ${child.pid}`,
+    await expect(claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: source.state })).rejects.toThrow(
+      `pid ${child.pid}`,
     )
     writeFileSync(gate, '')
     await waitFor(() => output.includes('done'), 30_000, 'the backup to finish')
