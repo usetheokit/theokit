@@ -21,7 +21,7 @@ import {
   ENV_SESSION_GC_MAX_AGE_DAYS,
   ENV_SHELL_TIMEOUT_MS,
 } from './env-knobs.js'
-import { firstSettings, refuseStrandedToml, settingsCandidates } from './settings-load.js'
+import { firstSettings, layerCandidates, refuseStrandedToml } from './settings-load.js'
 import type { TrustPosture } from './trust-posture.js'
 import { SECURITY_FLOORS } from './security-floor.js'
 import { readManagedSettingsTranslated, translateManaged } from './managed-settings.js'
@@ -443,7 +443,7 @@ function discoverSettings(opts: {
   projectAllowed: boolean
   ourHome: string
 } {
-  const candidates = settingsCandidates(opts)
+  const candidates = layerCandidates(opts)
   return {
     user: firstSettings(candidates.user),
     project: opts.projectAllowed ? firstSettings(candidates.project) : null,

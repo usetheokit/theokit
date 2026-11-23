@@ -66,4 +66,18 @@ describe('/compact', () => {
     expect(calls).toEqual(['auto'])
     expect(big.logs[0]).toContain('500 -> 20')
   })
+
+  it('compacts while the session lease is still held, with the lease agent id', async () => {
+    const order: string[] = []
+    const agent = new FakeAgent({ frames: [assistant('hi'), finished()], result: { status: 'finished', usage: { inputTokens: 500 } } }) as never
+    const handler = createReplyHandler({
+      reset: async () => undefined,
+      withAgent: async <R>(_e: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> =>
+        work({ agent, agentId: 'theoclaw-x-g7', release: () => void order.push('release') }),
+      compact: readCompactSettings({ THEOCLAW_COMPACT_AT: '100' }, () => undefined, async (id) => (order.push(`compact ${id}`), { preTokens: 1, postTokens: 1 })),
+    })
+    const event = messageEvent('telegram', 'hello')
+    await handler(event, { event, reply: async () => ({ ok: true, messageId: 'm' }) })
+    expect(order).toEqual(['compact theoclaw-x-g7', 'release'])
+  })
 })
