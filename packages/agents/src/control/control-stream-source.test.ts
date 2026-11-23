@@ -78,4 +78,23 @@ describe('createControlStreamSource', () => {
     expect(client.interrupt).toHaveBeenCalledWith('s1')
     expect(client.steer).toHaveBeenCalledWith('s1', 'go left')
   })
+
+  it('reads the frames through a transform and closes the message at a break', async () => {
+    const client = fake([
+      { type: 'event', event: { type: 'text_delta', content: 'a' } },
+      { type: 'done' },
+    ])
+    const source = createControlStreamSource(client, 's', 'm', {
+      frames: async function* (frames) {
+        for await (const frame of frames) {
+          yield frame
+          yield { type: 'break' }
+        }
+      },
+    })
+    expect(await collect(source())).toEqual([
+      { type: 'text-delta', text: 'a' },
+      { type: 'assistant', message: '' },
+    ])
+  })
 })

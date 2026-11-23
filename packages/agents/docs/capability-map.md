@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1559 export(s) across 30 entry point(s).
+1561 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -783,9 +783,11 @@ Measured against `@theokit/sdk@9.0.0`.
 | `ControlClientFrame` | type |
 | `ControlServerFrame` | type |
 | `ControlSocketOptions` | type |
+| `ControlStreamClient` | type |
 | `ControlStreamEvent` | type |
 | `ControlStreamFrame` | type |
 | `ControlStreamSource` | type |
+| `ControlStreamSourceOptions` | type |
 | `DevicePairing` | type |
 | `DevicePairingOptions` | type |
 | `PairingApproval` | type |

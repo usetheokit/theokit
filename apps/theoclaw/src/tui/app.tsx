@@ -14,9 +14,10 @@ import {
 import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
+import type { ControlStreamSource } from '@theokit/agents/control'
 import type { ControlClient } from '../control-client/control-client.js'
 import {
-  controlStream,
+  controlTurn,
   createTurnInbox,
   nextSessionId,
   type TranscriptEntry,
@@ -136,8 +137,10 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
   // A message submitted while a turn runs (a redirect typed right after Esc), sent once it ends.
   const queued = useRef<string | undefined>(undefined)
 
+  // The running turn's source: its `interrupt` is bound to the session the turn was sent on.
+  const turn = useRef<ControlStreamSource | undefined>(undefined)
   const interrupt = (): void => {
-    if (running.current) client.interrupt(session)
+    if (running.current) turn.current?.interrupt()
   }
 
   const turns = useRef(0)
@@ -171,8 +174,9 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
       if (next !== undefined) send(next)
     }
     // A function source: the hook starts the turn when it mounts, so the stream is opened exactly once.
-    const source: AgentStreamSource = () =>
-      controlStream(client, text, session, inTurn, onEnd, mine, onInterrupted)
+    const turnSource = controlTurn(client, text, session, inTurn, onEnd, mine, onInterrupted)
+    turn.current = turnSource
+    const source: AgentStreamSource = turnSource
     setItems((current) => [
       ...current,
       { kind: 'user', text },

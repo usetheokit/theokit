@@ -34,7 +34,9 @@ export {
   createControlFrameConverter,
   createControlStreamSource,
   type ControlStreamEvent,
+  type ControlStreamClient,
   type ControlStreamFrame,
+  type ControlStreamSourceOptions,
   type ControlStreamSource,
 } from './control/control-stream-source.js'
 export {

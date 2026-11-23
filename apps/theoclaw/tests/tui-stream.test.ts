@@ -11,6 +11,7 @@ import { deferred, waitFor } from './fakes.js'
 import { type ControlClient, type ControlFrame, nextArrival } from '../src/control-client/control-client.js'
 import {
   controlStream,
+  controlTurn,
   createTurnInbox,
   nextSessionId,
   type TranscriptEntry,
@@ -77,6 +78,29 @@ describe('controlStream: text deltas', () => {
 })
 
 describe('controlStream: tool cards', () => {
+  it('draws nothing for a result whose call the stream never saw', async () => {
+    const { state } = await run([
+      event({ type: 'tool_result', callId: 'ghost', isError: false }),
+      event({ type: 'text_delta', content: 'ok' }),
+      DONE,
+    ])
+    expect(state.events).toMatchObject([{ kind: 'message' }])
+    expect(state.events).toHaveLength(1)
+  })
+
+  it('binds interrupt and steer of controlTurn to its session', () => {
+    const calls: string[] = []
+    const client = {
+      chat: async function* () {},
+      interrupt: (s: string) => calls.push(`interrupt ${s}`),
+      steer: (s: string, m: string) => calls.push(`steer ${s} ${m}`),
+    } as unknown as ControlClient
+    const turn = controlTurn(client, 'hi', SESSION, () => undefined, () => undefined)
+    turn.interrupt()
+    turn.steer('left')
+    expect(calls).toEqual([`interrupt ${SESSION}`, `steer ${SESSION} left`])
+  })
+
   it('draws a running card for a tool call (until the turn ends)', async () => {
     const client = {
       chat: async function* () {
