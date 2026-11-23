@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - Pins `@theokit/sdk` 12.0.0 (#2744).
+- Removes `config/layers.ts` and the unused `applySecurityFloor` wrapper, dead since `resolveConfig` moved to `defineLayeredConfig`; their tests now run through `resolveConfig` (#2714).
 - Tests: the collection-floor test gives its all-projects classifier the cwd a DEAD verdict carries, and the tool-header test imports without the `.ts` extension, so the typecheck passes again (#2854).
 
 - Keybinding parsing, transcript export, resumed history and backtrack come from `@theokit/tui` (`parseKeybindings`, `agentEventsToMarkdown`/`lastAssistantText`, `sessionMessagesToThread`, `backtrackReducer`, `BacktrackOverlay`); `backtrack-ladder.ts` and `backtrack-select.ts` are gone. The overlay now has the library border and no cyan; the session fork, `REBINDABLE` and the reserved sets stay (#2727).
