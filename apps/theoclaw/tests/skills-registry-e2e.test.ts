@@ -1,6 +1,4 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,7 +7,8 @@ import { afterEach, expect, it } from 'vitest'
 import { Agent } from '@theokit/sdk'
 import { theoClawAgentOptions, withSdkSkills } from '../src/agent/create-agent.js'
 import { runCli } from '../src/cli.js'
-import { createSkillsRegistryHandler } from '../src/skills/registry-server.js'
+import { createNodeServer } from '@theokit/http/runtime/node'
+import { createSkillsRegistryHandler } from '@theokit/skills-registry'
 import { harness, scratchDir } from './support/cli-harness.js'
 import { startModelStub } from './model-stub.js'
 
@@ -28,10 +27,10 @@ it('publish, search and install through the CLI make the skill usable on the nex
   const registryDir = mkdtempSync(join(tmpdir(), 'theoclaw-reg-'))
   const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-ws-'))
   cleanups.push(() => rmSync(registryDir, { recursive: true, force: true }), () => rmSync(workspace, { recursive: true, force: true }))
-  const server: Server = createServer(createSkillsRegistryHandler({ dir: registryDir, token: 'secret' }))
+  const server = createNodeServer(createSkillsRegistryHandler({ dir: registryDir, token: 'secret' }))
   cleanups.push(() => void server.close())
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const { port } = await server.listen(0, '127.0.0.1')
+  const base = `http://127.0.0.1:${port}`
 
   const src = scratchDir()
   mkdirSync(join(src, 'summarize'))
