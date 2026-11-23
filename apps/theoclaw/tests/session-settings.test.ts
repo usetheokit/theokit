@@ -33,7 +33,18 @@ describe('readSessionSettings', () => {
       workspace: WORKSPACE,
       idleMinutes: 30,
       maxOpenSessions: 200,
+      transcriptRetentionDays: 30,
     })
+  })
+
+  it('reads and bounds THEOCLAW_TRANSCRIPT_RETENTION_DAYS', () => {
+    expect(
+      readSessionSettings({ ...BASE, THEOCLAW_TRANSCRIPT_RETENTION_DAYS: '7' }, aDirectory)
+        .transcriptRetentionDays,
+    ).toBe(7)
+    expect(refusal({ ...BASE, THEOCLAW_TRANSCRIPT_RETENTION_DAYS: '0' }).variable).toBe(
+      'THEOCLAW_TRANSCRIPT_RETENTION_DAYS',
+    )
   })
 
   it('refuses THEOCLAW_DM_SCOPE=per-room and names the four modes', () => {

@@ -27,7 +27,7 @@ const MCP_PROTOCOL_VERSION = '2025-06-18'
 const DEFAULT_PROTOCOL_VERSIONS: readonly string[] = ['2025-06-18', '2025-03-26', '2024-11-05']
 
 /** Options for {@link handleMcpToolsHttp}. */
-export interface McpHttpOptions {
+export interface McpHttpOptions extends McpToolsOptions {
   /** Supported revisions, newest first. Default ['2025-06-18', '2025-03-26', '2024-11-05']. */
   readonly protocolVersions?: readonly string[]
 }
@@ -426,6 +426,7 @@ export async function handleMcpToolsHttp(
     tools: tools as readonly CompiledTool[],
     appResources: [],
     protocolVersions: options.protocolVersions ?? DEFAULT_PROTOCOL_VERSIONS,
+    options,
   }
   return runMcp(parsed.body, (req) => dispatchMcp(served, name, req))
 }

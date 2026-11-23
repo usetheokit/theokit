@@ -57,7 +57,15 @@ async function readBounded(request: Request): Promise<string | undefined> {
  * unknown, spent or expired code, `400` for a bad body, name or credential, `413` over 64 KiB,
  * `429` while too many requests wait, `405` for another method. No answer echoes the credential.
  */
-export function pairRoute(pairing: DevicePairing): (request: Request) => Promise<Response> {
+export function pairRoute(
+  pairing: DevicePairing,
+  options: {
+    /** The coarse city for a request (from its peer address), kept with the pending device. */
+    cityOf?: (request: Request) => string | undefined
+    /** Renames a refusal reason in the `{ error }` body, for a client that knows another name. */
+    errorNames?: Partial<Record<keyof typeof STATUS, string>>
+  } = {},
+): (request: Request) => Promise<Response> {
   return async (request) => {
     if (request.method !== 'POST')
       return new Response(null, { status: 405, headers: { Allow: 'POST' } })
@@ -65,9 +73,12 @@ export function pairRoute(pairing: DevicePairing): (request: Request) => Promise
     if (text === undefined) return Response.json({ error: 'too_large' }, { status: 413 })
     const body = readBody(text)
     if (body === undefined) return Response.json({ error: 'bad_body' }, { status: 400 })
-    const result = pairing.request(body.code, body.name, body.credential)
+    const result = pairing.request(body.code, body.name, body.credential, options.cityOf?.(request))
     if (result.ok) return Response.json({ id: result.id }, { status: 202 })
     const status = STATUS[result.reason]
-    return Response.json({ error: result.reason }, { status })
+    return Response.json(
+      { error: options.errorNames?.[result.reason] ?? result.reason },
+      { status },
+    )
   }
 }
