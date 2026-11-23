@@ -15,6 +15,7 @@ import { encodeProjectDir, legacyTranscriptPath, transcriptPath } from '@theokit
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { GCFloorError, planProjectsGC, type ProjectsGCFs } from '../../src/session/index.js'
+import { sessionPointerPath } from '../../src/session/session-pointer.js'
 import type { LivenessVerdict } from '../../src/session/liveness-oracle.js'
 
 const DAY = 86_400_000
@@ -376,23 +377,11 @@ describe('planProjectsGC protection edge cases', () => {
     expect(result.kept.some((k) => k.reason.includes('project kept whole'))).toBe(true)
   })
 
-  it('pointerPath moves where the resumable pointer is read', async () => {
-    transcript('new', 1)
-    const pinned = transcript('pinned', 300)
-    const pointer = join(root, 'my-pointer')
-    writeFileSync(pointer, 'pinned\n')
-    const withPointer = await plan({ pointerPath: () => pointer })
-    expect(withPointer.candidates.map((c) => c.target)).not.toContain(pinned)
-    const without = await plan({ pointerPath: () => join(root, 'absent') })
-    expect(without.candidates.map((c) => c.target)).toContain(pinned)
-  })
-
   it('deadProjects "keep-last" protects only the newest transcripts and reads no pointer or registry', async () => {
     transcript('new', 1)
     const pinned = transcript('pinned', 300)
     const old = transcript('old', 300)
-    const pointer = join(root, 'ptr')
-    writeFileSync(pointer, 'pinned\n')
+    writeFileSync(sessionPointerPath(CWD, root), 'pinned\n')
     const dead = () => new Map([[NAME, { liveness: 'dead' as const, reason: 'gone', cwd: CWD }]])
     const listRegistry = () => Promise.reject(new Error('must not be read'))
     const result = await plan({
@@ -400,7 +389,6 @@ describe('planProjectsGC protection edge cases', () => {
       candidateCwds: undefined,
       candidateCwdsComplete: undefined,
       deadProjects: 'keep-last',
-      pointerPath: () => pointer,
       listRegistry,
     })
     expect(result.errors).toEqual([])
@@ -409,7 +397,6 @@ describe('planProjectsGC protection edge cases', () => {
     )
     const inspected = await plan({
       classify: dead,
-      pointerPath: () => pointer,
       listRegistry: () => Promise.resolve([]),
     })
     expect(inspected.candidates.map((c) => c.target)).toEqual([old])

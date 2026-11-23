@@ -91,9 +91,10 @@ describe('a failing pointer read is isolated to its project', () => {
   it('test_a_failing_pointer_read_is_not_reported_as_a_registry_problem', async () => {
     const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
 
-    expect(plan.errors.join(' '), 'the pointer failed and the message blamed the registry').toContain(
-      'pointer',
-    )
+    expect(
+      plan.errors.join(' '),
+      'the pointer failed and the message blamed the registry',
+    ).toContain('pointer')
   })
 
   it('test_a_failing_registry_read_still_names_the_registry', async () => {

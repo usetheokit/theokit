@@ -43,8 +43,6 @@ export interface LegacyPlan {
   framework: ProjectsGCPlan
 }
 
-const POINTER = '/pointer-of/'
-
 export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<LegacyPlan> {
   // Protection is by the SDK's own path, `<transcript root>/projects/<encoded cwd>/<hashed name>`.
   const root = join(opts.projectsRoot ?? transcriptRoot(), 'projects')
@@ -60,7 +58,9 @@ export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<Leg
       const raw = opts.classify(name)
       // A verdict without a cwd (tests that do not care) is given one derived from the name.
       const v: Verdict =
-        raw.state !== 'UNDETERMINED' && typeof raw.cwd !== 'string' ? { ...raw, cwd: `/${name}` } : raw
+        raw.state !== 'UNDETERMINED' && typeof raw.cwd !== 'string'
+          ? { ...raw, cwd: `/${name}` }
+          : raw
       verdictOf.set(name, v)
       const shown = v.state === 'UNDETERMINED' ? name : encodeProjectDir(v.cwd)
       alias.set(name, shown)
@@ -76,7 +76,7 @@ export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<Leg
   const entriesOf = (project: string): ProjectEntry[] => {
     const real = opts.listProject(original.get(project) ?? project)
     return noQuota
-      ? [...real, { name: SENTINEL, isDirectory: false, mtimeMs: (opts.now?.() ?? Date.now()) }]
+      ? [...real, { name: SENTINEL, isDirectory: false, mtimeMs: opts.now?.() ?? Date.now() }]
       : real
   }
   const framework = await planProjectsGC({
@@ -86,7 +86,6 @@ export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<Leg
     ...(opts.now ? { now: opts.now() } : {}),
     cwdCoverage: 'transcripts',
     deadProjects: 'keep-last',
-    pointerPath: (cwd) => POINTER + cwd,
     listRegistry: async (cwd) =>
       (await opts.listRegistry(cwd)).map((a) => ({
         id: a.agentId,
@@ -101,27 +100,41 @@ export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<Leg
             name,
             v.state === 'UNDETERMINED'
               ? { liveness: 'undetermined' as const, reason: v.reason }
-              : { liveness: v.state === 'ALIVE' ? ('alive' as const) : ('dead' as const), cwd: v.cwd },
+              : {
+                  liveness: v.state === 'ALIVE' ? ('alive' as const) : ('dead' as const),
+                  cwd: v.cwd,
+                },
           ] as const
         }),
       ) as never,
     fs: {
-      readdir: (dir) => (dir === root ? projects() : entriesOf(dir.slice(root.length + 1)).map((e) => e.name)),
+      readdir: (dir) =>
+        dir === root ? projects() : entriesOf(dir.slice(root.length + 1)).map((e) => e.name),
       stat: (path) => {
         const rel = path.slice(root.length + 1)
         const [project, name] = rel.split('/')
         if (name === undefined) return { isDirectory: true }
         const e = entriesOf(project ?? '').find((x) => x.name === name)
         if (e === undefined) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-        return { isDirectory: e.isDirectory, ...(e.mtimeMs === undefined ? {} : { mtimeMs: e.mtimeMs }) }
+        return {
+          isDirectory: e.isDirectory,
+          ...(e.mtimeMs === undefined ? {} : { mtimeMs: e.mtimeMs }),
+        }
       },
       readFile: (path) => {
         if (path.endsWith('.jsonl')) {
           const project = path.slice(root.length + 1).split('/')[0] ?? ''
           const v = verdictOf.get(original.get(project) ?? project)
-          if (v !== undefined && v.state !== 'UNDETERMINED') return `${JSON.stringify({ cwd: v.cwd })}\n`
+          if (v !== undefined && v.state !== 'UNDETERMINED')
+            return `${JSON.stringify({ cwd: v.cwd })}\n`
         }
-        const id = path.startsWith(POINTER) ? opts.readPointer(path.slice(POINTER.length)) : undefined
+        // The framework's own pointer: `<root>/<encoded cwd>/last-session`.
+        const shown = path.endsWith('/last-session')
+          ? path.slice(root.length + 1).split('/')[0]
+          : undefined
+        const v = shown === undefined ? undefined : verdictOf.get(original.get(shown) ?? shown)
+        const id =
+          v !== undefined && v.state !== 'UNDETERMINED' ? opts.readPointer(v.cwd) : undefined
         if (id === undefined) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
         return id
       },
@@ -136,9 +149,10 @@ export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<Leg
         return { ...c, project, target: c.target.replace(`/${c.project}/`, `/${project}/`) }
       }),
     kept: framework.kept.map((k) => original.get(k.project) ?? k.project),
-    errors: framework.errors.map((e) => (e.project === '' ? e.message : `${original.get(e.project) ?? e.project}: ${e.message}`)),
+    errors: framework.errors.map((e) =>
+      e.project === '' ? e.message : `${original.get(e.project) ?? e.project}: ${e.message}`,
+    ),
     liveCwds: [...framework.liveCwds],
     framework,
   }
 }
-

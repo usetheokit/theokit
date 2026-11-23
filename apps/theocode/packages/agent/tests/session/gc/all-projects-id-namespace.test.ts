@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
 import { transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
-import { runProjectsGC } from '@theokit/agents/session'
+import { runProjectsGC, sessionPointerPath } from '@theokit/agents/session'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { claimRoot, OWNER, THEOCODE_MARKER } from '../../../src/session/gc/root-ownership.js'
@@ -76,7 +76,10 @@ async function plan(seams: Seams): Promise<LegacyPlan> {
 }
 
 /** A real tree under a scratch transcript root, so the apply phase removes real files. */
-function realTree(names: string[], ageDays: number[] = []): { base: string; files: string[]; pointer: string } {
+function realTree(
+  names: string[],
+  ageDays: number[] = [],
+): { base: string; files: string[]; pointer: string } {
   const base = mkdtempSync(join(tmpdir(), 'theocode-gc-ns-'))
   bases.push(base)
   const files = names.map((n) => {
@@ -89,15 +92,14 @@ function realTree(names: string[], ageDays: number[] = []): { base: string; file
     return file
   })
   claimRoot(join(base, 'projects'))
-  return { base, files, pointer: join(base, 'pointer') }
+  return { base, files, pointer: sessionPointerPath(CWD, base) }
 }
 
-function apply(framework: LegacyPlan['framework'], pointer: string, deleted: string[]) {
+function apply(framework: LegacyPlan['framework'], deleted: string[]) {
   return runProjectsGC(framework, {
     apply: true,
     owner: OWNER,
     existingMarker: THEOCODE_MARKER,
-    pointerPath: () => pointer,
     removeFromRegistry: (id) => void deleted.push(id),
   })
 }
@@ -117,10 +119,13 @@ describe('the all-projects sweep speaks one id namespace', () => {
         { name: fileOf(LIVE_ID), mtimeMs: NOW - 90 * DAY },
       ],
     })
-    expect(p.candidates, 'the fixture must produce a candidate, or this case proves nothing').toHaveLength(1)
+    expect(
+      p.candidates,
+      'the fixture must produce a candidate, or this case proves nothing',
+    ).toHaveLength(1)
     writeFileSync(t.pointer, `${LIVE_ID}\n`)
 
-    const result = await apply(p.framework, t.pointer, [])
+    const result = await apply(p.framework, [])
 
     expect(existsSync(t.files[1] as string), 'the live session transcript was removed').toBe(true)
     expect(result.removed).toEqual([])
@@ -153,10 +158,16 @@ describe('the all-projects sweep speaks one id namespace', () => {
     expect(basename(transcripts[0]?.target ?? '')).toBe(fileOf(OLD_ID))
 
     const deleted: string[] = []
-    await apply(p.framework, t.pointer, deleted)
+    await apply(p.framework, deleted)
 
-    expect(deleted.every((id) => id === OLD_ID), `deleted by filename: ${deleted.join(',')}`).toBe(true)
-    expect(existsSync(t.files[1] as string), 'the transcript of the archived session survived').toBe(false)
+    expect(
+      deleted.every((id) => id === OLD_ID),
+      `deleted by filename: ${deleted.join(',')}`,
+    ).toBe(true)
+    expect(
+      existsSync(t.files[1] as string),
+      'the transcript of the archived session survived',
+    ).toBe(false)
   })
 
   it('test_a_registry_entry_whose_transcript_is_on_disk_is_not_collected_separately', async () => {
@@ -182,5 +193,58 @@ describe('the all-projects sweep speaks one id namespace', () => {
       p.candidates.filter((c) => c.kind === 'registry'),
       'an entry with no date was aged to 1970 and collected',
     ).toEqual([])
+  })
+})
+
+describe('pointer and registry protections hold across plan and apply', () => {
+  it('test_the_pointer_session_transcript_is_not_planned_at_all', async () => {
+    const p = await plan({
+      pointer: OLD_ID,
+      onDisk: [
+        { name: fileOf(LIVE_ID), mtimeMs: NOW },
+        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
+      ],
+    })
+
+    expect(p.candidates).toEqual([])
+  })
+
+  it('test_an_unarchived_registry_entry_protects_its_stale_transcript', async () => {
+    const p = await plan({
+      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY }],
+      onDisk: [
+        { name: fileOf(LIVE_ID), mtimeMs: NOW },
+        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
+      ],
+    })
+
+    expect(p.candidates).toEqual([])
+  })
+
+  it('test_an_unregistered_stale_transcript_is_unlinked_by_path_not_deleted_by_id', async () => {
+    const t = realTree([fileOf(LIVE_ID), fileOf(OLD_ID)], [0, 90])
+    const p = await plan({
+      base: t.base,
+      onDisk: [
+        { name: fileOf(LIVE_ID), mtimeMs: NOW },
+        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
+      ],
+    })
+    expect(p.candidates).toHaveLength(1)
+
+    const deleted: string[] = []
+    await apply(p.framework, deleted)
+
+    expect(existsSync(t.files[1] as string)).toBe(false)
+    expect(deleted, 'an unregistered transcript was deleted through the registry').toEqual([])
+  })
+
+  it('test_a_stale_registry_entry_with_no_transcript_is_a_registry_candidate', async () => {
+    const p = await plan({
+      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY }],
+      onDisk: [{ name: fileOf(LIVE_ID), mtimeMs: NOW }],
+    })
+
+    expect(p.candidates.filter((c) => c.kind === 'registry').map((c) => c.target)).toContain(OLD_ID)
   })
 })

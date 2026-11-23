@@ -66,7 +66,8 @@ function projectFor(cwd: string, transcript = 'sess-a.jsonl', withFresh = true):
   const old = new Date(Date.now() - 90 * 86_400_000)
   utimesSync(file, old, old)
   // A newer sibling spends the framework's keepLast floor of 1, so the old transcript is collectable.
-  if (withFresh) writeFileSync(join(dir, 'sess-fresh.jsonl'), `${JSON.stringify({ cwd })}\n`, 'utf8')
+  if (withFresh)
+    writeFileSync(join(dir, 'sess-fresh.jsonl'), `${JSON.stringify({ cwd })}\n`, 'utf8')
   return name
 }
 

@@ -135,9 +135,9 @@ describe('the retention floor is a refusal, not a normalisation', () => {
 
   it('test_the_refusal_says_what_the_floor_is_and_why_it_exists', async () => {
     // A guard that refuses without saying why gets removed by the next person who hits it.
-    await expect(
-      planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never),
-    ).rejects.toThrow(/must be at least 1/)
+    await expect(planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never)).rejects.toThrow(
+      /must be at least 1/,
+    )
   })
 
   it('test_the_floor_itself_is_accepted', async () => {

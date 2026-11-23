@@ -12,10 +12,7 @@ import { join } from 'node:path'
 import { encodeProjectDir } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  planAllProjectsOnDisk,
-  runAllProjectsOnDisk,
-} from '../../../src/session/gc/filesystem.js'
+import { planAllProjectsOnDisk, runAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
 import { claimRoot } from '../../../src/session/gc/root-ownership.js'
 
 const DAY = 86_400_000
@@ -104,7 +101,10 @@ describe('all-projects collection through the framework', () => {
 
   it('refuses a root that carries another product’s marker', async () => {
     rmSync(join(base, '.theocode-collector.json'))
-    writeFileSync(join(base, '.theocode-collector.json'), JSON.stringify({ product: 'x', version: 1 }))
+    writeFileSync(
+      join(base, '.theocode-collector.json'),
+      JSON.stringify({ product: 'x', version: 1 }),
+    )
     transcript(live, 'new.jsonl', 1)
     transcript(live, 'old.jsonl', 100)
     const plan = await planAllProjectsOnDisk(options())

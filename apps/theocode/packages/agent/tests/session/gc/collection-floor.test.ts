@@ -37,17 +37,17 @@ const perSessionSeams = {
 describe('the collection floor', () => {
   it('test_the_single_project_plan_refuses_a_window_below_the_floor', async () => {
     // The framework's floor error is a GCFloorError, not a RangeError.
-    await expect(
-      planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 }),
-    ).rejects.toThrow(GCFloorError)
+    await expect(planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 })).rejects.toThrow(
+      GCFloorError,
+    )
   })
 
   it('test_the_all_projects_plan_refuses_the_same_window', async () => {
     // The arm that already held. Present so a regression that removes the floor from EITHER path
     // is caught, rather than the two drifting again.
-    await expect(
-      planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 0 }),
-    ).rejects.toThrow(GCFloorError)
+    await expect(planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 0 })).rejects.toThrow(
+      GCFloorError,
+    )
   })
 
   it('test_both_plans_accept_the_floor_itself', async () => {

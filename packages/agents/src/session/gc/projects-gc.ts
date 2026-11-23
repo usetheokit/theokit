@@ -112,12 +112,6 @@ export interface PlanProjectsGCOptions {
    */
   readonly candidateCwdsComplete?: boolean
   /**
-   * Where the resumable-session pointer of a cwd lives. Default: the framework's own pointer
-   * (`<transcript root>/projects/<project>/last-session`). A caller with its own convention names it
-   * here; a read failure other than "not found" skips the project.
-   */
-  readonly pointerPath?: (cwd: string) => string
-  /**
    * How a live project's cwd coverage is established. `'declared'` (default): the caller's
    * `candidateCwds` + `candidateCwdsComplete: true`. `'transcripts'`: the cwds recorded in the
    * transcript headers are the whole collision class, and `candidateCwds` is optional extra input.
@@ -251,8 +245,6 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
   const cutoff = now - options.maxAgeDays * DAY_MS
   const root = dirname(options.projectsRoot) // the transcript root the SDK helpers take
   const listRegistry = options.listRegistry ?? defaultListRegistry
-  const pointerPathOf =
-    options.pointerPath ?? ((member: string) => sessionPointerPath(member, root))
 
   const candidates: ProjectsGCCandidate[] = []
   const kept: { project: string; reason: string }[] = []
@@ -393,7 +385,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       try {
         for (const member of cwds) {
           try {
-            const id = fs.readFile(pointerPathOf(member)).trim()
+            const id = fs.readFile(sessionPointerPath(member, root)).trim()
             if (id.length > 0) protect(id, member, 'resumable session pointer')
           } catch (error) {
             if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)
@@ -542,8 +534,6 @@ export interface RunProjectsGCOptions {
   readonly registryTimeoutMs?: number
   /** Extra protection re-read just before each removal. A throw refuses the candidate. */
   readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>
-  /** The pointer location the plan was made with; re-read before each removal. */
-  readonly pointerPath?: (cwd: string) => string
   /** A marker another app wrote in its own format, accepted as the owner's claim. */
   readonly existingMarker?: CollectorRootOptions['existingMarker']
   readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>
@@ -572,9 +562,7 @@ function protectionNow(
   }
   for (const cwd of plan.liveCwds) {
     try {
-      const id = fs
-        .readFile((options.pointerPath ?? ((c: string) => sessionPointerPath(c, root)))(cwd))
-        .trim()
+      const id = fs.readFile(sessionPointerPath(cwd, root)).trim()
       if (id.length > 0) protect(id, cwd, 'the session pointer now names it')
     } catch (error) {
       if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)

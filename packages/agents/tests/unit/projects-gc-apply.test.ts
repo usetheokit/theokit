@@ -12,6 +12,7 @@ import {
   type ProjectsGCCandidate,
   type ProjectsGCPlan,
 } from '../../src/session/index.js'
+import { sessionPointerPath } from '../../src/session/session-pointer.js'
 
 let home: string
 let projects: string
@@ -159,17 +160,16 @@ describe('runProjectsGC', () => {
     expect(existsSync(a)).toBe(true)
   })
 
-  it("applies under a legacy marker, and refuses a transcript the caller's pointer now names", async () => {
+  it('applies under a legacy marker, and refuses a transcript the pointer now names', async () => {
     rmSync(join(home, '.theokit-collector.json'))
     writeFileSync(join(home, '.legacy.json'), JSON.stringify({ product: 'theocode' }))
     const existingMarker = {
       fileName: '.legacy.json',
       ownerOf: (p: unknown) => (p as { product?: string }).product,
     }
-    const pointer = join(home, 'ptr')
     const a = file('a.jsonl')
     const b = file('b.jsonl')
-    writeFileSync(pointer, 'b\n')
+    writeFileSync(sessionPointerPath(CWD, home), 'b\n')
     const result = await runProjectsGC(
       planOf([
         { kind: 'transcript', target: a },
@@ -179,8 +179,6 @@ describe('runProjectsGC', () => {
         apply: true,
         owner: OWNER,
         existingMarker,
-        pointerPath: () => pointer,
-        protectedIds: () => new Map([['b', 'pointer']]),
         ...noWriter,
       },
     )

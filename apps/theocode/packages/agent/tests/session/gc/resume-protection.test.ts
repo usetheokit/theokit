@@ -51,7 +51,8 @@ async function planWith(registry: { agentId: string; archived?: boolean }[]) {
   } as never)
 }
 
-const targets = (p: { candidates: { target: string }[] }): string[] => p.candidates.map((c) => c.target)
+const targets = (p: { candidates: { target: string }[] }): string[] =>
+  p.candidates.map((c) => c.target)
 
 describe('a session the registry lists', () => {
   it('test_it_is_kept_however_old_it_is_and_with_no_pointer_written', async () => {

@@ -18,8 +18,13 @@ async function plan(names: string[]) {
     keepLast: 0,
     maxAgeDays: 30,
     listProjects: () => ['proj'],
-    listProject: () => // `<id>.jsonl.lock` is the directory shape of the lock, `<id>.jsonl.writer.lock` the file one.
-    names.map((name) => ({ name, isDirectory: name.endsWith('.jsonl.lock'), mtimeMs: NOW - 90 * DAY })),
+    listProject: () =>
+      // `<id>.jsonl.lock` is the directory shape of the lock, `<id>.jsonl.writer.lock` the file one.
+      names.map((name) => ({
+        name,
+        isDirectory: name.endsWith('.jsonl.lock'),
+        mtimeMs: NOW - 90 * DAY,
+      })),
     classify: () => ({ state: 'DEAD', cwd: '/proj' }),
     listRegistry: async () => [],
     hasLiveWriter: () => false,
@@ -50,7 +55,10 @@ describe('transcript names', () => {
 
     expect(base(guarded)).not.toContain('80a43d49-abc.jsonl.lock')
     expect(base(guarded)).not.toContain('80a43d49-abc.jsonl.writer.lock')
-    expect(base(orphans).sort()).toEqual(['80a43d49-abc.jsonl.lock', '80a43d49-abc.jsonl.writer.lock'])
+    expect(base(orphans).sort()).toEqual([
+      '80a43d49-abc.jsonl.lock',
+      '80a43d49-abc.jsonl.writer.lock',
+    ])
   })
 
   it('lock_suffix_and_lockId_agree_on_what_is_a_lock', async () => {
