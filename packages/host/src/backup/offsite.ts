@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { containedPath, LEGACY_ROOTS, verifyBackupDir } from './archive.js'
 import { BackupError } from './errors.js'
-import { MANIFEST_NAME, readManifest } from './manifest.js'
+import { MANIFEST_NAME, parseManifest, readManifest } from './manifest.js'
 
 export interface OffsiteOptions {
   /** Sent as `Authorization: Bearer`; never put in an error. */
@@ -90,16 +91,24 @@ export async function downloadDirectory(
     throw new BackupError('an offsite download needs an absent directory', { path: dir })
   await mkdir(dir, { recursive: true, mode: 0o700 })
   try {
-    await writeFile(path.join(dir, MANIFEST_NAME), await transfer(target, MANIFEST_NAME, options), {
-      mode: 0o600,
-    })
-    const manifest = await readManifest(dir, LEGACY_ROOTS)
+    // The manifest is parsed and validated before it reaches the disk.
+    const manifestBytes = await transfer(target, MANIFEST_NAME, options)
+    const manifest = parseManifest(manifestBytes.toString('utf8'), MANIFEST_NAME, LEGACY_ROOTS)
+    await writeFile(path.join(dir, MANIFEST_NAME), manifestBytes, { mode: 0o600 })
     for (const root of manifest.roots)
       await mkdir(path.join(dir, root), { recursive: true, mode: 0o700 })
     for (const entry of manifest.files) {
       const to = containedPath(dir, entry.path)
       await mkdir(path.dirname(to), { recursive: true, mode: 0o700 })
-      await writeFile(to, await transfer(target, entry.path, options), { mode: 0o600, flag: 'wx' })
+      const bytes = await transfer(target, entry.path, options)
+      if (
+        bytes.length !== entry.size ||
+        createHash('sha256').update(bytes).digest('hex') !== entry.sha256
+      )
+        throw new BackupError(`offsite file ${entry.path} does not match the manifest`, {
+          path: entry.path,
+        })
+      await writeFile(to, bytes, { mode: 0o600, flag: 'wx' })
     }
     await verifyBackupDir(dir, LEGACY_ROOTS)
   } catch (error) {
