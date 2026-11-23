@@ -360,7 +360,7 @@ describe('a tool call a policy refused is not reported as one that ran', () => {
   })
 })
 
-describe('Bash, Edit and ApplyPatch headers come from the toolkit presentation', () => {
+describe('Bash and Edit headers come from the toolkit presentation; ApplyPatch keeps its own', () => {
   const header = (name: string, input: Record<string, unknown>, status = 'completed') =>
     formatToolHeader({ kind: 'tool', name, status, input } as never)
 
