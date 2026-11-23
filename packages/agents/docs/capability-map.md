@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1555 export(s) across 30 entry point(s).
+1563 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -1181,6 +1181,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | Symbol | Kind |
 |---|---|
 | `agentRunPort` | value |
+| `BaseDirOutsideProjectRootError` | value |
 | `buildEnvContext` | value |
 | `buildRepoMap` | value |
 | `CatastrophicCommandError` | value |
@@ -1198,6 +1199,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createGitDiffTool` | value |
 | `createGitStatusTool` | value |
 | `createGlobTool` | value |
+| `createImageGenerateTool` | value |
 | `createInteractiveShellTool` | value |
 | `createJobStore` | value |
 | `createListDirTool` | value |
@@ -1222,7 +1224,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createWriteFileTool` | value |
 | `createWriteStdinTool` | value |
 | `DEFAULT_MAX_AUDIO_BYTES` | value |
+| `DEFAULT_MAX_GENERATED_IMAGE_BYTES` | value |
 | `DEFAULT_MAX_IMAGE_BYTES` | value |
+| `DEFAULT_MAX_PROMPT_CHARS` | value |
 | `DEFAULT_MAX_TEXT_CHARS` | value |
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
@@ -1265,6 +1269,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `CreateGitDiffToolOptions` | type |
 | `CreateGitStatusToolOptions` | type |
 | `CreateGlobToolOptions` | type |
+| `CreateImageGenerateToolOptions` | type |
 | `CreateInteractiveShellToolOptions` | type |
 | `CreateListDirToolOptions` | type |
 | `CreateReadFileToolOptions` | type |
@@ -1283,6 +1288,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `DeliveryResult` | type |
 | `EnvContextOptions` | type |
 | `FireOutcome` | type |
+| `GeneratedImageData` | type |
+| `ImageGenerateCallback` | type |
+| `ImageGenerateResult` | type |
 | `JobStore` | type |
 | `PlanModeTool` | type |
 | `PlanModeToolOptions` | type |
