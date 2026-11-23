@@ -1,14 +1,13 @@
 import { homedir } from 'node:os'
 
 import { auditInstanceConfig, fixInstanceConfig } from './audit.js'
+import { InstanceConfigError } from './errors.js'
 import { loadInstanceConfig } from './load.js'
 import { onboardInstanceConfig, type OnboardIo, type OnboardOptions } from './onboard.js'
 import { assertAppName, defaultVariable, resolveConfigPath } from './path.js'
 import { reloadInstanceConfig, type ReloadEvent } from './reload.js'
 import { watchInstanceConfig, type WatchOptions } from './watch.js'
 import { writeInstanceConfig } from './write.js'
-
-import { InstanceConfigError } from './errors.js'
 
 export { InstanceConfigError }
 export type { OnboardIo, OnboardOptions } from './onboard.js'
@@ -121,7 +120,7 @@ export function defineInstanceConfig<K extends string>(
       }
       const found = new Map<string, string>()
       for (let index = 0; index < argv.length; index += 2) {
-        const flag = argv[index]!
+        const flag = argv[index]
         const variable = Object.hasOwn(flags, flag) ? flags[flag] : undefined
         if (variable === undefined)
           throw new InstanceConfigError(
