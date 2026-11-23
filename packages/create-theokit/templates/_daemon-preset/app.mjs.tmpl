@@ -1,0 +1,26 @@
+import { defineInstanceConfig } from '@theokit/host/instance-config'
+
+/** The app name: lowercase letters, digits and hyphens, as `@theokit/host` requires. */
+export const APP = '{{name}}'.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'daemon'
+
+const PREFIX = APP.toUpperCase().replaceAll('-', '_')
+
+/** Environment variable that names the config file (set it to move the file). */
+export const CONFIG_VARIABLE = `${PREFIX}_CONFIG`
+
+/** Environment variable that holds the state directory (default: ~/.local/state/<app>). */
+export const STATE_DIR_VARIABLE = `${PREFIX}_STATE_DIR`
+
+export const MODEL_KEY = `${PREFIX}_MODEL`
+export const DEFAULT_MODEL = 'claude-sonnet-5-5'
+
+/**
+ * The config file: `$<APP>_CONFIG`, else `~/.config/<app>/<app>.env`. Declare every setting
+ * your agent reads here; `onboard` writes them, `load` copies them into the environment.
+ */
+export const config = defineInstanceConfig({
+  app: APP,
+  keys: {
+    [MODEL_KEY]: {},
+  },
+})
