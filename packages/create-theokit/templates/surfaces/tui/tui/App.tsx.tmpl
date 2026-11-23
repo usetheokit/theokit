@@ -1,5 +1,5 @@
 import { Text, useApp, useInput } from 'ink'
-import { type ReactElement, useCallback, useState } from 'react'
+import { type ReactElement, useCallback, useMemo, useState } from 'react'
 import {
   AgentStreaming,
   AgentTimeline,
@@ -22,8 +22,8 @@ import {
 import { InProcessTransport, useAgent } from 'theokit/client'
 import { streamAgentTurnInProcess } from 'theokit/server/agent'
 
-import * as chatAgent from '../agents/chat.js'
-import { AGENT } from '../shared/agent.js'
+import * as chatAgent from '../src/server/agents/chat.js'
+import { AGENT } from '../src/shared/agent.js'
 // Composed from `tui/components/*`; restyle everything in the ONE file `tui/theme.ts`.
 import { Banner } from './components/Banner.js'
 import { DemoSurface, type Mode, type ToastPayload } from './components/Demos.js'
@@ -73,7 +73,9 @@ export function App(): ReactElement {
   const backToChat = useCallback(() => setMode('chat'), [])
 
   // Derived from the store (M46): timeline events (greeting prepended), the last turn's usage, HITL approval.
-  const { events } = useAgentTimeline(agent, { prefix: PREFIX })
+  const timeline = useAgentTimeline(agent, { prefix: PREFIX })
+  // `<AgentTimeline events>` takes a mutable array; the hook's is readonly — copy, new identity per update.
+  const events = useMemo(() => [...timeline.events], [timeline.events])
   const lastUsage = agent.thread.map(readTurnUsage).filter((u) => u !== undefined).at(-1)
   const rawApproval = findPendingApproval(agent.thread)
   const pendingApproval =

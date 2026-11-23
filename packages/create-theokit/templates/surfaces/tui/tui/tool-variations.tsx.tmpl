@@ -5,7 +5,7 @@
  * uses, so what you see here is exactly what a live turn renders. Delete this file if you don't want it.
  */
 import { Box, render, Text } from 'ink'
-import { type ReactElement } from 'react'
+import { type ReactElement, useMemo } from 'react'
 import { AgentTimeline, TheoTUIProvider, type UIMessageLike, useAgentTimeline } from '@theokit/tui'
 
 import { THEME } from './theme.js'
@@ -36,7 +36,9 @@ const THREAD: UIMessageLike[] = [
 const SOURCE = { thread: THREAD }
 
 function Demo(): ReactElement {
-  const { events } = useAgentTimeline(SOURCE)
+  const timeline = useAgentTimeline(SOURCE)
+  // `<AgentTimeline events>` takes a mutable array; the hook's is readonly.
+  const events = useMemo(() => [...timeline.events], [timeline.events])
   return (
     <TheoTUIProvider theme={THEME}>
       <Box flexDirection="column" paddingX={1}>

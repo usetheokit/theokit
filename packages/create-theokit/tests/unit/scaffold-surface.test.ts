@@ -83,6 +83,7 @@ describe('applySurface (M45)', () => {
     expect(demo).toContain('AgentTimeline')
     expect(demo).toContain('useAgentTimeline')
     expect(demo).not.toContain('messagesToAgentEvents')
+    expect(demo).toContain('[...timeline.events]') // AgentTimeline wants a mutable array
     expect(demo).toContain("from './theme.js'")
     expect(demo).toContain('output-error') // the failed-tool state is exercised
 
@@ -99,6 +100,9 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('useAgentTimeline')
     expect(app).toContain('prefix: PREFIX')
     expect(app).not.toContain('messagesToAgentEvents')
+    expect(app).toContain("'../src/server/agents/chat.js'") // agents live under src/server
+    expect(app).toContain("'../src/shared/agent.js'")
+    expect(app).toContain('[...timeline.events]') // AgentTimeline wants a mutable array
     // Footer telemetry: the two-line StatusFooter shows real context usage from the last turn's usage
     // (readTurnUsage over `agent.thread`), against the app-declared context window.
     expect(app).toContain('readTurnUsage')
