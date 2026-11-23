@@ -1,7 +1,7 @@
 /**
  * `sessions gc --all-projects` on a real tree, through `planProjectsGC` / `runProjectsGC`.
  *
- * What is ours and is asserted here: the kind names in `totalByKind`, the TUI pointer location, the
+ * What is ours and is asserted here: the kind names in `totalByKind`, the
  * keep-last-only rule for a dead project, the product's own ownership marker, and the plan -> apply
  * hand-off. The safety rules themselves are the framework's and are tested there.
  */
@@ -69,18 +69,19 @@ describe('all-projects collection through the framework', () => {
     })
   })
 
-  it('protects the session the TUI pointer at <cwd>/.theokit/tui-session names', async () => {
+  it('protects the session the last-session pointer names', async () => {
     transcript(live, 'new.jsonl', 1)
     const pinned = transcript(live, 'pinned.jsonl', 100)
-    mkdirSync(join(live, '.theokit'))
     // The pointer holds a session id; its transcript is named from it, so use the real mapping.
     const { transcriptPath } = await import('@theokit/agents/persistence')
-    const named = transcriptPath(base, live, 'sess-1')
+    const named = transcriptPath(root, live, 'sess-1')
     mkdirSync(join(named, '..'), { recursive: true })
     writeFileSync(named, `${JSON.stringify({ cwd: live })}\n`)
     const t = new Date(Date.now() - 100 * DAY)
     utimesSync(named, t, t)
-    writeFileSync(join(live, '.theokit', 'tui-session'), 'sess-1\n')
+    const { sessionPointerPath } = await import('@theokit/agents/session')
+    mkdirSync(join(sessionPointerPath(live, root), '..'), { recursive: true })
+    writeFileSync(sessionPointerPath(live, root), 'sess-1\n')
     const plan = await planAllProjectsOnDisk({ ...options(), projectsRoot: join(base, 'projects') })
     const targets = plan.candidates.map((c) => c.target)
     expect(targets).toContain(pinned)

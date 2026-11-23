@@ -1,7 +1,7 @@
 import { twiml } from '@theokit/gateway-sms'
 
 import { UsageError } from '../cli-args.js'
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
 const E164 = /^\+[1-9]\d{1,14}$/

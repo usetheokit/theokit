@@ -14,7 +14,6 @@ import {
 } from '@theokit/agents/session'
 
 import { listAgents } from '../agent-list.js'
-import { pointerPath } from './pointer.js'
 import { claimDefaultRoot } from './root-claim.js'
 import { OWNERSHIP_MARKER, OWNER, THEOCODE_MARKER, rootIsOurs } from './root-ownership.js'
 
@@ -165,7 +164,6 @@ export async function planAllProjectsOnDisk(opts: CliOptions = {}): Promise<AllP
     cwdCoverage: 'transcripts',
     // It applies retention alone to a project whose cwd is gone.
     deadProjects: 'keep-last',
-    pointerPath,
     listRegistry: async (cwd) =>
       (await listAgents(cwd)).map((a) => ({
         id: a.agentId,
@@ -229,7 +227,6 @@ export async function runAllProjectsOnDisk(
     apply,
     owner: OWNER,
     existingMarker: THEOCODE_MARKER,
-    pointerPath,
     removeFromRegistry: (id) => Agent.delete(id),
     fs: {
       readFile: (path) => io.readText(path),

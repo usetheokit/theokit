@@ -38,6 +38,7 @@ export interface LegacyOptions {
 export interface LegacyPlan {
   candidates: ProjectsGCPlan['candidates'][number][]
   kept: string[]
+  liveCwds: string[]
   errors: string[]
   framework: ProjectsGCPlan
 }
@@ -136,6 +137,7 @@ export async function planSessionGCAllProjects(opts: LegacyOptions): Promise<Leg
       }),
     kept: framework.kept.map((k) => original.get(k.project) ?? k.project),
     errors: framework.errors.map((e) => (e.project === '' ? e.message : `${original.get(e.project) ?? e.project}: ${e.message}`)),
+    liveCwds: [...framework.liveCwds],
     framework,
   }
 }
