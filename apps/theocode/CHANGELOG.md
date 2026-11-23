@@ -17,6 +17,13 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `config/layers.ts` is gone and `security-floor.ts` exports only the floor vocabulary: `resolveConfig` resolves through `defineLayeredConfig`, so the hand-built fold (`foldLayers`, `LAYERS`, `applySecurityFloor`) was reachable only from its own tests, which now run against `resolveConfig` (#2714).
+- Each built-in command is declared once with its description and action, and the composer's `/` menu comes from `registry.palette()`; `BUILTIN_COMMANDS` is gone (#2725).
+- The credential source stays the framework's typed `SourceOrigin` from resolution to the TUI footer; `toLocalSource` and the regular expression in `credential-helpers.ts` that rebuilt it from a string are gone.
+- The live config takes its provider-key guard from `@theokit/agents/testing`; `tools/require-provider-key.mjs` and its test are gone (#2760).
+- Tests: the session GC suites again pin pointer protection, DEAD and undetermined projects, transcript age and live-writer rules (plan and apply), foreign files and registry entries (#2829).
+- `orderedPermissionRules` builds its rules with `permissionRulesFromLayers` from `@theokit/agents/config`; the app-local deny-first partition is gone (#2745).
+- `foreign-keys.ts` is gone: the settings keys recognised from a `.claude` file are `CLAUDE_SETTINGS_KEYS` from `@theokit/agents/config` (#2712).
+- The doctor's `settings` and `credential-strays` rows come from `checks.settingsReport` and `checks.leftovers` in `@theokit/agents/doctor`; their wording changes (`not implemented` for `not implemented here`, `permissions not supported` for `permission entries not honoured`, `path (…)` for `path — …`, `, ` separators, and `… no longer read; remove if you no longer need it` for the stray row).
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
 - The TUI session pointer is the framework's `last-session` (`loadOrCreateSessionId` / `persistSessionId` from `@theokit/agents/session`) instead of `<cwd>/.theokit/tui-session`; the old file is read once, when no `last-session` exists, and its id is copied across. Writes stay serialised per pointer and a failed write is still reported. `gc/pointer.ts` is gone: session delete, fork and `sessions gc` read `last-session` through `readPointerId`, which still refuses when the file cannot be read (#2754).
 - `/theme` with `NO_COLOR` set no longer claims a colour switch the provider would not draw: it refuses, says why, and persists nothing (#2731).
