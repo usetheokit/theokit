@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The transcript sweep passes its generation and held-session rule to `planTranscriptGC` as `isProtected`, asked at planning and again at apply, instead of filtering the plan afterwards; a transcript with no owner is kept (#2746).
 - `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
 
 - Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).

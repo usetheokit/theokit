@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `sessions gc` leaves identity and legacy-name protection to `planTranscriptGC` (`knownIds`, `isProtected`); `assignOwnIdentities` and `withholdLegacyNamed` are gone (#2746).
 - `theocode doctor` derives the credential state with `credentialState` from `@theokit/agents/doctor`; the local `credentialState` is gone.
 - The directory trust and hook review gates render `WorkspaceTrustPrompt` and `HookReviewPrompt` over `useWorkspaceConsent` from `@theokit/tui`; the consent state and hook-decision modules are gone, and a hook command is shown with control characters escaped (#2724).
 - Each built-in command is declared once with its description and action, and the composer's `/` menu comes from `registry.palette()`; `BUILTIN_COMMANDS` is gone (#2725).
