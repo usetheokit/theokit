@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@theokit/host/discovery`: `announceService` announces a service on the local network through an injected DNS-SD publisher; no announcement on a loopback bind, names trimmed to 63 bytes, bounded `stop()`.
+
 ## [@theokit/agents 17.3.1, create-theokit 3.2.5, @theokit/presenter 0.18.0, theokit 0.85.2] - 2026-11-22
 
 Released with no entry under `[Unreleased]`. Per-package detail is in each package's
