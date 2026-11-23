@@ -131,6 +131,8 @@ describe('web search', () => {
     expect(() => settingsFor({ THEOCLAW_SEARCH: 'tavily' })).toThrow(expect.objectContaining({ variable: 'TAVILY_API_KEY' }))
     expect(() => settingsFor({ THEOCLAW_SEARCH: 'duck' })).toThrow(expect.objectContaining({ variable: 'THEOCLAW_SEARCH' }))
     expect(() => settingsFor({ THEOKIT_SEARCH_API_URL: SEARCH_URL })).toThrow(expect.objectContaining({ variable: 'THEOKIT_SEARCH_API_KEY' }))
+    expect(() => settingsFor({ THEOKIT_SEARCH_API_KEY: SEARCH_KEY })).toThrow(expect.objectContaining({ variable: 'THEOKIT_SEARCH_API_URL' }))
+    expect(() => settingsFor({ THEOCLAW_SEARCH: 'searxng:nope' })).toThrow(expect.objectContaining({ variable: 'THEOCLAW_SEARCH' }))
   })
 
   it('refuses a bad THEOCLAW_SEARCH', () => {

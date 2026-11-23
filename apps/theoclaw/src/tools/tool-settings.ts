@@ -6,13 +6,13 @@ import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPostur
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
-import { resolveWebSearchAdapter } from '@theokit/sdk-tools'
-import type { WebSearchCallback, WebSearchProvider } from '@theokit/sdk-tools'
 import { isSubscriptionRoute } from '@theokit/agents/auth'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { createDockerBackend, readSandboxBackend, readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
 import type { DockerBackendDeps, SandboxBackendName } from '../sandbox/sandbox-mode.js'
+import { resolveSearch } from './web-search-settings.js'
+import type { SearchSettings } from './web-search-settings.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
 import { computerLine, readComputer } from './computer-settings.js'
@@ -22,10 +22,7 @@ import type { ExternalTools } from './external-tools.js'
 import { isWithin, resolveRealPath, SymlinkLoopError } from '@theokit/agents/tool-scope'
 
 /** Where web search goes, chosen from the keys present at start. */
-export interface SearchSettings {
-  readonly kind: WebSearchProvider | 'off'
-  readonly adapter?: WebSearchCallback
-}
+
 
 /** Everything the tool list is built from, resolved once at start. */
 export interface ToolSettings {
@@ -159,47 +156,6 @@ const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
 /**
- * Web search over the SDK's `resolveWebSearchAdapter`, fed only the variables TheoClaw honours.
- * `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`) wins; else Brave when
- * `BRAVE_API_KEY` is set, else the generic adapter when `THEOKIT_SEARCH_API_URL` and
- * `THEOKIT_SEARCH_API_KEY` both are. A Tavily key alone never turns search on here. A blank value
- * counts as unset.
- */
-function readSearch(env: Env, fetchImpl: typeof fetch): SearchSettings {
-  const chosen = nonBlank(env.THEOCLAW_SEARCH)
-  if (chosen !== undefined && chosen !== 'tavily' && !chosen.startsWith('searxng:')) {
-    throw new TheoClawConfigError(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`, { variable: 'THEOCLAW_SEARCH' })
-  }
-  const input: Record<string, string | undefined> = {
-    BRAVE_API_KEY: env.BRAVE_API_KEY,
-    THEOKIT_SEARCH_API_URL: env.THEOKIT_SEARCH_API_URL,
-    THEOKIT_SEARCH_API_KEY: env.THEOKIT_SEARCH_API_KEY,
-    ...(chosen === undefined ? {} : { THEOKIT_SEARCH: chosen, TAVILY_API_KEY: env.TAVILY_API_KEY }),
-  }
-  try {
-    const { adapter, provider } = resolveWebSearchAdapter(input, { fetchImpl })
-    return adapter === undefined || provider === undefined ? { kind: 'off' } : { kind: provider, adapter }
-  } catch (error) {
-    throw searchConfigError(error, chosen)
-  }
-}
-
-/** The SDK's `ConfigurationError` as a `TheoClawConfigError` naming the variable the operator should fix. */
-function searchConfigError(error: unknown, chosen: string | undefined): unknown {
-  const code = (error as { code?: unknown } | null)?.code
-  const message = error instanceof Error ? error.message : ''
-  if (code === 'web_search_invalid_url') {
-    return new TheoClawConfigError('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888', { variable: 'THEOCLAW_SEARCH' })
-  }
-  if (code === 'web_search_missing_variable') {
-    const variable = /^([A-Z0-9_]+) is not set/.exec(message)?.[1] ?? 'THEOCLAW_SEARCH'
-    const text = chosen === 'tavily' && variable === 'TAVILY_API_KEY' ? 'THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY' : message
-    return new TheoClawConfigError(text, { variable })
-  }
-  return error
-}
-
-/**
  * `read-only` confines the shell and the file tools, and the browser server is the one built-in
  * server that runs outside the sandbox and writes: its screenshot, console and PDF tools write the
  * file they are given. MCP servers the operator names (`THEOCLAW_EXTERNAL_TOOLS`, an import) run
@@ -224,7 +180,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const hostTools = readHostTools(env)
   const sandboxMode = readSandboxMode(env)
   const backend = readSandboxBackend(env)
-  const search = readSearch(env, deps.fetchImpl ?? globalThis.fetch)
+  const search = resolveSearch(env, deps.fetchImpl ?? globalThis.fetch)
   const browser = readBrowser(env, deps.browser)
   const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
   const external = resolveExternalTools(env)
