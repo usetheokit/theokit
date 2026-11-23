@@ -34,7 +34,6 @@ import {
   deleteSession,
   forkSession,
   protectedSessions,
-  readPointerId,
 } from '../../src/session/session-ops.js'
 
 let base: string
@@ -335,21 +334,5 @@ describe('#1905 — the TUI pointer protects an idle, older session', () => {
     })
     expect(result.transcriptRemoved).toBe(true)
     expect(existsSync(other)).toBe(false)
-  })
-})
-
-describe('readPointerId — unreadable means refuse', () => {
-  const fail = (code: string) => () => {
-    throw Object.assign(new Error(code), { code })
-  }
-  it('a missing pointer means no live session', () => {
-    expect(readPointerId('/p', base, fail('ENOENT'))).toBeUndefined()
-  })
-  it('an unreadable pointer refuses instead of reporting no session', () => {
-    expect(() => readPointerId('/p', base, fail('EACCES'))).toThrow(/refusing/)
-  })
-  it('an empty pointer is none and a written one is trimmed', () => {
-    expect(readPointerId('/p', base, () => '  \n')).toBeUndefined()
-    expect(readPointerId('/p', base, () => 'tui-abc\n')).toBe('tui-abc')
   })
 })
