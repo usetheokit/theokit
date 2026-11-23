@@ -95,6 +95,10 @@ export class RelayState {
     inner: A2ATransport,
     onAccepted?: () => void,
   ): Promise<{ readonly from: string; readonly plaintext: string }[]> {
+    // Trade-off: the SDK calls `acceptReceived` only after a message authenticated from a trusted
+    // peer, but before it knows the sequence is fresh. Closing the gate here is what lets it close
+    // before the counter write ends; the cost is that a replayed (then dropped) message also closes
+    // it for the rest of the turn. The gate errs towards withholding a send, never towards allowing one.
     const sequences: SequenceStore = {
       nextSent: (peer) => this.sequences.nextSent(peer),
       acceptReceived: (peer, seq) => {

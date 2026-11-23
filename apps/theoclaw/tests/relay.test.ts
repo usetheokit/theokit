@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { RelayClient, RelayTurnGate, relayTools } from '../src/relay/relay-client.js'
-import { generateA2AIdentity } from '@theokit/sdk/a2a'
+import { generateA2AIdentity, type A2AMessage, type A2ATransport } from '@theokit/sdk/a2a'
 import { relayRoute } from '../src/relay/relay-server.js'
 import { readRelaySettings } from '../src/relay/relay-settings.js'
 import { RelayState } from '../src/relay/relay-state.js'
@@ -16,6 +16,98 @@ const TOKEN = 'r'.repeat(40)
 function dir(): string {
   return mkdtempSync(join(tmpdir(), 'relay-'))
 }
+
+/** A one-queue wire that keeps every message sent, so a test can read, change or replay it. */
+function wire(): A2ATransport & { readonly sent: A2AMessage[]; queue: A2AMessage[] } {
+  const w = {
+    sent: [] as A2AMessage[],
+    queue: [] as A2AMessage[],
+    send: async (m: A2AMessage) => {
+      w.sent.push(m)
+      w.queue.push(m)
+    },
+    poll: async () => w.queue.splice(0),
+  }
+  return w
+}
+
+describe('sealed messages on the SDK transport (OC-14)', () => {
+  it('round-trips between two instances and hides the plaintext on the wire', async () => {
+    const fileB = join(dir(), 'b.json')
+    const b0 = await RelayState.load(fileB, new Map())
+    const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', b0.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const w = wire()
+    await a.send(w, 'bob', 'secret plan')
+    expect(JSON.stringify(w.sent)).not.toContain('secret plan')
+    expect(await b.receive(w)).toEqual([{ from: 'alice', plaintext: 'secret plan' }])
+  })
+
+  it('refuses an untrusted peer on send, and drops untrusted, tampered, misaddressed, spoofed and re-sequenced messages', async () => {
+    const fileB = join(dir(), 'b.json')
+    const b0 = await RelayState.load(fileB, new Map())
+    const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', b0.publicKey]]))
+    const c = await RelayState.load(join(dir(), 'c.json'), new Map([['bob', b0.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const w = wire()
+    await expect(a.send(w, 'carol', 'x')).rejects.toThrow()
+    expect(w.sent).toEqual([])
+
+    // A sender outside the trust list.
+    await c.send(w, 'bob', 'from c')
+    expect(await b.receive(w)).toEqual([])
+
+    await a.send(w, 'bob', 'hello')
+    const good = w.sent.at(-1)!
+    const env = good.payload as { ct: string; seq: number; sender: string; recipient: string }
+
+    // Tampered ciphertext.
+    const flipped = Buffer.from(env.ct, 'base64url')
+    flipped[0] = flipped[0]! ^ 1
+    w.queue = [{ ...good, payload: { ...env, ct: flipped.toString('base64url') } }]
+    expect(await b.receive(w)).toEqual([])
+    // A changed sequence number.
+    w.queue = [{ ...good, payload: { ...env, seq: env.seq + 1 } }]
+    expect(await b.receive(w)).toEqual([])
+    // Spoofed sender: c's key on a's envelope.
+    w.queue = [{ ...good, payload: { ...env, sender: c.publicKey } }]
+    expect(await b.receive(w)).toEqual([])
+    // Wrong recipient: the envelope opens only for the instance it names.
+    w.queue = [good]
+    expect(await c.receive(w)).toEqual([])
+    // The untouched message still opens: none of the forgeries used up its sequence.
+    w.queue = [good]
+    expect((await b.receive(w)).map((m) => m.plaintext)).toEqual(['hello'])
+  })
+
+  it('refuses a replay on the SDK transport', async () => {
+    const fileB = join(dir(), 'b.json')
+    const b0 = await RelayState.load(fileB, new Map())
+    const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', b0.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const w = wire()
+    await a.send(w, 'bob', 'once')
+    const sealed = w.sent[0]!
+    w.queue = [sealed, sealed]
+    expect((await b.receive(w)).map((m) => m.plaintext)).toEqual(['once'])
+    w.queue = [sealed]
+    expect(await b.receive(w)).toEqual([])
+  })
+
+  it('the gate also closes for a replayed message (it is conservative, never permissive)', async () => {
+    const fileB = join(dir(), 'b.json')
+    const b0 = await RelayState.load(fileB, new Map())
+    const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', b0.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const w = wire()
+    await a.send(w, 'bob', 'once')
+    await b.receive(w)
+    w.queue = [w.sent[0]!]
+    const gate = new RelayTurnGate()
+    expect(await b.receive(w, () => gate.markReceived())).toEqual([])
+    expect(gate.blocked).toBe(true)
+  })
+})
 
 async function post(route: (r: Request) => Promise<Response>, path: string, body: unknown, token = TOKEN) {
   return route(
@@ -198,6 +290,41 @@ describe('relay state files', () => {
     await new Promise((r) => setImmediate(r))
     expect(gate.blocked).toBe(true)
     expect((await reading).map((m) => m.plaintext)).toEqual(['hi'])
+  })
+})
+
+describe('relay mailbox limits', () => {
+  const message = (to: string, payload: unknown = 1) => ({
+    type: 't',
+    payload,
+    from: 'f',
+    to,
+    timestamp: 1,
+  })
+
+  it('queues concurrent puts without losing one', async () => {
+    const file = join(dir(), 'box.json')
+    const route = relayRoute(TOKEN, { persistPath: file })
+    const to = generateA2AIdentity().publicKey
+    await Promise.all(
+      [1, 2, 3].map((n) => post(route, '/relay/put', { message: message(to, n) })),
+    )
+    const again = relayRoute(TOKEN, { persistPath: file })
+    const taken = (await (await post(again, '/relay/take', { recipient: to })).json()) as {
+      envelopes: unknown[]
+    }
+    expect(taken.envelopes).toHaveLength(3)
+  })
+
+  it('keeps the old caps: 100 messages per recipient and a 256 KiB body', async () => {
+    const route = relayRoute(TOKEN)
+    const to = generateA2AIdentity().publicKey
+    for (let n = 0; n < 100; n++) {
+      expect((await post(route, '/relay/put', { message: message(to, n) })).status).toBe(200)
+    }
+    expect((await post(route, '/relay/put', { message: message(to) })).status).toBe(507)
+    const big = message(generateA2AIdentity().publicKey, 'x'.repeat(256 * 1024 + 1))
+    expect((await post(route, '/relay/put', { message: big })).status).toBe(413)
   })
 })
 

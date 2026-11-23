@@ -11,6 +11,10 @@ import { createHttpMailboxHandler } from '@theokit/sdk/a2a'
 export const RELAY_PUT_PATH = '/relay/put'
 export const RELAY_TAKE_PATH = '/relay/take'
 
+/** The limits the relay always had, held here so an SDK default change cannot loosen them. */
+export const RELAY_MAX_PER_RECIPIENT = 100
+export const RELAY_MAX_BODY_BYTES = 256 * 1024
+
 export function isRelayPath(pathname: string): boolean {
   return pathname === RELAY_PUT_PATH || pathname === RELAY_TAKE_PATH
 }
@@ -19,5 +23,10 @@ export function relayRoute(
   token: string,
   options: { readonly maxPerRecipient?: number; readonly persistPath?: string } = {},
 ): (request: Request) => Promise<Response> {
-  return createHttpMailboxHandler({ token, ...options })
+  return createHttpMailboxHandler({
+    token,
+    maxPerRecipient: RELAY_MAX_PER_RECIPIENT,
+    maxBodyBytes: RELAY_MAX_BODY_BYTES,
+    ...options,
+  })
 }
