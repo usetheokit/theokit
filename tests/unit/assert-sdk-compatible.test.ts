@@ -52,7 +52,7 @@ describe('assertSdkCompatible (M48 T3.2)', () => {
       expect(() => assertSdkCompatible({ resolveVersion: () => v }), v).not.toThrow()
   })
 
-  it('test_throws_typed_error_on_sdk_14', () => {
+  it('test_throws_typed_error_at_the_sdk_14_ceiling', () => {
     let thrown: unknown
     try {
       assertSdkCompatible({ resolveVersion: () => '14.0.0' })
