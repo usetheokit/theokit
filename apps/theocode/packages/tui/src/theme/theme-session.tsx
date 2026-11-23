@@ -48,20 +48,31 @@ import { THEME_RESOLUTION, THEMES } from './theme.js'
 const initialTheme = (): TheoThemeProp => THEMES[THEME_RESOLUTION.base]
 const controller = createThemeController(initialTheme())
 
+/**
+ * The face the provider sees. It forwards to the controller and only counts subscriptions, so
+ * `themeSubscriberCountForTest` can observe the unsubscribe without mutating the shared controller.
+ */
 let subscribers = 0
-const baseSubscribe = controller.subscribe
-controller.subscribe = (listener) => {
-  subscribers += 1
-  const off = baseSubscribe(listener)
-  return () => {
-    subscribers -= 1
-    off()
-  }
+const surface = {
+  get: controller.get,
+  set: controller.set,
+  subscribe(listener: () => void): () => void {
+    subscribers += 1
+    const off = controller.subscribe(listener)
+    return () => {
+      subscribers -= 1
+      off()
+    }
+  },
 }
 
 /**
  * What `/theme` selected, for `/status` and for `/theme`'s own report: a base name, or
  * `custom:<slug>`. `undefined` while the environment still decides.
+ *
+ * #14 — this used to sit beside a narrower accessor that answered only "which of the three built-in
+ * bases", so after `/theme custom:midnight` the reports described the environment's answer while
+ * the frame was drawn in the operator's own file. One selection, one fact, no second accessor.
  */
 let sessionLabelValue: string | undefined
 
@@ -69,7 +80,13 @@ export function sessionThemeLabel(): string | undefined {
   return sessionLabelValue
 }
 
-/** Switch the base and tell the frame. */
+/**
+ * Switch the base and tell the frame.
+ *
+ * The notification is load-bearing: without it the next render would pick the new base up by
+ * accident and the one after it would not — a UI that repaints on unrelated keystrokes is read as
+ * a rendering bug rather than as a command.
+ */
 export function setSessionThemeBase(base: ThemeBase): void {
   sessionLabelValue = base
   setSessionTheme(THEMES[base])
@@ -87,7 +104,7 @@ export function setSessionTheme(prop: TheoThemeProp, label?: string): void {
 
 /** The provider, driven by the controller, so a switch reaches `useTheoTheme()` in a child. */
 export function ThemedSurface({ children }: { children: ReactNode }): ReactElement {
-  return <TheoTUIProvider controller={controller}>{children}</TheoTUIProvider>
+  return <TheoTUIProvider controller={surface}>{children}</TheoTUIProvider>
 }
 
 /** Test-only: drop the override so each test starts from the environment's answer. */
