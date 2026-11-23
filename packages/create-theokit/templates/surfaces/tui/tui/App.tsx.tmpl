@@ -8,7 +8,6 @@ import {
   findPendingApproval,
   InkInputProvider,
   KeyboardHelp,
-  messagesToAgentEvents,
   Notice,
   PermissionPrompt,
   readTurnUsage,
@@ -16,6 +15,7 @@ import {
   StatusFooter,
   TheoTUIProvider,
   Toast,
+  useAgentTimeline,
   useTurnElapsed,
   type UIMessageLike,
 } from '@theokit/tui'
@@ -42,6 +42,8 @@ const GREETING: UIMessageLike = {
   role: 'assistant',
   parts: [{ type: 'text', text: AGENT.greeting }],
 }
+/** Module-stable (`useAgentTimeline` re-projects when the prefix identity changes). */
+const PREFIX: readonly UIMessageLike[] = [GREETING]
 
 /** Resolve the provider key from the environment (OpenRouter / Anthropic / OpenAI). */
 const apiKey = (): string =>
@@ -71,7 +73,7 @@ export function App(): ReactElement {
   const backToChat = useCallback(() => setMode('chat'), [])
 
   // Derived from the store (M46): timeline events (greeting prepended), the last turn's usage, HITL approval.
-  const events = messagesToAgentEvents([GREETING, ...agent.thread])
+  const { events } = useAgentTimeline(agent, { prefix: PREFIX })
   const lastUsage = agent.thread.map(readTurnUsage).filter((u) => u !== undefined).at(-1)
   const rawApproval = findPendingApproval(agent.thread)
   const pendingApproval =
