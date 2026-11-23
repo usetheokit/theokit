@@ -11,6 +11,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Named storage locations and the offsite transfer now come from `@theokit/host/backup` (`createStorageRegistry`, `uploadDirectory`, `downloadDirectory`); `src/backup/storage.ts` is gone. The host reads the existing flat `storage.json` and `.tcb` archives (encrypted or not), so nothing needs converting; new backups are written as `.tcbk` and the registry is rewritten in the host format at the next `storage init`. Observable differences: `storage list` prints `name`, `root`, `encrypted` and `state` (no free space), and a stalled HTTPS request ends after 60 s (#2751).
+
 - `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
 
 - Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).
@@ -22,6 +24,12 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
 
+- Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
+
+- The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone, and the output matches `formatUsd` (#2710).
+
+- Removed the unwired `media/understanding.ts` (and its tests): nothing called it, and the pinned `gateway-telegram` adapter does not produce `event.audio`, so it could not be wired (#2763).
+- The transcript sweeper's timer now comes from `startInProcessSweeper` in `@theokit/agents/session`; the schedule and reports are unchanged.
 - `@theokit/tui` is pinned at 0.83.8 (was 0.83.4) and the TUI drops its own stream reducer for an interrupted turn: the framework's `interrupted` and `notice` events now fold it. Visible differences: a tool still running when the owner presses Esc is shown as cancelled (it stayed running), and the line reads "Interrupted by user" (was "interrupted"); a notice posted after the interruption is drawn below the turn (#2728).
 
 - The profile of `THEOCLAW_PROFILE` is now resolved and applied by the SDK's `resolveProfile` and `applyProfile` (`@theokit/sdk/persistence`); the app keeps the name message, the conflict refusal before the instance lock and `TheoClawConfigError` (#2715).

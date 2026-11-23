@@ -171,9 +171,47 @@ export async function unpackInto(plain: AsyncIterable<Buffer>, target: string): 
   }
 }
 
+/** The roots a TheoClaw backup holds; its older manifests do not list them. */
+export const LEGACY_ROOTS: readonly string[] = ['state', 'workspace']
+
+/**
+ * Write the files of an older TheoClaw archive (`{ files: [{ path, data: base64 }] }`) below
+ * `target`, which must exist, with both roots present even when empty. Nothing is trusted until
+ * the caller has verified the manifest.
+ */
+export async function unpackLegacyInto(plain: Buffer, target: string): Promise<void> {
+  let payload: unknown
+  try {
+    payload = JSON.parse(plain.toString('utf8'))
+  } catch (cause) {
+    throw new BackupError('the archive is not a backup archive', { cause })
+  }
+  const files = (payload as { files?: unknown } | null)?.files
+  if (!Array.isArray(files)) throw new BackupError('the archive is not a backup archive')
+  for (const root of LEGACY_ROOTS)
+    await mkdir(path.join(target, root), { recursive: true, mode: 0o700 })
+  const seen = new Set<string>()
+  for (const file of files as unknown[]) {
+    const f = file as { path?: unknown; data?: unknown } | null
+    if (typeof f?.path !== 'string' || typeof f.data !== 'string') {
+      throw new BackupError('the archive holds a malformed entry')
+    }
+    const dest = containedPath(target, f.path)
+    if (seen.has(f.path)) throw new BackupError(`archive lists "${f.path}" twice`, { path: f.path })
+    seen.add(f.path)
+    await mkdir(path.dirname(dest), { recursive: true, mode: 0o700 })
+    const handle = await open(dest, 'wx', 0o600)
+    try {
+      await writeAll(handle, Buffer.from(f.data, 'base64'))
+    } finally {
+      await handle.close()
+    }
+  }
+}
+
 /** Check every file the manifest lists exists with its size and sha256. */
-export async function verifyBackupDir(dir: string): Promise<void> {
-  const manifest = await readManifest(dir)
+export async function verifyBackupDir(dir: string, legacyRoots?: readonly string[]): Promise<void> {
+  const manifest = await readManifest(dir, legacyRoots)
   for (const entry of manifest.files) {
     const { root, relative } = splitEntryPath(entry.path, manifest.roots)
     const file = path.join(dir, root, ...relative.split('/'))

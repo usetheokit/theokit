@@ -1,6 +1,6 @@
 import { MANAGED_SETTINGS_PATHS } from '@theokit/agents/config'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 
 import { CONFIG_SCHEMA_KEYS } from './config-contract.js'
 import { translateSettings, type SettingsRead } from './settings-json.js'

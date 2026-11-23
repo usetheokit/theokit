@@ -20,7 +20,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 import { CursorNotDrainedError, listAgents } from '../../../src/session/agent-list.js'
 
 const DAY = 86_400_000
