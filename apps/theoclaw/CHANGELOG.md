@@ -27,6 +27,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - The channel loop passes `reconnect.retryFalse` and uses the gateway's `maskSecrets`, replacing its `watchConnect` wrapper and its own copy; a connect that fails after its timeout is now reported as `start failed` (was `abandoned start failed`) (#2706).
 
+- `tests/fakes.ts` re-exports `FakeAgent` from `@theokit/agents/testing` and no longer defines it. The gateway's `FakeAdapter` and `messageEvent` stay local: `@theokit/gateway` 0.30.0 has no `testing` subpath yet (#2759).
+
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
 
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`, and accepts `--json`; the generation protection and default are unchanged.
