@@ -4,6 +4,9 @@ import { parseEnv } from 'node:util'
 
 import { loadProjectEnv } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
+import { resolveProfile } from '@theokit/sdk/persistence'
+
+import { resolveSecretRefs } from '../auth/secret-refs.js'
 
 /** What every step receives: the environment to mutate, the working directory and the app's home. */
 export interface BootstrapContext {
@@ -117,4 +120,70 @@ export const projectEnvStep: BootstrapStep = {
       }
     })
   },
+}
+
+const SDK_HOME_VARIABLES = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME'] as const
+
+/** `sdkHomeStep` with `onConflict: 'refuse'` found an SDK home variable already set. Names it, never its value. */
+export class SdkHomeConflictError extends TheokitAgentError {
+  override readonly name = 'SdkHomeConflictError'
+  readonly variable: string
+
+  constructor(variable: string) {
+    super(`[@theokit/agents] ${variable} is already set; sdkHomeStep refuses to override it`, {
+      code: 'sdk_home_conflict',
+      isRetryable: false,
+    })
+    this.variable = variable
+  }
+}
+
+export type SdkHomeStepOptions = (
+  | { readonly dirName: string; readonly profile?: undefined }
+  | { readonly profile: string; readonly dirName?: undefined }
+) & {
+  /** A variable already set in `ctx.env` (even empty): `'refuse'` fails, `'env-wins'` keeps it. Default `'env-wins'`. */
+  readonly onConflict?: 'refuse' | 'env-wins'
+}
+
+/**
+ * Points `THEOKIT_HOME` and `THEOKIT_AUTH_HOME` at one directory: `<ctx.home>/<dirName>`, or the
+ * SDK profile directory `<ctx.home>/.theokit/profiles/<profile>`. Both variables are checked before
+ * either is written. Creates no directories.
+ */
+export function sdkHomeStep(options: SdkHomeStepOptions): BootstrapStep {
+  const policy = options.onConflict ?? 'env-wins'
+  return {
+    name: 'sdk-home',
+    run(ctx) {
+      const dir =
+        options.profile === undefined
+          ? join(ctx.home, options.dirName)
+          : resolveProfile(options.profile, {
+              profilesRoot: join(ctx.home, '.theokit', 'profiles'),
+            }).directory
+      if (policy === 'refuse') {
+        for (const variable of SDK_HOME_VARIABLES) {
+          if (ctx.env[variable] !== undefined) throw new SdkHomeConflictError(variable)
+        }
+      }
+      for (const variable of SDK_HOME_VARIABLES) ctx.env[variable] ??= dir
+    },
+  }
+}
+
+/**
+ * Replaces every `ctx.env` value that is a secret reference with the value read from its store
+ * (the built-in stores of `resolveSecretRefs`). `ctx.env` changes only after every reference resolved.
+ */
+export function secretRefsStep(): BootstrapStep {
+  return {
+    name: 'secret-refs',
+    async run(ctx) {
+      const { env } = await resolveSecretRefs(ctx.env)
+      for (const [key, value] of Object.entries(env)) {
+        if (value !== undefined && ctx.env[key] !== value) ctx.env[key] = value
+      }
+    },
+  }
 }
