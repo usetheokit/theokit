@@ -5,9 +5,9 @@ import { homedir } from 'node:os'
 
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
+import { resolveSecretRefs } from '@theokit/agents/auth'
 
 import { startTheoClaw } from './composition.js'
-import { resolveSecretRefs } from './secret-refs.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'

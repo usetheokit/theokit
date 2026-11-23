@@ -123,7 +123,44 @@ describe('runHeadlessTurn', () => {
   })
 })
 
+describe('runHeadlessTurn format', () => {
+  it('writes only the formatter strings and keeps the exit code rule', async () => {
+    const t = io()
+    const r = await runHeadlessTurn(from([finish()]), {
+      io: t.io,
+      format: (e) => (e.type === 'finish' ? undefined : { out: `<${e.type}>` }),
+    })
+    expect(r).toMatchObject({ outcome: 'empty', exitCode: 1 })
+    expect(t.err).toEqual([])
+    expect(t.out.every((s) => /^<.+>$/.test(s))).toBe(true)
+  })
+
+  it('does not print the final text or json when a formatter is given', async () => {
+    const t = io()
+    const r = await runHeadlessTurn(from([...text('a', 'hello'), finish()]), {
+      io: t.io,
+      json: true,
+      format: () => ({ err: 'e' }),
+    })
+    expect(r).toMatchObject({ outcome: 'ok', exitCode: 0, finalText: 'hello' })
+    expect(t.out).toEqual([])
+    expect(t.err.length).toBeGreaterThan(0)
+    expect(t.err.every((s) => s === 'e')).toBe(true)
+  })
+})
+
 describe('readHeadlessPrompt', () => {
+  it('forced reads piped input when the argument is -', () => {
+    expect(readHeadlessPrompt({ prompt: '-', stdin: 'forced', readStdin: () => 'piped\n' })).toBe(
+      'piped',
+    )
+  })
+
+  it('forced with empty stdin and a - argument throws EmptyPromptError', () => {
+    const read = () => readHeadlessPrompt({ prompt: '-', stdin: 'forced', readStdin: () => '' })
+    expect(read).toThrow(EmptyPromptError)
+  })
+
   it('with stdin required and empty input throws EmptyPromptError', () => {
     const read = () => readHeadlessPrompt({ stdin: 'required', readStdin: () => '  \n' })
     expect(read).toThrow(EmptyPromptError)

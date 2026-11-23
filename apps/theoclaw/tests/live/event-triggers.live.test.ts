@@ -9,7 +9,8 @@ import { EmailAdapter } from '@theokit/gateway-email'
 import { Agent } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { hookFingerprint } from '../../src/agent/hook-approval.js'
+import { hookFingerprint } from '@theokit/agents/hooks'
+import { hookIdentity } from '../../src/agent/hook-approval.js'
 import { startTheoClaw } from '../../src/composition.js'
 import type { RunningTheoClaw } from '../../src/composition.js'
 import { agentOptionsFor } from '../../src/control-plane/agent-factory.js'
@@ -108,7 +109,7 @@ function stopHookWorkspace(): { readonly cwd: string; readonly marker: string; r
   const command = `touch ${marker}`
   mkdirSync(join(cwd, '.theokit'))
   writeFileSync(join(cwd, '.theokit', 'settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command }] }] } }))
-  return { cwd, marker, fingerprint: hookFingerprint({ sourceEvent: 'Stop', command, timeoutMs: 30_000 }) }
+  return { cwd, marker, fingerprint: hookFingerprint(hookIdentity({ sourceEvent: 'Stop', command, timeoutMs: 30_000 })) }
 }
 
 /**

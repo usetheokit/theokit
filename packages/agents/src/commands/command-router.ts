@@ -33,6 +33,11 @@ export interface CommandDefinition<Ctx = void> {
   readonly aliases?: readonly string[]
   /** Routed, but not shown in the palette. */
   readonly hidden?: boolean
+  /**
+   * Match only when the WHOLE trimmed input is the name: `/new` routes, `/new chat` does not (it is
+   * an `unknown-command` error). Omitted ⇒ the default word-boundary match.
+   */
+  readonly exact?: boolean
   /** Called by a registry's `dispatch` with the argument and the caller's context. */
   readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>
 }
@@ -44,6 +49,7 @@ export function defineCommand<Ctx = void>(input: {
   arg?: CommandArgument
   aliases?: readonly string[]
   hidden?: boolean
+  exact?: boolean
   run?: (arg: string, ctx: Ctx) => void | Promise<void>
 }): CommandDefinition<Ctx> {
   const { arg, ...rest } = input
@@ -80,6 +86,7 @@ export function routeCommand<Ctx = void>(
   if (!input.startsWith(PREFIX)) return { kind: 'message', text: input }
 
   const body = input.slice(PREFIX.length)
+  const whole = body.trim()
 
   // Longest first, so a name can never be swallowed by its own prefix. Ties are resolved after the
   // match, where the ambiguity can be REPORTED rather than silently decided.
@@ -88,7 +95,9 @@ export function routeCommand<Ctx = void>(
     [command.name, ...(command.aliases ?? [])].map((typed) => ({ typed, command })),
   )
   const byLength = [...entries].sort((a, b) => b.typed.length - a.typed.length)
-  const matches = byLength.filter((entry) => matchesName(body, entry.typed))
+  const matches = byLength.filter((entry) =>
+    entry.command.exact === true ? whole === entry.typed : matchesName(body, entry.typed),
+  )
   // Guarded by LENGTH rather than by `matches[0] === undefined`: without
   // `noUncheckedIndexedAccess`, indexing an empty array is typed as present, so the compiler calls
   // the undefined-check impossible while the runtime value is exactly that. Checking the length is

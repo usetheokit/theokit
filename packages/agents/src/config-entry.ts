@@ -262,6 +262,7 @@ export {
   CLAUDE_SETTINGS_KEYS,
   FOREIGN_KEY_DECISIONS,
   firstSettingsFile,
+  permissionRulesFromLayers,
   readSettingsFile,
   settingsCandidates,
   type ReadSettingsFileOptions,

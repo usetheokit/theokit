@@ -3,7 +3,8 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { createHookApprovalGate, hookFingerprint } from '../src/agent/hook-approval.js'
+import { hookFingerprint } from '@theokit/agents/hooks'
+import { createHookApprovalGate, hookIdentity } from '../src/agent/hook-approval.js'
 import { runCli } from '../src/cli.js'
 import { harness, scratchDir } from './support/cli-harness.js'
 
@@ -31,19 +32,27 @@ const hook = (command: string, timeout?: number) => ({
 describe('theoclaw hooks list', () => {
   it('marks the approved hook and the unapproved one, with fingerprints the gate accepts', async () => {
     const workspace = workspaceWith({ hooks: { PreToolUse: [hook('echo a'), hook('echo b')] } })
-    const a = hookFingerprint({ sourceEvent: 'PreToolUse', command: 'echo a', timeoutMs: 30_000 })
-    const b = hookFingerprint({ sourceEvent: 'PreToolUse', command: 'echo b', timeoutMs: 30_000 })
+    const a = hookFingerprint(hookIdentity({ sourceEvent: 'PreToolUse', command: 'echo a', timeoutMs: 30_000, matcher: '*' }))
+    const b = hookFingerprint(hookIdentity({ sourceEvent: 'PreToolUse', command: 'echo b', timeoutMs: 30_000, matcher: '*' }))
     const { code, out } = await run(['hooks', 'list'], workspace, a)
     expect(code).toBe(0)
     expect(out.split('\n').filter(Boolean)).toEqual([`PreToolUse\t${a}\tapproved`, `PreToolUse\t${b}\tnot approved`])
     const gate = createHookApprovalGate(new Set([a]))
-    expect(gate.approve?.({ sourceEvent: 'PreToolUse', event: 'preToolUse', command: 'echo a', timeoutMs: 30_000 } as never)).toBe(true)
+    expect(gate.approve?.({ sourceEvent: 'PreToolUse', event: 'preToolUse', command: 'echo a', timeoutMs: 30_000, matcher: '*' } as never)).toBe(true)
+  })
+
+  it('lists a fingerprint that covers the matcher', async () => {
+    const workspace = workspaceWith({ hooks: { PreToolUse: [{ ...hook('echo a'), matcher: 'Write' }] } })
+    const { out } = await run(['hooks', 'list'], workspace)
+    expect(out).toContain(
+      hookFingerprint(hookIdentity({ sourceEvent: 'PreToolUse', command: 'echo a', timeoutMs: 30_000, matcher: 'Write' })),
+    )
   })
 
   it('uses the hook timeout in the fingerprint', async () => {
     const workspace = workspaceWith({ hooks: { Stop: [hook('touch x', 5)] } })
     const { out } = await run(['hooks', 'list'], workspace)
-    expect(out).toContain(hookFingerprint({ sourceEvent: 'Stop', command: 'touch x', timeoutMs: 5000 }))
+    expect(out).toContain(hookFingerprint(hookIdentity({ sourceEvent: 'Stop', command: 'touch x', timeoutMs: 5000, matcher: '*' })))
   })
 
   it('exits 1 with no settings file or no hooks', async () => {

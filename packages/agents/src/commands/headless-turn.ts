@@ -30,6 +30,12 @@ export interface HeadlessTurnOptions {
   /** Receives the final text, e.g. to write a `-o` file. */
   readonly outputLastMessage?: (text: string) => void | Promise<void>
   readonly exitCodes?: Partial<Record<HeadlessOutcome, number>>
+  /**
+   * Replaces the built-in rendering: each canonical event is passed in, and only the returned
+   * strings are written (`io` still receives them). Built-in diagnostics are not written either.
+   * Outcome and exit code are unchanged. Takes precedence over `json`.
+   */
+  readonly format?: (event: AgentOutputEvent) => { out?: string; err?: string } | undefined
 }
 
 const DEFAULT_EXIT_CODES: Record<HeadlessOutcome, number> = { ok: 0, error: 1, empty: 1, cut: 2 }
@@ -50,13 +56,17 @@ export class EmptyPromptError extends TheokitAgentError {
  */
 export function readHeadlessPrompt(input: {
   prompt?: string
-  stdin: 'ignore' | 'append' | 'required'
+  stdin: 'ignore' | 'append' | 'required' | 'forced'
   readStdin: () => string
 }): string {
   const arg = input.prompt?.trim() ?? ''
   let prompt = arg
   if (input.stdin === 'required') {
     prompt = input.readStdin().trim()
+  } else if (input.stdin === 'forced') {
+    const piped = input.readStdin().trim()
+    const fallback = arg === '-' ? '' : arg
+    prompt = piped === '' ? fallback : piped
   } else if (input.stdin === 'append') {
     const piped = input.readStdin().trim()
     if (piped !== '') prompt = arg === '' ? piped : `${arg}\n\n<stdin>\n${piped}\n</stdin>`
@@ -87,7 +97,20 @@ interface Collected {
   failed: boolean
 }
 
-function emit(event: AgentOutputEvent, io: HeadlessIo, json: boolean): void {
+type Format = NonNullable<HeadlessTurnOptions['format']>
+
+function emit(event: AgentOutputEvent, io: HeadlessIo, json: boolean, format?: Format): void {
+  if (format !== undefined) {
+    let r: ReturnType<Format>
+    try {
+      r = format(event)
+    } catch {
+      return
+    }
+    if (r?.out !== undefined) safe(io.out, r.out)
+    if (r?.err !== undefined) safe(io.err, r.err)
+    return
+  }
   if (json) {
     safe(io.out, `${JSON.stringify(event)}\n`)
     return
@@ -100,6 +123,7 @@ async function collect(
   chunks: AsyncIterable<WireChunk>,
   io: HeadlessIo,
   json: boolean,
+  format?: Format,
 ): Promise<Collected> {
   const reader = createWireReader()
   const state: Collected = { events: [], failed: false }
@@ -112,12 +136,12 @@ async function collect(
           state.failed = true
           state.errorCode ??= event.code
         }
-        emit(event, io, json)
+        emit(event, io, json, format)
       }
     }
   } catch (e) {
     state.failed = true
-    safe(io.err, `error: ${errorMessage(e)}\n`)
+    if (format === undefined) safe(io.err, `error: ${errorMessage(e)}\n`)
   }
   return state
 }
@@ -133,6 +157,18 @@ function classify(state: Collected, finalText: string): HeadlessOutcome {
   return finalText === '' && !hasTools ? 'empty' : 'ok'
 }
 
+function reportTurn(
+  io: HeadlessIo,
+  json: boolean,
+  outcome: HeadlessOutcome,
+  finalText: string,
+  stopReason: string | undefined,
+): void {
+  if (!json && finalText !== '') safe(io.out, `${finalText}\n`)
+  if (outcome === 'cut') safe(io.err, `turn cut: ${stopReason}\n`)
+  if (outcome === 'empty') safe(io.err, 'the turn produced no text and no tool calls\n')
+}
+
 /**
  * Consume one turn's wire chunks into stdout/stderr output and an exit code. Never rejects: a
  * thrown stream is an `error` outcome. Precedence: error, then cut, then empty, else ok.
@@ -142,20 +178,19 @@ export async function runHeadlessTurn(
   options: HeadlessTurnOptions,
 ): Promise<HeadlessTurnResult> {
   const { io } = options
-  const state = await collect(chunks, io, options.json === true)
+  const state = await collect(chunks, io, options.json === true, options.format)
   const finalText = finalMessageOf(state.events)
   const stopReason = state.meta?.stopReason
   let outcome = classify(state, finalText)
 
-  if (options.json !== true && finalText !== '') safe(io.out, `${finalText}\n`)
-  if (outcome === 'cut') safe(io.err, `turn cut: ${stopReason}\n`)
-  if (outcome === 'empty') safe(io.err, 'the turn produced no text and no tool calls\n')
+  const builtIn = options.format === undefined
+  if (builtIn) reportTurn(io, options.json === true, outcome, finalText, stopReason)
 
   try {
     await options.outputLastMessage?.(finalText)
   } catch (e) {
     outcome = 'error'
-    safe(io.err, `error: could not write the last message: ${errorMessage(e)}\n`)
+    if (builtIn) safe(io.err, `error: could not write the last message: ${errorMessage(e)}\n`)
   }
 
   const { errorCode } = state
