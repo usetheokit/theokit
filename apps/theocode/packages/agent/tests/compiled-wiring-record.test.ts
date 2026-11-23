@@ -49,6 +49,43 @@ describe('withCompiledWiring', () => {
     expect(w.skills.active).toEqual(['s2'])
   })
 
+  it('drops the entities the created agent did not get, and keeps scopes of the rest', () => {
+    const w = withCompiledWiring(
+      requested,
+      compiled({ mcpServers: ['b'], skills: { listed: ['s2'], readable: [] }, hooks: [] }),
+    )
+    expect(w.mcp.entities).toEqual([{ name: 'b', scope: 'project' }])
+    expect(w.skills.entities).toEqual([{ name: 's2', scope: 'project' }])
+    expect(w.hooks.entities.map((e) => e.name)).toEqual(['SessionStart  ./start.sh'])
+  })
+
+  it('keeps a trust-withheld row and its reason, and sets no reason the framework did not give', () => {
+    const withheld = wiredCapabilities({
+      posture: { allows: { mcp: false, skills: true, hooks: true, agentsMd: true } },
+      projectSourcesAllowed: false,
+      mcpServers: {},
+      mcpWithheld: ['theirs'],
+      configuredSkills: ['s1'],
+      hookEvents: [],
+      agentsMdFiles: [],
+      sandboxMode: 'workspace-write',
+    })
+    const w = withCompiledWiring(withheld, compiled({ skills: { listed: [], readable: [] } }))
+    expect(w.mcp.entities).toEqual([{ name: 'theirs', scope: 'project' }])
+    expect(w.mcp.off?.reason).toBe('suppressed-by-trust')
+    // The agent got no skill though one was configured and allowed: cause unknown, so no reason.
+    expect(w.skills.entities).toEqual([])
+    expect(w.skills.off).toBeUndefined()
+  })
+
+  it('clears a reason once something is active', () => {
+    const w = withCompiledWiring(
+      { ...requested, mcp: { ...requested.mcp, off: { reason: 'x' } } },
+      compiled({ mcpServers: ['a'] }),
+    )
+    expect(w.mcp.off).toBeUndefined()
+  })
+
   it('lists only the hooks whose event reached the agent', () => {
     const w = withCompiledWiring(requested, compiled({ hooks: [{ event: 'pre_tool_call' }] }))
     // `Stop` was configured and never reached the agent; `SessionStart` is delivered by this

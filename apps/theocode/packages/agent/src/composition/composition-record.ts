@@ -198,12 +198,34 @@ export function withCompiledWiring(
   const events = new Set(compiled.hooks.map((h) => h.event))
   return {
     ...record,
-    mcp: { ...record.mcp, active: [...compiled.mcpServers].sort() },
-    skills: { ...record.skills, active: [...compiled.skills.listed].sort() },
-    hooks: {
-      ...record.hooks,
-      active: record.hooks.active.filter((row) => reachedAgent(row, events)),
-    },
+    mcp: narrowed(record.mcp, [...compiled.mcpServers].sort()),
+    skills: narrowed(record.skills, [...compiled.skills.listed].sort()),
+    hooks: narrowed(
+      record.hooks,
+      record.hooks.active.filter((row) => reachedAgent(row, events)),
+    ),
+  }
+}
+
+/**
+ * The entity with `active` replaced by what the created agent got.
+ *
+ * `entities` drops a name that was active and no longer is, so it never lists something the agent
+ * does not have; a name that was never active (withheld by trust) stays, as the requested row it is.
+ * `off` is kept only while nothing is active — its cause was known then — and cleared once something
+ * is. A capability the agent emptied by itself gets no `off`: the framework does not say why.
+ */
+function narrowed(
+  entity: WiredCapabilities['mcp'],
+  active: readonly string[],
+): WiredCapabilities['mcp'] {
+  const now = new Set(active)
+  const was = new Set(entity.active)
+  return {
+    ...entity,
+    active,
+    entities: entity.entities.filter((e) => !was.has(e.name) || now.has(e.name)),
+    off: active.length === 0 ? entity.off : undefined,
   }
 }
 

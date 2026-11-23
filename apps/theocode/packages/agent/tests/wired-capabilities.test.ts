@@ -185,10 +185,22 @@ describe('B-076 — the record carries the sandbox mode', () => {
   it('test_a_capability_that_is_off_says_why', () => {
     const trust = wiredCapabilities(input({ posture: allows(false, true, true) }))
     expect(trust.mcp.off?.reason).toBe('suppressed-by-trust')
-    const config = wiredCapabilities(
-      input({ configuredSkills: [], disabled: { hooks: { reason: 'disabled-by-config' } } }),
+    expect(wiredCapabilities(input()).mcp.off).toBeUndefined()
+  })
+
+  it('test_a_name_in_both_scopes_keeps_both_rows_and_both_scopes', () => {
+    const w = wiredCapabilities(
+      input({
+        posture: allows(false, true, true),
+        mcpServers: { shared: {} },
+        mcpPersonal: ['shared'],
+        mcpWithheld: ['shared'],
+      }),
     )
-    expect(config.hooks.active).toEqual([])
-    expect(config.hooks.off).toEqual({ reason: 'disabled-by-config' })
+    expect(w.mcp.active).toEqual(['shared'])
+    expect(w.mcp.entities).toEqual([
+      { name: 'shared', scope: 'project' },
+      { name: 'shared', scope: 'personal' },
+    ])
   })
 })

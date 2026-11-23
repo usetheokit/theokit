@@ -4700,6 +4700,24 @@
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';"
           }
         },
+        "ScopedWiringCapability": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
+        },
+        "ScopedWiringGroup": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ScoreVerdict": {
           "tier": "stable",
           "declaration": "interface ScoreVerdict {\n    pass: boolean;\n    score?: number;\n    feedback?: string;\n}",
@@ -9532,6 +9550,20 @@
           "references": [],
           "internals": {}
         },
+        "recordScopedWiring": {
+          "tier": "stable",
+          "declaration": "declare function recordScopedWiring<K extends string>(input: {\n    readonly posture: {\n        readonly allows: Readonly<Record<string, boolean>>;\n    };\n    readonly requested: Readonly<Record<K, ScopedWiringCapability>>;\n}): Readonly<Record<K, WiredEntity>>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"
+          ],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
+        },
         "recordWiring": {
           "tier": "stable",
           "declaration": "declare function recordWiring<K extends string>(input: WiringRecordInput<K>): Readonly<Record<K, WiredEntity>>;",
@@ -13861,6 +13893,24 @@
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';"
           }
         },
+        "ScopedWiringCapability": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
+        },
+        "ScopedWiringGroup": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ScoreVerdict": {
           "tier": "stable",
           "declaration": "interface ScoreVerdict {\n    pass: boolean;\n    score?: number;\n    feedback?: string;\n}",
@@ -16682,6 +16732,20 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "recordScopedWiring": {
+          "tier": "stable",
+          "declaration": "declare function recordScopedWiring<K extends string>(input: {\n    readonly posture: {\n        readonly allows: Readonly<Record<string, boolean>>;\n    };\n    readonly requested: Readonly<Record<K, ScopedWiringCapability>>;\n}): Readonly<Record<K, WiredEntity>>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"
+          ],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
         },
         "renderTranscript": {
           "tier": "stable",
