@@ -80,16 +80,9 @@ describe('approvalChoices', () => {
 /**
  * A rejected call must not be reported as one that ran.
  *
- * Measured in the TUI by rejecting a real approval and dumping the event the renderer receives:
- *
- *     {"kind":"tool","name":"Ran echo probe2","status":"failed",
- *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'Bash' denied by human approver\",
- *                \"exitCode\":126}"}
- *
  * Every header here reads `failed` as "not active" and prints the past tense, so the transcript
- * said `Ran echo probe2` for a command that never executed. B-027 deleted a detector for this exact
- * shape on the grounds that "nothing in this repository or the SDK produces exit code 126"; the
- * measurement above says otherwise.
+ * said `Ran echo probe2` for a command that never executed. The refusal is the typed `refusal` on
+ * the event (`@theokit/tui` `ToolRefusal`); the result text and exit code are never consulted.
  */
 const denied = (name: string, input: Record<string, unknown>) =>
   ({
@@ -123,8 +116,10 @@ describe('a rejected tool call is not reported as one that ran', () => {
 
   it('test_a_timeout_reads_as_a_rejection', () => {
     expect(
-      formatToolHeader({ ...(denied('Bash', { command: 'ls' }) as object), refusal: { by: 'timeout' } } as never)
-        ?.name,
+      formatToolHeader({
+        ...(denied('Bash', { command: 'ls' }) as object),
+        refusal: { by: 'timeout' },
+      } as never)?.name,
     ).toBe('Rejected ls')
   })
 
@@ -156,13 +151,9 @@ describe('a rejected tool call is not reported as one that ran', () => {
 })
 
 /**
- * The BODY of a rejected call, which used to reach the user as raw JSON:
- *
- *     ⎿ {"stdout":"","stderr":"Tool 'Bash' denied by human approver","exitCode":126}
- *
- * Not a formatting oversight here — `formatToolResult` was never CALLED on the failure path.
- * `toToolEvent` gated the override on a field an errored part does not populate
- * (usetheokit/theokit-tui#156). With the gate fixed upstream, this is the body it produces.
+ * The BODY of a refused call. The toolkit supplies it from the typed `refusal` (`nothing ran:
+ * <reason>`), so the shell formatter has no refusal branch and treats marker text as the ordinary
+ * shell output it is.
  */
 describe('the body of a rejected call', () => {
   const result = (raw: unknown) =>
@@ -170,16 +161,30 @@ describe('the body of a rejected call', () => {
 
   it('test_marker_text_in_the_output_is_not_a_refusal', () => {
     expect(
-      result(JSON.stringify({ stdout: '', stderr: "Tool 'Bash' denied by human approver", exitCode: 126 })),
-    ).not.toMatch(/rejected|blocked/)
+      result(
+        JSON.stringify({
+          stdout: '',
+          stderr: "Tool 'Bash' denied by human approver",
+          exitCode: 126,
+        }),
+      ),
+    ).toBe("Tool 'Bash' denied by human approver")
+  })
+
+  it('test_a_refused_call_has_no_shell_body_so_the_toolkit_states_the_reason', () => {
+    const event = { name: 'Bash', status: 'failed', refusal: { by: 'human' } } as never
+
+    expect(formatToolResult(event, undefined)).toBeUndefined()
   })
 
   it('test_a_real_shell_failure_still_shows_its_output_and_code', () => {
     // Anti-vacuity, and the reason 126 alone is not the signal: a real shell returns 126 for
     // "command not executable", which deserves different words from "you said no".
-    expect(result(JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }))).toBe(
-      'bash: ./x: Permission denied\n(exit code: 126)',
-    )
+    expect(
+      result(
+        JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
+      ),
+    ).toBe('bash: ./x: Permission denied\n(exit code: 126)')
   })
 
   it('test_a_successful_run_is_untouched', () => {
@@ -220,8 +225,11 @@ describe('the explored grouping is worth more than a verb on a card', () => {
       } as never)?.name,
     ).toBe('Running echo hi')
     expect(
-      formatToolHeader({ name: 'ViewImage', status: 'completed', input: { path: 'a.png' } } as never)
-        ?.name,
+      formatToolHeader({
+        name: 'ViewImage',
+        status: 'completed',
+        input: { path: 'a.png' },
+      } as never)?.name,
     ).toBe('Viewed a.png')
   })
 })
@@ -229,16 +237,9 @@ describe('the explored grouping is worth more than a verb on a card', () => {
 /**
  * A call a policy refused must not be reported as one that ran either.
  *
- * Measured in the TUI on 2026-10-02 (TheoCode 0.27.0 on `@theokit/agents@15.0.2`): the operator's
- * `~/.claude/settings.json` carried a `permissions.allow` list without `ApplyPatch`, so the
- * permissions gate refused the call before it ran. `ctrl+o` showed
- *
- *     •  Edited hello.txt (+1 -0)
- *       ⎿ {"stdout":"","stderr":"`ApplyPatch` matched no rule in your `permissions` block, ...",
- *          "exitCode":126}
- *
- * and no `hello.txt` existed. The human-rejection branch above only recognises "denied by human
- * approver", so every other refusal fell through to the past tense.
+ * Measured in the TUI on 2026-10-02: a permissions gate refused `ApplyPatch` before it ran and
+ * `ctrl+o` showed `Edited hello.txt (+1 -0)` for a file that was never written. The signal is the
+ * typed `refusal` (`policy`, `hook`), whatever the output says.
  */
 const refused = (name: string, input: Record<string, unknown>) =>
   ({
@@ -252,10 +253,14 @@ const refused = (name: string, input: Record<string, unknown>) =>
 describe('a tool call a policy refused is not reported as one that ran', () => {
   it('test_a_refused_patch_is_not_reported_as_an_edit', () => {
     const header = formatToolHeader(
-      refused('ApplyPatch', { patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch' }),
+      refused('ApplyPatch', {
+        patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch',
+      }),
     )
 
-    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(/^Edited /)
+    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(
+      /^Edited /,
+    )
     expect(header?.name).toBe('Blocked the patch')
     expect(header?.summary).toContain('nothing ran')
   })
@@ -264,10 +269,25 @@ describe('a tool call a policy refused is not reported as one that ran', () => {
     expect(formatToolHeader(refused('Bash', { command: 'ls' }))?.name).toBe('Blocked ls')
   })
 
+  it('test_the_refusal_wins_over_whatever_the_output_became', () => {
+    // The result formatter and `turnErrorText` rewrite `output` before the header sees it; the
+    // header must not depend on what they left there.
+    for (const output of [
+      'nothing ran: x',
+      '{"stdout":"hi"} — set THEOCODE_DIAGNOSTICS=stderr',
+      '',
+    ]) {
+      const event = { ...(refused('ApplyPatch', {}) as object), output } as never
+      expect(formatToolHeader(event)?.name).toBe('Blocked the patch')
+    }
+  })
+
   it('test_a_hook_refusal_reads_as_a_block', () => {
     expect(
-      formatToolHeader({ ...(refused('Bash', { command: 'ls' }) as object), refusal: { by: 'hook' } } as never)
-        ?.name,
+      formatToolHeader({
+        ...(refused('Bash', { command: 'ls' }) as object),
+        refusal: { by: 'hook' },
+      } as never)?.name,
     ).toBe('Blocked ls')
   })
 
