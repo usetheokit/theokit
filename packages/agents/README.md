@@ -135,11 +135,14 @@ before anything resolves an SDK path; a failing step throws `BootstrapStepError`
 
 ```ts
 // bootstrap.ts
-import { defineAppBootstrap, projectEnvStep } from '@theokit/agents/config'
+import { defineAppBootstrap, projectEnvStep, sdkHomeStep, secretRefsStep } from '@theokit/agents/config'
 
 export const bootstrap = defineAppBootstrap([
   projectEnvStep, // loads .env, refusing the SDK's sovereign keys
-  { name: 'home', run: (ctx) => void (ctx.env.THEOKIT_HOME ??= ctx.home) },
+  // THEOKIT_HOME and THEOKIT_AUTH_HOME -> <home>/.myapp; or { profile: 'work' } for the SDK profile directory.
+  // onConflict: 'env-wins' (default) keeps a set variable; 'refuse' throws SdkHomeConflictError naming it.
+  sdkHomeStep({ dirName: '.myapp' }),
+  secretRefsStep(), // replaces env values that are secret references (built-in stores)
 ])
 
 // cli.ts and acp.ts both begin with the same call

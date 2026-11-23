@@ -1049,6 +1049,9 @@ Measured against `@theokit/sdk@5.32.0`.
 | `resolveFileMentions` | value |
 | `resolveOperatorRoots` | value |
 | `resolveOutputStyle` | value |
+| `SdkHomeConflictError` | value |
+| `sdkHomeStep` | value |
+| `secretRefsStep` | value |
 | `SETTINGS_LAYERS` | value |
 | `settingsCandidates` | value |
 | `settingsLayerChain` | value |
@@ -1105,6 +1108,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
 | `ResolvedFileMentions` | type |
+| `SdkHomeStepOptions` | type |
 | `SecurityFloorSpec` | type |
 | `Settings` | type |
 | `SettingsCandidate` | type |
