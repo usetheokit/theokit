@@ -4,7 +4,12 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { firstSettingsFile, readSettingsFile, settingsCandidates } from '../../src/config-entry.js'
+import {
+  firstSettingsFile,
+  readManagedSettings,
+  readSettingsFile,
+  settingsCandidates,
+} from '../../src/config-entry.js'
 
 function setup(files: Record<string, string>): string {
   const cwd = mkdtempSync(join(tmpdir(), 'two-roots-'))
@@ -83,5 +88,55 @@ describe('settings under two roots', () => {
     const c = settingsCandidates({ cwd, home: cwd, ownRoot: '.myapp', foreignRoot: false })
     expect(c.user).toHaveLength(1)
     expect(firstSettingsFile(c.project, opts)).toBeUndefined()
+  })
+
+  it('several own roots come in order, before the foreign root', () => {
+    const c = settingsCandidates({ cwd: '/p', home: '/h', ownRoot: ['.a', '.b'] })
+    expect(c.project.map((x) => [x.path, x.foreignRoot])).toEqual([
+      ['/p/.a/settings.json', false],
+      ['/p/.b/settings.json', false],
+      ['/p/.claude/settings.json', true],
+    ])
+  })
+
+  it('throwOnMalformed throws instead of warning', () => {
+    const cwd = setup({ '.myapp/settings.json': '{nope' })
+    const c = cands(cwd).project[0]!
+    expect(readSettingsFile(c, opts)).toBeUndefined()
+    expect(() => readSettingsFile(c, { ...opts, throwOnMalformed: true })).toThrow(/malformed JSON/)
+  })
+
+  it('a non-object permissions block is treated as absent', () => {
+    const cwd = setup({ '.myapp/settings.json': '{"permissions":"all"}' })
+    expect(readSettingsFile(cands(cwd).project[0]!, opts)?.permissionRules).toEqual([])
+  })
+
+  it('readManagedSettings reads the first existing path for the caller keys', () => {
+    const cwd = setup({
+      'a/managed-settings.json': '{"model":"m","other":1}',
+      'b/managed-settings.json': '{"model":"later"}',
+    })
+    const r = readManagedSettings({
+      paths: [
+        join(cwd, 'missing.json'),
+        join(cwd, 'a/managed-settings.json'),
+        join(cwd, 'b/managed-settings.json'),
+      ],
+      ownKeys: ['model'],
+    })
+    expect(r?.values).toEqual({ model: 'm' })
+    expect(r?.unrecognised).toEqual(['other'])
+  })
+
+  it('readManagedSettings warns on a malformed file and stops', () => {
+    const cwd = setup({ 'a/managed-settings.json': '{', 'b/managed-settings.json': '{}' })
+    const warns: string[] = []
+    const r = readManagedSettings({
+      paths: [join(cwd, 'a/managed-settings.json'), join(cwd, 'b/managed-settings.json')],
+      ownKeys: [],
+      onWarn: (m) => warns.push(m),
+    })
+    expect(r).toBeUndefined()
+    expect(warns).toHaveLength(1)
   })
 })
