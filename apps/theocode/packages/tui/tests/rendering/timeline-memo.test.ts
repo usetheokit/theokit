@@ -53,6 +53,33 @@ describe('explored grouping, through the real formatter', () => {
   })
 })
 
+describe('a refused call, through the real formatter', () => {
+  it('test_a_typed_refusal_renders_the_refusal_header_without_marker_text', () => {
+    const [event] = messagesToAgentEvents(
+      [
+        {
+          id: 'm',
+          role: 'assistant',
+          parts: [
+            {
+              type: 'tool-Bash',
+              toolCallId: 'r1',
+              state: 'output-error',
+              input: { command: 'ls' },
+              errorText: 'refused',
+              refusal: { by: 'human' },
+            },
+          ],
+        } as never,
+      ],
+      { formatToolHeader, formatToolResult },
+    )
+
+    expect(event).toMatchObject({ kind: 'tool', name: 'Rejected ls', status: 'failed' })
+    expect(JSON.stringify(event)).not.toMatch(/denied by human approver|126/)
+  })
+})
+
 describe('prepareThread — goal continuation', () => {
   it('test_a_goal_continuation_user_turn_is_collapsed', () => {
     const out = prepareThread([
