@@ -99,4 +99,52 @@ describe('readForeignSetup', () => {
     ])
     expect(setup.hooks).toEqual([])
   })
+
+  it('reads the project scope: hooks, .mcp.json and skills that shadow the user ones', () => {
+    const home = mkdtempSync(join(tmpdir(), 'fs-claude-'))
+    const cwd = mkdtempSync(join(tmpdir(), 'fs-proj-'))
+    const skill = (d: string): string => `---\nname: triage\ndescription: ${d}\n---\nbody\n`
+    write(home, '.claude/skills/triage/SKILL.md', skill('user'))
+    write(cwd, '.claude/skills/triage/SKILL.md', skill('project'))
+    write(
+      home,
+      '.claude/settings.json',
+      JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'user-hook' }] }] } }),
+    )
+    write(
+      cwd,
+      '.claude/settings.json',
+      JSON.stringify({
+        hooks: { Stop: [{ hooks: [{ type: 'command', command: 'project-hook' }] }] },
+      }),
+    )
+    write(
+      home,
+      '.claude.json',
+      JSON.stringify({ mcpServers: { a: { command: 'user-a' }, b: { command: 'user-b' } } }),
+    )
+    write(
+      cwd,
+      '.mcp.json',
+      JSON.stringify({
+        mcpServers: { a: { command: 'project-a' }, bad: { command: 'x', url: 'https://x.test' } },
+      }),
+    )
+
+    const setup = readForeignSetup('claude-code', { home, cwd })
+
+    expect(setup.hooks.map((h) => h.command)).toEqual(['user-hook', 'project-hook'])
+    expect(setup.mcpServers).toEqual({ a: { command: 'project-a' }, b: { command: 'user-b' } })
+    expect(setup.skills).toHaveLength(1)
+    expect(setup.skills[0]).toMatchObject({
+      description: 'project',
+      path: 'project/.claude/skills/triage/SKILL.md',
+    })
+    expect(setup.untranslated).toEqual(
+      expect.arrayContaining([
+        { path: 'skills/triage/SKILL.md', reason: 'shadowed by the project scope' },
+        { path: 'project/.mcp.json#bad', reason: 'both command and url' },
+      ]),
+    )
+  })
 })
