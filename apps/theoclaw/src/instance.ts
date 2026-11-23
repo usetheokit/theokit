@@ -28,8 +28,6 @@ export interface TheoClawInstance {
 /** The app directories a profile holds beside the SDK's two homes, relative to the profile directory. */
 const APP_DIRECTORIES = { THEOCLAW_STATE_DIR: 'state', THEOCLAW_WORKSPACE: 'workspace' } as const
 
-const NAME_RULE = '^[a-z0-9][a-z0-9-]{0,15}$'
-
 export const NO_PROFILE: TheoClawInstance = { label: 'theoclaw', overrides: {} }
 
 /** The first line a start writes, naming the instance and where its state lives. */
@@ -55,10 +53,13 @@ export function resolveInstance(env: Env, options: { readonly homeDir: string })
       profilesRoot: join(options.homeDir, '.theokit', 'profiles'),
       appDirectories: APP_DIRECTORIES,
     })
-  } catch {
-    throw new TheoClawConfigError(`THEOCLAW_PROFILE must match ${NAME_RULE}`, {
-      variable: 'THEOCLAW_PROFILE',
-    })
+  } catch (error) {
+    // Only the SDK's name refusal is the operator's name; anything else is not, and passes through.
+    if ((error as { code?: unknown }).code !== 'profile_name_invalid') throw error
+    throw new TheoClawConfigError(
+      'THEOCLAW_PROFILE must be 1 to 16 lowercase letters, digits or hyphens, starting with a letter or digit',
+      { variable: 'THEOCLAW_PROFILE' },
+    )
   }
   // The SDK checks a conflict when it applies the profile, after the lock; this start refuses it first.
   const conflicts = Object.keys(profile.env).filter(
@@ -114,6 +115,8 @@ export async function applyInstance(
       scratch,
     )
   } catch (error) {
+    // Only the SDK's directory failure is a directory that cannot be created; anything else passes through.
+    if ((error as { code?: unknown }).code !== 'profile_directory_failed') throw error
     const cause = (error as { cause?: NodeJS.ErrnoException }).cause
     throw new TheoClawConfigError(
       `THEOCLAW_PROFILE: cannot create ${directory}: ${cause?.code ?? 'unknown error'}`,
