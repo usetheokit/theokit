@@ -1,34 +1,19 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
-import { loopDetectionPlugin } from '../src/tools/loop-detection.js'
-import { handlerOf as hookOf } from './support/plugin-host.js'
+import { LOOP_REPEAT_LIMIT, LOOP_WINDOW, untrustedContentSendOptions } from '../src/agent/untrusted-content.js'
 
-type Handler = (context: unknown) => unknown
-
-function handlerOf(options?: Parameters<typeof loopDetectionPlugin>[0]): Handler {
-  return hookOf(loopDetectionPlugin(options))
-}
-
+// The repeat guard is the SDK's window guard (`sendDefaults.doomLoop`), set once for every agent (#2702).
 describe('loop detection', () => {
-  it('stops a run that repeats the same tool call, with a stated reason', () => {
-    const handler = handlerOf()
-    const call = { name: 'read_file', args: { path: 'a.txt' } }
-    for (let i = 0; i < 3; i++) expect(handler(call)).toBeUndefined()
-    expect(handler(call)).toMatchObject({ block: true, message: expect.stringMatching(/loop detected: read_file/) })
+  it('sends the SDK window guard with limit 3 and window 20', () => {
+    expect(LOOP_REPEAT_LIMIT).toBe(3)
+    expect(LOOP_WINDOW).toBe(20)
+    expect(untrustedContentSendOptions().doomLoop).toEqual({ window: 20, windowRepeatLimit: 3 })
   })
 
-  it('lets different arguments and different tools through', () => {
-    const handler = handlerOf()
-    for (let i = 0; i < 10; i++) expect(handler({ name: 'read_file', args: { path: `${i}` } })).toBeUndefined()
-    for (let i = 0; i < 3; i++) expect(handler({ name: 'list_dir', args: { path: 'a' } })).toBeUndefined()
-  })
-
-  it('forgets calls that left the window', () => {
-    const handler = handlerOf({ limit: 2, window: 3 })
-    const same = { name: 'x', args: {} }
-    handler(same)
-    handler(same)
-    for (let i = 0; i < 3; i++) handler({ name: 'y', args: i })
-    expect(handler(same)).toBeUndefined()
+  it('has no app-owned plugin any more', () => {
+    expect(existsSync(fileURLToPath(new URL('../src/tools/loop-detection.ts', import.meta.url)))).toBe(false)
   })
 })
