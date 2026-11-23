@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import {
   type AgentStreamEvent,
+  createAgentEventMask,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
@@ -12,7 +13,6 @@ import { type SdkMessageLike, toSdkMessage, type TurnAgent, type TurnRun, typedE
 import { maskSecrets } from '@theokit/gateway'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import { describeError } from './errors.js'
-import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
@@ -247,7 +247,7 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
     return { ok: false, code: 'turn_cancelled', reason: 'the turn was cancelled before it started' }
   }
   const secrets = options.secrets ?? []
-  const mask = createEventMask(secrets, options.emit)
+  const mask = createAgentEventMask(secrets, options.emit)
   // The model id reaches a frame and a log line; a configured value inside it is masked there too.
   const model = options.model === undefined ? {} : { model: maskSecrets(options.model, secrets) }
   let outcome: TurnOutcome
