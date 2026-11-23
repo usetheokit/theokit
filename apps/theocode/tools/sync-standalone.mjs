@@ -46,7 +46,11 @@ function checkLockfile(root, released) {
   if (!existsSync(lockPath)) return ['pnpm-lock.yaml is missing']
   const lock = readFileSync(lockPath, 'utf8')
   return Object.entries(released)
-    .filter(([name, version]) => !lock.includes(`'${name}':\n        specifier: ${version}\n`))
+    .filter(
+      ([name, version]) =>
+        !lock.includes(`'${name}':\n        specifier: ${version}\n`) &&
+        !lock.includes(`      ${name}:\n        specifier: ${version}\n`),
+    )
     .map(([name, version]) => `pnpm-lock.yaml: no importer specifier ${name}@${version}`)
 }
 

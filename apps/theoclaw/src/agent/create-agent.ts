@@ -9,7 +9,7 @@ import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import { createHookApprovalGate } from './hook-approval.js'
-import { UNTRUSTED_CONTENT_NOTICE, untrustedContentSendOptions, type UntrustedContentSendOptions } from './untrusted-content.js'
+import { untrustedContentSendOptions, type UntrustedContentSendOptions } from './untrusted-content.js'
 
 /**
  * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
@@ -67,8 +67,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
   /**
-   * Opens with `UNTRUSTED_CONTENT_NOTICE` on every agent (B-398 FR-002); a `/control` agent with an
-   * import has the import's instructions and read-only memory after it (FR-008).
+   * Empty on every agent but a `/control` agent with an import, which has the import's instructions and
+   * read-only memory (FR-008). The SDK adds the explanation of the tool-output tag when `delimit` is on.
    */
   readonly systemPrompt: string
   /** The SDK reads these per send; set once here, so no send site passes them (OC-88). */
@@ -140,7 +140,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     apiKey: input.apiKey,
     withheldBuiltinTools: ['shell'] as const,
     memory: input.toolOptions?.memory ?? ({ enabled: false } as const),
-    systemPrompt: UNTRUSTED_CONTENT_NOTICE,
+    systemPrompt: '',
     sendDefaults: untrustedContentSendOptions(),
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
@@ -225,10 +225,10 @@ function withToolOptions<Model extends string | ModelSelection>(
   }
 }
 
-/** The notice, then the import's instructions, then its memory under a read-only heading. */
+/** The import's instructions, then its memory under a read-only heading. */
 function importedPrompt(setup: ImportedSetup): string {
   const memory = setup.memory === '' ? '' : `## Imported memory (read-only)\n\n${setup.memory}`
-  return [UNTRUSTED_CONTENT_NOTICE, setup.instructions, memory].filter((part) => part !== '').join('\n\n')
+  return [setup.instructions, memory].filter((part) => part !== '').join('\n\n')
 }
 
 /**

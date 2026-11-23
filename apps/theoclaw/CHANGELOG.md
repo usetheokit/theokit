@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Runs on `@theokit/sdk` 12.0.0. The SDK explains the `<untrusted-tool-output>` tag in the system prompt while `toolResultGuard` delimits, so `untrusted-content.ts` no longer defines the notice and TheoClaw's own sentence is gone from the prompt; the guard stays on through `sendDefaults` (#2744).
 - Named storage locations and the offsite transfer now come from `@theokit/host/backup` (`createStorageRegistry`, `uploadDirectory`, `downloadDirectory`); `src/backup/storage.ts` is gone. The host reads the existing flat `storage.json` and `.tcb` archives (encrypted or not), so nothing needs converting; new backups are written as `.tcbk` and the registry is rewritten in the host format at the next `storage init`. Observable differences: `storage list` prints `name`, `root`, `encrypted` and `state` (no free space), and a stalled HTTPS request ends after 60 s (#2751).
 
 - `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
@@ -25,6 +26,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - `sessions list|show|export|share|resume` read transcripts through `readThreadHistoryFile` and `threadToUIMessages` from `@theokit/agents/session` instead of staging a copy in a temporary directory. Output is unchanged: `export` still prints text only, and the message count still counts each assistant record (#2753).
+- The `computer` tool is `createComputerTool` and the framebuffer reader is `readXwdHeader` from `@theokit/sdk-tools` 0.34.0; the app's own `xwd.ts` is gone and only the screenshot describer stays. Behaviour that changes: `left_click` needs both `x` and `y` (a click at the pointer is no longer offered), failures are plain `Error`s reading `computer <action>: ...`, and a pointer action answers `<action> done; pointer at ...` (#2697).
+
 - Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
 
 - The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone, and the output matches `formatUsd` (#2710).

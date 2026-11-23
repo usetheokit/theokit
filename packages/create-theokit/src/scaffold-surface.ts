@@ -78,7 +78,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       figlet: '^1.7.0',
       lowlight: '^3.0.0',
     },
-    devDeps: { tsx: '^4.19.0', esbuild: '^0.28.2' },
+    devDeps: { tsx: '^4.19.0', esbuild: '^0.28.2', 'create-theokit': '^3.3.2' },
     scripts: {
       dev: 'tsx tui/main.tsx',
       start: 'tsx tui/main.tsx',
