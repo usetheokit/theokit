@@ -243,6 +243,9 @@ export type ApprovalPolicy = 'untrusted' | 'on-request' | 'never'
  *   chosen on purpose; otherwise it is `auto-reject`, never a silent approval.
  * - `untrusted` and `on-request`: a human decides when `interactive` is given, else `auto-reject`.
  *
+ * `interactive` is the surface's `emit` and `awaitApproval` callbacks, not a boolean: the
+ * `interactive` posture cannot exist without them. Absent means headless.
+ *
  * Which tools reach the gate is the caller's: a posture decides what happens to a gated tool, so a
  * tool no permission rule matched must be gated for `untrusted` to ask about it.
  */

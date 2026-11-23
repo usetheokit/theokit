@@ -1,7 +1,8 @@
+import { PermissionEngine } from '@theokit/sdk'
 import type { SandboxPosture } from '@theokit/sdk/sandbox'
 import { describe, expect, it } from 'vitest'
 
-import { approvalPostureFor } from '../../src/bridge/approval-posture.js'
+import { applyPosture, approvalPostureFor } from '../../src/bridge/approval-posture.js'
 
 const enforced: SandboxPosture = { mode: 'workspace-write', enforced: true, detail: 'bwrap' }
 const unenforced: SandboxPosture = { mode: 'workspace-write', enforced: false, detail: 'no bwrap' }
@@ -22,5 +23,16 @@ describe('approvalPostureFor', () => {
   })
   it('refuses when headless', () => {
     expect(approvalPostureFor('untrusted', enforced).kind).toBe('auto-reject')
+  })
+
+  it('untrusted gates a tool no rule matched: the engine asks and the posture installs the gate', () => {
+    const engine = new PermissionEngine([{ tool: 'Read', action: 'allow' }], {
+      defaultAction: 'ask',
+    })
+    expect(engine.evaluate('mystery_tool')).toBe('ask')
+    const extra: Record<string, unknown> = {}
+    const gated = new Map([['mystery_tool', { approve: true }]]) as never
+    applyPosture(extra, {}, approvalPostureFor('untrusted', enforced, { interactive }), gated)
+    expect(extra.plugins).toHaveLength(1)
   })
 })

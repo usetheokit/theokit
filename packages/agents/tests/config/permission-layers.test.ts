@@ -31,6 +31,29 @@ describe('permission rules from several layers', () => {
   })
 })
 
+describe('ask and allow keep read order across files', () => {
+  it('a user allow stays above a project ask', () => {
+    const user = read({ allow: ['Bash(ls:*)'] })
+    const project = read({ ask: ['Bash'] })
+    const rules = permissionRulesFromLayers([user, project])
+    expect(rules.map((r) => r.action)).toEqual(['allow', 'ask'])
+    const engine = new PermissionEngine([...rules], { defaultAction: 'ask' })
+    expect(engine.evaluate('Bash', { command: 'ls -la' })).toBe('allow')
+  })
+
+  it('only deny moves, and stays in read order', () => {
+    const a = read({ ask: ['Read'], deny: ['Bash(rm:*)'] })
+    const b = read({ allow: ['Edit'], deny: ['Write'] })
+    const rules = permissionRulesFromLayers([a, b])
+    expect(rules.map((r) => `${r.action}:${r.tool}`)).toEqual([
+      'deny:Bash',
+      'deny:Write',
+      'ask:Read',
+      'allow:Edit',
+    ])
+  })
+})
+
 describe('toolAliases', () => {
   it('Bash(ls:*) allows shell_exec with ls -la', () => {
     const { rules } = permissionRulesFromSettings(

@@ -310,17 +310,13 @@ export function firstSettingsFile(
 }
 
 /**
- * The rules of several settings reads as one list: every `deny` first, then `ask`, then `allow`,
- * each keeping read order. The engine is first-match-wins, so a deny in any layer beats an allow in
+ * The rules of several settings reads as one list: every `deny` first, then the rest
+ * (`ask` and `allow`) in read order. The engine is first-match-wins, so a deny in any layer beats an allow in
  * any other, whichever file came first.
  */
 export function permissionRulesFromLayers(
   reads: readonly (Pick<SettingsFileRead, 'permissionRules'> | undefined)[],
 ): PermissionRule[] {
   const all = reads.flatMap((read) => read?.permissionRules ?? [])
-  return [
-    ...all.filter((r) => r.action === 'deny'),
-    ...all.filter((r) => r.action === 'ask'),
-    ...all.filter((r) => r.action === 'allow'),
-  ]
+  return [...all.filter((r) => r.action === 'deny'), ...all.filter((r) => r.action !== 'deny')]
 }
