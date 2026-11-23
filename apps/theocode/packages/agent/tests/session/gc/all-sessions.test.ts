@@ -14,9 +14,9 @@
  * A guard that is declared, wired and never invoked is worse than an absent one: it reads as
  * protection.
  */
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { runProjectsGC } from '@theokit/agents/session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -146,6 +146,9 @@ describe('transcript collection rules', () => {
     claimRoot(join(base, 'projects'))
     const plan = await planSessionGCAllProjects({ ...options(), projectsRoot: base })
     expect(plan.candidates).toHaveLength(1)
+    const target = plan.candidates[0]?.target as string
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, '{}\n')
 
     const result = await runProjectsGC(plan.framework, {
       apply: true,
@@ -154,7 +157,8 @@ describe('transcript collection rules', () => {
       fs: { readFile: () => '', hasLiveWriter: () => true },
     })
 
+    expect(existsSync(target), 'the transcript was unlinked despite a live writer').toBe(true)
     expect(result.removed).toEqual([])
-    expect(result.refused.map((r) => r.reason).join(' ')).toMatch(/writer/)
+    expect(result.refused.map((r) => r.reason).join(' ')).toMatch(/live writer/)
   })
 })
