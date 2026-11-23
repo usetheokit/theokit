@@ -14,10 +14,15 @@
  * A guard that is declared, wired and never invoked is worse than an absent one: it reads as
  * protection.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
-import { runSessionGCAllProjects } from '../../../src/session/gc/all-sessions-apply.js'
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { runProjectsGC } from '@theokit/agents/session'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { claimRoot, OWNER, THEOCODE_MARKER } from '../../../src/session/gc/root-ownership.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
 const DAY = 86_400_000
 const NOW = 1_000 * DAY
@@ -85,6 +90,11 @@ describe('#1911 — only the SDK’s own temp files are collectable', () => {
   })
 })
 
+const scratch: string[] = []
+afterEach(() => {
+  for (const d of scratch.splice(0)) rmSync(d, { recursive: true, force: true })
+})
+
 describe('transcript collection rules', () => {
   it('test_a_transcript_inside_the_age_window_is_kept_and_one_past_it_is_collected', async () => {
     const plan = await planSessionGCAllProjects(
@@ -130,21 +140,25 @@ describe('transcript collection rules', () => {
   })
 
   it('test_a_writer_that_appears_between_plan_and_apply_stops_the_unlink', async () => {
-    const plan = await planSessionGCAllProjects(options())
+    const base = mkdtempSync(join(tmpdir(), 'theocode-gc-writer-'))
+    scratch.push(base)
+    mkdirSync(join(base, 'projects'), { recursive: true })
+    claimRoot(join(base, 'projects'))
+    const plan = await planSessionGCAllProjects({ ...options(), projectsRoot: base })
     expect(plan.candidates).toHaveLength(1)
+    const target = plan.candidates[0]?.target as string
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, '{}\n')
 
-    const unlink = vi.fn(async () => undefined)
-    const result = await runSessionGCAllProjects(plan, {
+    const result = await runProjectsGC(plan.framework, {
       apply: true,
-      unlink,
-      rmdir: async () => undefined,
-      deleteAgent: async () => undefined,
-      readPointer: () => undefined,
-      hasLiveWriter: () => true,
+      owner: OWNER,
+      existingMarker: THEOCODE_MARKER,
+      fs: { readFile: () => '', hasLiveWriter: () => true },
     })
 
-    expect(unlink).not.toHaveBeenCalled()
+    expect(existsSync(target), 'the transcript was unlinked despite a live writer').toBe(true)
     expect(result.removed).toEqual([])
-    expect(result.errors.join(' ')).toMatch(/live writer/)
+    expect(result.refused.map((r) => r.reason).join(' ')).toMatch(/live writer/)
   })
 })
