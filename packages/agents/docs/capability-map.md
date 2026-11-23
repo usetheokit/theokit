@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1589 export(s) across 30 entry point(s).
+1595 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@11.0.0`.
 
@@ -210,6 +210,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `resolveMcpServers` | value |
 | `resolveModelCapabilities` | value |
 | `resolveSettingSources` | value |
+| `resolveSkillsSettings` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
 | `runAgentTurn` | value |
@@ -972,6 +973,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `credentialHome` | value |
 | `CredentialNotFoundError` | value |
 | `credentialSources` | value |
+| `customProviderPlugin` | value |
 | `DeclaredProviderError` | value |
 | `DEFAULT_PROVIDERS` | value |
 | `deviceLogin` | value |
@@ -1457,6 +1459,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
+| `startInProcessSweeper` | value |
 | `streamTurnForkingIfBusy` | value |
 | `sweepDecision` | value |
 | `threadToUIMessages` | value |
@@ -1464,6 +1467,8 @@ Measured against `@theokit/sdk@11.0.0`.
 | `transcriptRootHint` | value |
 | `transcriptToText` | value |
 | `ClassifyProjectsOptions` | type |
+| `CollectorRootMarkerFormat` | type |
+| `CollectorRootOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
 | `ForkIfBusyOptions` | type |
@@ -1471,6 +1476,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `GCCandidate` | type |
 | `GCError` | type |
 | `GCKept` | type |
+| `InProcessSweeper` | type |
 | `Liveness` | type |
 | `LivenessVerdict` | type |
 | `PlanProjectsGCOptions` | type |
@@ -1695,6 +1701,7 @@ Measured against `@theokit/sdk@11.0.0`.
 |---|---|
 | `checks` | value |
 | `credentialShape` | value |
+| `credentialState` | value |
 | `describeCredentialDefect` | value |
 | `diagnose` | value |
 | `DiagnosticBundleError` | value |
@@ -1705,6 +1712,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `Check` | type |
 | `CredentialDefect` | type |
 | `CredentialState` | type |
+| `CredentialStateOptions` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |

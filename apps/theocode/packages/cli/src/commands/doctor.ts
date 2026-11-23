@@ -10,6 +10,7 @@
  */
 import process from 'node:process'
 import { exitAfterDrain } from '@theokit/agents/commands'
+import { credentialState } from '@theokit/agents/doctor'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -19,54 +20,6 @@ import { MissingCredentialError, resolveCredential } from '@theocode/agent/auth'
 // `exports` map, and `tsconfig.json` maps `@theocode/agent/*` straight onto `src/*` — so TypeScript
 // resolves it happily and the bundle would fail at runtime. README.md names this exact trap.
 import type { CredentialState } from '@theocode/agent'
-
-/** Presence only — the file is opened to tell "absent" from "corrupt", never to read a secret. */
-/**
- * What the stored credential is, WITHOUT reading its value.
- *
- * The expiry check is the point. Parsing the file and returning `present` reported `✓ credential:
- * present` for an OAuth token ten days past its expiry (measured 2026-08-25) — a green tick on the
- * one thing that was going to fail first.
- *
- * `expires` is optional and its absence is not expiry: an API-key credential has no expiry at all,
- * and treating a missing field as expired would warn every key user about a problem they cannot
- * have. Only a number in the past counts. `now` is injected so the boundary is testable without
- * waiting for a real token to age.
- */
-/**
- * The shape every stored credential has, whichever kind it is.
- *
- * `StoredOAuthCredential` declares `provider`, and the message this product prints when no
- * credential is found tells the operator to write `{"provider": "openrouter", "api_key": "..."}`.
- * The two forms share exactly one field, so that field is the floor — nothing here invents a
- * contract, it reads the one the product already states in two places.
- *
- * Deliberately NOT stricter. Demanding `access`/`api_key` would make this file the second authority
- * on what a credential is, and the first one lives in the framework; a `doctor` that refuses what
- * the loader accepts is the same defect pointed the other way.
- */
-function looksLikeACredential(parsed: unknown): boolean {
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false
-  const provider: unknown = (parsed as { provider?: unknown }).provider
-  return typeof provider === 'string' && provider !== ''
-}
-
-export function credentialState(path: string, now: number = Date.now()): CredentialState {
-  if (!existsSync(path)) return 'absent'
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(readFileSync(path, 'utf8'))
-  } catch {
-    return 'unreadable'
-  }
-  // #823 — parsing is not the same question as being a credential. `{"nao":"e-credencial"}` is valid
-  // JSON, so this returned `present` while the TUI, which tries to USE the file, showed `none`.
-  // Measured 2026-09-17 against a decoy: the diagnostic an operator opens BECAUSE a session will not
-  // authenticate was the one saying everything was fine.
-  if (!looksLikeACredential(parsed)) return 'unreadable'
-  const expires = (parsed as { expires?: unknown }).expires
-  return typeof expires === 'number' && expires <= now ? 'expired' : 'present'
-}
 
 /**
  * The state of the credential a turn will actually use (#938).
@@ -82,13 +35,18 @@ export function runtimeCredentialState(
   env: Record<string, string | undefined>,
   now: number = Date.now(),
 ): CredentialState {
-  try {
-    resolveCredential({ env, home: undefined })
-    return 'present'
-  } catch (err) {
-    if (!(err instanceof MissingCredentialError)) throw err
-  }
-  return credentialState(path, now)
+  return credentialState(path, {
+    now,
+    fromEnvironment: () => {
+      try {
+        resolveCredential({ env, home: undefined })
+        return true
+      } catch (err) {
+        if (!(err instanceof MissingCredentialError)) throw err
+        return false
+      }
+    },
+  })
 }
 
 /**
