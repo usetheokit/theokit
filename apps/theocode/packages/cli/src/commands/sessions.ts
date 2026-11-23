@@ -76,7 +76,6 @@ export interface CurrentProjectGCOptions {
   removeFromRegistry?: (id: string) => unknown
 }
 
-
 /** The framework's note for a candidate with no id; here that is expected, not a failure. */
 const UNNAMEABLE = 'transcript collected without a registry removal'
 

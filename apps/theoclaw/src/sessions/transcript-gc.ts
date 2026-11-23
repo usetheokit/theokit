@@ -62,7 +62,9 @@ export async function collectTranscripts(
   // state as it is then. A transcript with no readable owner cannot be matched to a chat: kept.
   const isProtected = (session: GCSession): string | undefined =>
     session.id === undefined
-      ? 'transcript id unreadable or unowned'
+      ? session.idReadable
+        ? 'transcript is not stored under its own id (a fork or a renamed file); owner unknown'
+        : 'transcript id unreadable'
       : protection(session.id, deps.generations, new Set(deps.heldIds?.() ?? []))
   const plan = await planTranscriptGC({
     cwd: deps.workspace,
