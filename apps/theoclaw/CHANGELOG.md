@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Telemetry registers its tracer, meter and log providers with `registerTelemetry` from `@theokit/sdk/telemetry-node` (SDK 12.0.0, which exports logs and returns a `log` function); `src/telemetry/otel.ts` builds no trace or metric provider. The settings reader, the masking and the anonymous meter stay. Visible differences: diagnostics now include warnings, and a tracer or meter provider that is already registered is left alone and reported on one line instead of being replaced (#2755).
 - `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
 
 - Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).
