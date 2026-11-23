@@ -13,7 +13,7 @@ class LayerError extends TheokitAgentError {
   override readonly name = 'LayerError'
 }
 
-export type Layer =
+type Layer =
   | 'defaults'
   | 'user'
   | 'project'

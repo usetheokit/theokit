@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1509 export(s) across 27 entry point(s).
+1527 export(s) across 27 entry point(s).
 
-Measured against `@theokit/sdk@5.32.0`.
+Measured against `@theokit/sdk@9.0.0`.
 
 ## `@theokit/agents`
 
@@ -53,6 +53,8 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `CircuitBreaker` | value |
+| `codingAgentPreset` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -118,6 +120,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `GenerateObjectError` | value |
+| `GenerationFileError` | value |
 | `getModelInfo` | value |
 | `GoalRunner` | value |
 | `GuardrailError` | value |
@@ -181,6 +184,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `parseModelId` | value |
 | `piiDetector` | value |
 | `Plugin` | value |
+| `PluginManifestError` | value |
 | `PluginsCapability` | value |
 | `PreCompactionHandlerError` | value |
 | `prepareWorkspace` | value |
@@ -215,6 +219,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `runWithApiErrorHandling` | value |
 | `safePathJoin` | value |
 | `Semaphore` | value |
+| `SessionPoolClosedError` | value |
 | `SessionStoreCapability` | value |
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
@@ -255,6 +260,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
+| `TrustRecordError` | value |
 | `UngatedCapabilityError` | value |
 | `unicodeNormalizer` | value |
 | `UnknownAgentError` | value |
@@ -324,6 +330,8 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CatalogModel` | type |
 | `CatalogModelCost` | type |
 | `CheckpointSavedEvent` | type |
+| `CircuitBreakerOptions` | type |
+| `CodingAgentPresetOptions` | type |
 | `CompactionCallOptions` | type |
 | `CompactionStrategyConfig` | type |
 | `CompatSurface` | type |
@@ -746,7 +754,9 @@ Measured against `@theokit/sdk@5.32.0`.
 | `createControlClient` | value |
 | `createDevicePairing` | value |
 | `createSessionStore` | value |
+| `PairingRefusedError` | value |
 | `pairRoute` | value |
+| `redeemPairing` | value |
 | `Server` | value |
 | `AgentTurnUsage` | type |
 | `ControlClient` | type |
@@ -757,9 +767,14 @@ Measured against `@theokit/sdk@5.32.0`.
 | `DevicePairingOptions` | type |
 | `PairingApproval` | type |
 | `PairingRequestResult` | type |
+| `RedeemedPairing` | type |
+| `RedeemPairingOptions` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
+| `SocketOutcome` | type |
+| `SocketSessions` | type |
+| `SocketVerdict` | type |
 
 ## `@theokit/agents/testing`
 
@@ -1044,6 +1059,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `LAYERS_ARE_POSITIONED` | value |
 | `loadCustomCommands` | value |
 | `loadInstructionTree` | value |
+| `loadInstructionWalk` | value |
 | `loadOutputStyle` | value |
 | `loadSettings` | value |
 | `mcpServerAdmitted` | value |
@@ -1101,10 +1117,12 @@ Measured against `@theokit/sdk@5.32.0`.
 | `LayerValues` | type |
 | `LoadCustomCommandsInput` | type |
 | `LoadInstructionTreeInput` | type |
+| `LoadInstructionWalkInput` | type |
 | `LoadOutputStyleInput` | type |
 | `LoadSettingsInput` | type |
 | `LoadSettingsResult` | type |
 | `OperatorDefinition` | type |
+| `OperatorInstruction` | type |
 | `OperatorOrigin` | type |
 | `OperatorPolicy` | type |
 | `OperatorRootsOptions` | type |

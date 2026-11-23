@@ -19,6 +19,7 @@ function settings(overrides: Partial<SessionSettings> = {}): SessionSettings {
     workspace: '/srv/theoclaw',
     idleMinutes: 30,
     maxOpenSessions: 200,
+    transcriptRetentionDays: 30,
     ...overrides,
   }
 }

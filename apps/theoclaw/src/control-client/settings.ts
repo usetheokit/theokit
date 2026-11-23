@@ -1,4 +1,4 @@
-import { MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
+import { MIN_BEARER_TOKEN_LENGTH } from '@theokit/http/guards'
 import { parsePort } from '../control-plane/bind.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 

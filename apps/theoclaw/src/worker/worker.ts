@@ -163,8 +163,8 @@ async function runLocal(message: string, profile: WorkerProfile, io: WorkerIo): 
 
 /** The model call proxied to the gateway, which makes it; nothing is written to the worker's log. */
 async function runProxied(message: string, profile: WorkerProfile, io: WorkerIo): Promise<number> {
-  const { createControlClient } = await import('../control-client/control-client.js')
-  const client: ControlClient = await createControlClient({
+  const { connectControlClient } = await import('../control-client/control-client.js')
+  const client: ControlClient = await connectControlClient({
     url: profile.url,
     token: profile.token,
   })

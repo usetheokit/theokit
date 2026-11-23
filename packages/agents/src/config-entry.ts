@@ -79,6 +79,8 @@ export { expandInstructionImports, type ExpandImportsInput } from './config/inst
 export {
   blockAppliesTo,
   loadInstructionTree,
+  loadInstructionWalk,
+  type LoadInstructionWalkInput,
   type InstructionBlock,
   type InstructionTree,
   type InstructionTreeBudget,
@@ -218,6 +220,7 @@ export {
 export {
   type OperatorDefinition,
   type OperatorOrigin,
+  type OperatorInstruction,
   type OperatorRootsOptions,
   type OperatorRootsResult,
   OperatorRootUnreadableError,

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import http from 'node:http'
 
-import { bearerCheck } from '../control-plane/bearer.js'
+import { bearerCheck } from '@theokit/http/guards'
 import { GrantStore } from './grants.js'
 
 /**

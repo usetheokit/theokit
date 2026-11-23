@@ -110,7 +110,7 @@ describe('M96 U2 — SubagentDefinition alongside the loader', () => {
     // raise: M107 review HIGH-2 moved the floor to 4.37.0 because 4.36.0 silently ignores the `cwd`
     // that `Agent.list` advertises, and this test went red for guarding the opposite of its purpose.
     // A floor BELOW the settingSources version is the defect; a floor above it is the mechanism.
-    const floor = range!.replace(/^[\^~]/, '')
+    const floor = range!.replace(/^(?:>=|[\^~])/, '').split(' ')[0] ?? ''
     expect(
       compareVersions(floor, PHASE_1_VERSION),
       `the floor ${floor} is below ${PHASE_1_VERSION}, the first version with settingSources — a ` +

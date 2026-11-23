@@ -156,6 +156,48 @@ describe('a list of CustomTools served over MCP', () => {
       expect(s.ran()).toBe(false)
     })
 
+    const callReq = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'echo', arguments: { text: 'x' } },
+    }
+
+    it('handleMcpToolsHttp applies a blocking plugin', async () => {
+      const s = spied()
+      const req = new Request('http://x/mcp', {
+        method: 'POST',
+        body: JSON.stringify(callReq),
+        headers: { 'content-type': 'application/json' },
+      })
+      const res: any = await (
+        await handleMcpToolsHttp(s.list, 'host', req, {
+          plugins: [plugin(() => ({ block: true, message: 'no way' }))],
+        })
+      ).json()
+      expect(res.result.isError).toBe(true)
+      expect(res.result.content[0].text).toContain('no way')
+      expect(s.ran()).toBe(false)
+    })
+
+    it('serveMcpToolsStdio applies a blocking plugin', async () => {
+      const s = spied()
+      const out: string[] = []
+      async function* lines(): AsyncGenerator<string> {
+        yield JSON.stringify(callReq)
+      }
+      await serveMcpToolsStdio(
+        s.list,
+        'host',
+        { lines: lines(), write: (l) => out.push(l) },
+        { plugins: [plugin(() => ({ block: true, message: 'no way' }))] },
+      )
+      const res = JSON.parse(out[0]!)
+      expect(res.result.isError).toBe(true)
+      expect(res.result.content[0].text).toContain('no way')
+      expect(s.ran()).toBe(false)
+    })
+
     it('without options behaviour is unchanged', async () => {
       expect((await call()).result).toEqual({
         content: [{ type: 'text', text: 'x' }],
