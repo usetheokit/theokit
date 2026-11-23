@@ -126,6 +126,12 @@ export interface PlanProjectsGCOptions {
    * Every transcript must still name a cwd of the project, or the project is kept whole.
    */
   readonly cwdCoverage?: 'declared' | 'transcripts'
+  /**
+   * What a project judged dead gets. `'inspect'` (default): the same pointer and registry protection
+   * as a live one. `'keep-last'`: only the newest `keepLast` transcripts are protected, and no
+   * pointer or registry is read, for a caller whose dead projects have no cwd left to consult.
+   */
+  readonly deadProjects?: 'inspect' | 'keep-last'
   readonly fs?: ProjectsGCFs
 }
 
@@ -363,7 +369,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       })
       continue
     }
-    {
+    if (live || options.deadProjects !== 'keep-last') {
       // The encoding is many-to-one and registries cannot be enumerated: a colliding live cwd may
       // appear in no header and no verdict, only in its own registry. Registry coverage is complete
       // only when the caller declares the cwds it knows; otherwise the project is kept whole.

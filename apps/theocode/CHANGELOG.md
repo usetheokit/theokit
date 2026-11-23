@@ -42,9 +42,12 @@ for `release.yml` in this repository will not find it, and should not have been 
   `gc/sweep-wiring.ts`). A backtrack index past the last turn is now the framework's error, not a
   `RangeError`. The sweep's child is now detached (own process group, so it survives the terminal
   closing) and a stamp that cannot be written is reported with the framework's wording. The
-  cross-project collector (`gc/all-sessions*`, `filesystem`, `root-claim`, `root-ownership`) stays:
-  `planProjectsGC` keeps a live project whole unless the caller declares its cwd list complete, which
-  TheoCode cannot enumerate, and the framework's ownership marker is not TheoCode's.
+  cross-project collector is now `planProjectsGC` / `runProjectsGC` (#2747): `gc/all-sessions*`,
+  `remove-tolerant`, `transcript-names` and `collection-window` are gone, and `filesystem.ts` adapts
+  the framework plan to this product's `byKind` names (`lock-file`, `tmp`). It plans with
+  `cwdCoverage: 'transcripts'`, `deadProjects: 'keep-last'` and the `<cwd>/.theokit/tui-session`
+  pointer, and recognises its own `.theocode-collector.json` marker through `existingMarker`.
+  `--keep 0` is now refused: the framework floor for `keepLast` is 1.
 
 ### Fixed
 

@@ -387,6 +387,32 @@ describe('planProjectsGC protection edge cases', () => {
     expect(without.candidates.map((c) => c.target)).toContain(pinned)
   })
 
+  it('deadProjects "keep-last" protects only the newest transcripts and reads no pointer or registry', async () => {
+    transcript('new', 1)
+    const pinned = transcript('pinned', 300)
+    const old = transcript('old', 300)
+    const pointer = join(root, 'ptr')
+    writeFileSync(pointer, 'pinned\n')
+    const dead = () => new Map([[NAME, { liveness: 'dead' as const, reason: 'gone', cwd: CWD }]])
+    const listRegistry = () => Promise.reject(new Error('must not be read'))
+    const result = await plan({
+      classify: dead,
+      candidateCwds: undefined,
+      candidateCwdsComplete: undefined,
+      deadProjects: 'keep-last',
+      pointerPath: () => pointer,
+      listRegistry,
+    })
+    expect(result.errors).toEqual([])
+    expect(result.candidates.map((c) => c.target).sort()).toEqual([old, pinned].sort())
+    const inspected = await plan({
+      classify: dead,
+      pointerPath: () => pointer,
+      listRegistry: () => Promise.resolve([]),
+    })
+    expect(inspected.candidates.map((c) => c.target)).toEqual([old])
+  })
+
   it('a dead verdict does not hide a live cwd known only to its registry', async () => {
     const hidden = '/work-app'
     transcript('new', 1)

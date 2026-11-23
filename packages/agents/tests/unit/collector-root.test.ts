@@ -91,6 +91,15 @@ describe('an existing marker in another file name and schema', () => {
     expect(collectorRootOwner(projects, { existingMarker })).toEqual({ app: 'other' })
   })
 
+  it('a malformed standard marker does not hide the existing marker', () => {
+    writeFileSync(legacy(), JSON.stringify({ product: 'other', version: 1 }))
+    writeFileSync(join(home, '.theokit-collector.json'), '{not json')
+    expect(collectorRootOwner(projects, { existingMarker })).toEqual({ app: 'other' })
+    expect(() => {
+      claimCollectorRoot(projects, { app: 'theocode' }, { existingMarker })
+    }).toThrow(CollectorRootNotOwnedError)
+  })
+
   it('an unreadable marker file throws CollectorRootError', () => {
     mkdirSync(legacy())
     expect(() => collectorRootOwner(projects, { existingMarker })).toThrow(CollectorRootError)

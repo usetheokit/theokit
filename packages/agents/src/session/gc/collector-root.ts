@@ -103,9 +103,8 @@ export function collectorRootOwner(
         return { app: parsed.app }
       }
     } catch {
-      // malformed: treated as unowned
+      // malformed: authorises nothing, so the caller's existing marker (if any) is still consulted
     }
-    return undefined
   }
   const format = options.existingMarker
   if (format === undefined) return undefined
