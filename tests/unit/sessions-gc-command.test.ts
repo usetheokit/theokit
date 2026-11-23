@@ -191,7 +191,7 @@ describe('sessionsGcCommand — the seam the formatter tests never crossed', () 
 
 describe('parseSessionsGcArgs and the JSON report', () => {
   it('parses apply, dry-run, age and keep, and refuses a contradiction', async () => {
-    const { parseSessionsGcArgs } = await import('@theokit/agents/commands')
+    const { parseSessionsGcArgs } = await import('../../packages/agents/src/commands/index.js')
     expect(parseSessionsGcArgs([])).toEqual({ ok: true, apply: false, json: false })
     expect(parseSessionsGcArgs([], { apply: true })).toMatchObject({ apply: true })
     expect(parseSessionsGcArgs(['--dry-run'], { apply: true })).toMatchObject({ apply: false })
@@ -208,7 +208,8 @@ describe('parseSessionsGcArgs and the JSON report', () => {
   })
 
   it('prints one JSON line when asked, through a custom runner', async () => {
-    const { sessionsGcCommand: command } = await import('@theokit/agents/commands')
+    const { sessionsGcCommand: command } =
+      await import('../../packages/agents/src/commands/index.js')
     const out = await command({
       json: true,
       run: async () => ({
