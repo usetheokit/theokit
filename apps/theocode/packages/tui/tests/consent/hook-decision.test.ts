@@ -57,4 +57,68 @@ describe('B-040 — the consent gate closes only when the approval landed', () =
       expect(d.markReviewed).toHaveBeenCalled()
     })
   })
+
+  it('test_approval_passes_the_spec_and_never_refuses', async () => {
+    const d = deps()
+    await applyHookDecision('yes', head, 1, d)
+
+    expect(d.approve).toHaveBeenCalledWith(head.spec)
+    expect(d.refuse).not.toHaveBeenCalled()
+  })
+
+  it('test_approving_an_earlier_hook_does_not_close_the_gate', async () => {
+    const d = deps()
+    await applyHookDecision('yes', head, 2, d)
+
+    expect(d.approve).toHaveBeenCalledTimes(1)
+    expect(d.markReviewed).not.toHaveBeenCalled()
+    expect(d.toast).not.toHaveBeenCalled()
+  })
+
+  it('test_declining_an_earlier_hook_refuses_it_and_keeps_the_gate_open', async () => {
+    const d = deps()
+    await applyHookDecision('no', head, 2, d)
+
+    expect(d.refuse).toHaveBeenCalledWith('sha256:abc')
+    expect(d.approve).not.toHaveBeenCalled()
+    expect(d.markReviewed).not.toHaveBeenCalled()
+  })
+
+  it('test_the_failure_toast_names_the_cause_and_says_to_retry', async () => {
+    const d = deps({ approve: vi.fn(() => Promise.reject(new Error('EROFS'))) })
+    await applyHookDecision('yes', head, 1, d)
+
+    expect(d.toast).toHaveBeenCalledTimes(1)
+    const message = String(d.toast.mock.calls[0]?.[0])
+    expect(message).toContain('EROFS')
+    expect(message).toContain('approve again to retry')
+  })
+
+  it('test_a_retry_after_a_failed_approval_closes_the_gate', async () => {
+    const approve = vi
+      .fn<(spec: unknown) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('EROFS'))
+      .mockResolvedValueOnce(undefined)
+    const d = deps({ approve })
+
+    await applyHookDecision('yes', head, 1, d)
+    expect(d.markReviewed).not.toHaveBeenCalled()
+    await applyHookDecision('yes', head, 1, d)
+
+    expect(d.markReviewed).toHaveBeenCalledTimes(1)
+    expect(d.toast).toHaveBeenCalledTimes(1)
+  })
+
+  it('test_the_gate_closes_only_after_the_approval_settles', async () => {
+    let release: () => void = () => {}
+    const approve = vi.fn(() => new Promise<void>((r) => (release = r)))
+    const d = deps({ approve })
+
+    const done = applyHookDecision('yes', head, 1, d)
+    await Promise.resolve()
+    expect(d.markReviewed, 'closed while the approval was still in flight').not.toHaveBeenCalled()
+    release()
+    await done
+    expect(d.markReviewed).toHaveBeenCalledTimes(1)
+  })
 })
