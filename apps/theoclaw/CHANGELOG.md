@@ -11,6 +11,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The joinery gate (`tools/measure-app-joinery.mjs`) now reports, and fails on, every app file that declares a function or class named like an export of a `@theokit/*` dependency, unless `ALLOWED` lists it with a reason (#2610).
+
 - Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
 
 ### Changed
