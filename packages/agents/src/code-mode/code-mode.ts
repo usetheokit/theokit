@@ -238,7 +238,7 @@ function generateCodeModeInstructions(tools: CustomTool[], toolName: string): st
   return [
     `The \`${toolName}\` tool runs your code in a sandbox. Your code may call ONLY these functions (each bridges to a real, validated tool on the host):`,
     calls,
-    'The code is JavaScript (ECMAScript), not Python. It runs as the body of an async function: use `await api.<name>(input)` for the calls above and `return` exactly ONE structured, JSON-serializable result. Compose these calls and do not assume `fs`, `process`, `require` or network access. Prefer these calls and return exactly ONE structured result. `Promise.all` for independent calls; do arithmetic and aggregation in code, not in prose.',
+    'The code is JavaScript (ECMAScript), not Python. It runs as the body of an async function: call the functions above with `await api.<name>(input)` and `return` exactly ONE structured, JSON-serializable result. Prefer `Promise.all` for independent calls; do arithmetic and aggregation in code, not in prose.',
   ].join('\n\n')
 }
 

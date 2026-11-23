@@ -234,6 +234,10 @@ describe('createCodeMode language, allowedTools and maxResultChars', () => {
     const { tool, instructions } = createCodeMode({ ...base, tools: [spyTool('read_file')] })
     expect(tool.description).toContain('JavaScript')
     expect(instructions).toContain('JavaScript')
+    expect(instructions).toContain(
+      'Prefer `Promise.all` for independent calls; do arithmetic and aggregation in code, not in prose.',
+    )
+    expect(instructions).not.toMatch(/Prefer these calls/)
   })
 
   it('throws a typed error stating the limit and the size', async () => {
