@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { Agent } from '@theokit/agents'
-import { exitAfterDrain } from '@theokit/agents/commands'
+import { exitAfterDrain, sessionsGcCommand } from '@theokit/agents/commands'
 import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
 import {
   planTranscriptGC,
@@ -207,28 +207,26 @@ export async function planAndRunCurrentProjectGC(
 }
 
 async function gcForCurrentProject(args: ExecSessions): Promise<void> {
-  let outcome: Awaited<ReturnType<typeof planAndRunCurrentProjectGC>>
+  let outcome: Awaited<ReturnType<typeof sessionsGcCommand>>
   try {
-    outcome = await planAndRunCurrentProjectGC({
+    outcome = await sessionsGcCommand({
       cwd: process.cwd(),
       apply: args.apply,
+      json: args.json,
       ...(args.keepLast !== undefined ? { keepLast: args.keepLast } : {}),
       ...(args.maxAgeDays !== undefined ? { maxAgeDays: args.maxAgeDays } : {}),
+      human: humanReport,
+      run: (resolved) => planAndRunCurrentProjectGC(resolved),
     })
   } catch (err) {
     process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
     exitAfterDrain(1)
     return
   }
-  const { plan, result } = outcome
-  if (args.json) {
-    process.stdout.write(
-      `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: [...result.removed, ...result.orphaned], kept: plan.kept.length, keptReasons: plan.kept, errors: result.errors.map((e) => `${e.id ?? 'unnamed transcript'}: ${e.message}`) })}\n`,
-    )
-  } else {
-    for (const l of humanReport(plan, result)) process.stderr.write(`${l}\n`)
-  }
-  exitAfterDrain(result.errors.length > 0 ? 1 : 0)
+  // The JSON report is a machine line on stdout; the human one goes to stderr.
+  const out = args.json ? process.stdout : process.stderr
+  for (const l of outcome.lines) out.write(`${l}\n`)
+  exitAfterDrain(outcome.failed > 0 ? 1 : 0)
 }
 
 /**
