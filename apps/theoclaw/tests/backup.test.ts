@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   backupInstance,
@@ -32,8 +32,8 @@ import { InstanceLockedError } from '@theokit/sdk/persistence'
 import {
   claimInstance,
   NO_PROFILE,
-  resolveInstance,
   removeOwnLockSync,
+  resolveInstance,
   takeInstanceLock,
 } from '../src/instance.js'
 import { waitFor } from './fakes.js'
@@ -266,22 +266,19 @@ describe('the instance lock (FR-010)', () => {
     await holder.end()
   })
 
-  it('a conflicting explicit directory is refused when the instance resolves, before any lock is taken', async () => {
-    const stateDirectory = join(tmpdir(), 'theoclaw-conflict-state')
-    const beforeLock = vi.fn()
-    let instance: ReturnType<typeof resolveInstance> | undefined
-    await expect(
-      (async () => {
-        instance = resolveInstance(
-          { THEOCLAW_PROFILE: 'a', THEOCLAW_STATE_DIR: stateDirectory },
-          { homeDir: tmpdir() },
-        )
-        await claimInstance(instance, {}, { beforeLock })
-      })(),
-    ).rejects.toThrow('THEOCLAW_PROFILE cannot be combined with THEOCLAW_STATE_DIR')
-    expect(instance).toBeUndefined()
-    expect(beforeLock).not.toHaveBeenCalled()
-    expect(existsSync(`${stateDirectory}.instance.lock`)).toBe(false)
+  it('a conflicting explicit directory is refused before the instance lock is taken', async () => {
+    const stateDir = join(tempDir(), 'state')
+    const holder = lockChild(stateDir)
+    expect(await holder.answer).toBe('took')
+    const env: NodeJS.ProcessEnv = { THEOCLAW_PROFILE: 'a', THEOCLAW_STATE_DIR: stateDir }
+    // The start path of main.ts: resolve, then claim. Were the lock taken first, this would be
+    // InstanceLockedError naming the holder, not the conflict.
+    const start = async (): Promise<void> => {
+      const instance = resolveInstance(env, { homeDir: tempDir() })
+      await claimInstance(instance, env)
+    }
+    await expect(start()).rejects.toThrow('THEOCLAW_PROFILE cannot be combined with THEOCLAW_STATE_DIR')
+    await holder.end()
   })
 
   it('a start with no state directory takes no lock', async () => {
@@ -427,9 +424,7 @@ describe('theoclaw backup (FR-008)', () => {
     const { symlinkSync } = await import('node:fs')
     symlinkSync('/etc/hostname', join(source.workspace, 'link'))
     const dir = join(tempDir(), 'backup')
-    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
-      /link is a symbolic link/,
-    )
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(/link is a symbolic link/)
     expect(existsSync(dir)).toBe(false)
   })
 
@@ -438,16 +433,16 @@ describe('theoclaw backup (FR-008)', () => {
     const holder = lockChild(source.state)
     expect(await holder.answer).toBe('took')
     const dir = join(tempDir(), 'backup')
-    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(`pid ${holder.pid}`)
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
+      `pid ${holder.pid}`,
+    )
     expect(existsSync(dir)).toBe(false)
     await holder.end()
   })
 })
 
 describe('theoclaw restore (FR-009)', () => {
-  async function backedUp(
-    source: Instance = populated(),
-  ): Promise<{ source: Instance; dir: string; manifest: Manifest }> {
+  async function backedUp(source: Instance = populated()): Promise<{ source: Instance; dir: string; manifest: Manifest }> {
     const dir = join(tempDir(), 'backup')
     return { source, dir, manifest: await backupInstance(source.env, dir, HOME(source)) }
   }
@@ -544,26 +539,15 @@ describe('theoclaw restore (FR-009)', () => {
     const { encodeProjectDir } = await import('@theokit/sdk/persistence')
     const { createHash } = await import('node:crypto')
     const source = populated()
-    const projects = join(
-      source.workspace,
-      '.theoclaw',
-      'projects',
-      encodeProjectDir(source.workspace),
-    )
+    const projects = join(source.workspace, '.theoclaw', 'projects', encodeProjectDir(source.workspace))
     mkdirSync(projects, { recursive: true })
     writeFileSync(join(projects, 'session.jsonl'), '{"turn":"old"}\n')
     const { dir } = await backedUp(source)
     // The manifest the app wrote before the switch: no `roots`, the workspace recorded.
-    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Manifest & {
-      roots?: unknown
-    }
+    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Manifest & { roots?: unknown }
     delete manifest.roots
     for (const entry of manifest.files) {
-      expect(
-        createHash('sha256')
-          .update(readFileSync(join(dir, entry.path)))
-          .digest('hex'),
-      ).toBe(entry.sha256)
+      expect(createHash('sha256').update(readFileSync(join(dir, entry.path))).digest('hex')).toBe(entry.sha256)
     }
     const legacy = JSON.stringify(manifest, null, 2)
     writeFileSync(join(dir, 'manifest.json'), legacy)
@@ -571,16 +555,7 @@ describe('theoclaw restore (FR-009)', () => {
     await restoreInstance(target.env, dir, HOME(target))
     expect(readFileSync(join(target.state, 'pairing.json'), 'utf8')).toContain('paired')
     expect(
-      readFileSync(
-        join(
-          target.workspace,
-          '.theoclaw',
-          'projects',
-          encodeProjectDir(target.workspace),
-          'session.jsonl',
-        ),
-        'utf8',
-      ),
+      readFileSync(join(target.workspace, '.theoclaw', 'projects', encodeProjectDir(target.workspace), 'session.jsonl'), 'utf8'),
     ).toBe('{"turn":"old"}\n')
     expect(readFileSync(join(dir, 'manifest.json'), 'utf8')).toBe(legacy)
   })
@@ -644,9 +619,7 @@ describe('theoclaw restore (FR-009)', () => {
     renameSync(join(dir, 'workspace'), join(elsewhere, 'workspace'))
     symlinkSync(join(elsewhere, 'workspace'), join(dir, 'workspace'))
     const target = instance()
-    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
-      /is a symbolic link/,
-    )
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(/is a symbolic link/)
     expect(existsSync(target.state)).toBe(false)
   })
 
@@ -654,9 +627,7 @@ describe('theoclaw restore (FR-009)', () => {
     const source = populated()
     const env = { ...source.env, THEOCLAW_WORKSPACE: join(source.state, 'workspace') }
     await expect(backupInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
-    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(
-      /overlap/,
-    )
+    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
   })
 
   it('restore refuses while instance.lock names a live process', async () => {

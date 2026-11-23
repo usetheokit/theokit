@@ -15,8 +15,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - The profile of `THEOCLAW_PROFILE` is now resolved and applied by the SDK's `resolveProfile` and `applyProfile` (`@theokit/sdk/persistence`); the app keeps the name message, the conflict refusal before the instance lock and `TheoClawConfigError` (#2715).
 
-- `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
-
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
 
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).

@@ -62,16 +62,11 @@ export function resolveInstance(env: Env, options: { readonly homeDir: string })
     )
   }
   // The SDK checks a conflict when it applies the profile, after the lock; this start refuses it first.
-  const conflicts = Object.keys(profile.env).filter(
-    (variable) => (env[variable] ?? '').trim() !== '',
-  )
+  const conflicts = Object.keys(profile.env).filter((variable) => (env[variable] ?? '').trim() !== '')
   if (conflicts.length > 0) {
-    throw new TheoClawConfigError(
-      `THEOCLAW_PROFILE cannot be combined with ${conflicts.join(', ')}: unset them or the profile`,
-      {
-        variable: 'THEOCLAW_PROFILE',
-      },
-    )
+    throw new TheoClawConfigError(`THEOCLAW_PROFILE cannot be combined with ${conflicts.join(', ')}: unset them or the profile`, {
+      variable: 'THEOCLAW_PROFILE',
+    })
   }
   return {
     label: `theoclaw-${name}`,
