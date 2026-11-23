@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 9.0.0 does neither, so the repository carries a pnpm patch (`patches/@theokit__sdk@9.0.0.patch`) until an SDK release does (#2743).
 - `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
 
 - The `theoclaw` command line (`dist/cli.js`) now exits once stdout and stderr are flushed, on success and on error. It called `process.exit` at once, so a pipe reader (`docker exec`) lost the `updated <from> -> <to>` line after a long update output (#2681).
