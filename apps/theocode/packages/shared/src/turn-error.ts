@@ -1,5 +1,5 @@
 /**
- * NOT built on `describeTurnFailure` (`@theokit/agents/errors`), and this is what stops it (#2605):
+ * NOT built on `describeTurnFailure` (`@theokit/agents/errors`), and this is what stops it (#2662):
  * the framework helper takes a `TurnFailure` whose code is coerced to the known set, so an
  * unrecognised provider code (`overloaded_error`, `E123`) becomes `unknown` and is no longer printed,
  * and every text this product pins differs from the helper's `"<message> [<code>]: <hint>"` form.
