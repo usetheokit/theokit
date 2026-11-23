@@ -141,3 +141,44 @@ describe('standalone released.json synchronization', () => {
     }
   })
 })
+
+// The release runs `pnpm install --frozen-lockfile` here before Version Packages, and a lockfile
+// edited by hand fails it there, after the promotion: the patchedDependencies section was dropped
+// (4b6d720f), a snapshot kept @theokit/sdk 12.0.0 after the bump to 13.0.0 (c128dcf5), and
+// create-theokit was pinned to a version never published, with no package entry (eb5ac75b).
+describe('the standalone lockfile is one pnpm would accept frozen', () => {
+  const lock = readFileSync(join(app, 'standalone', 'pnpm-lock.yaml'), 'utf8')
+  const workspace = readFileSync(join(app, 'standalone', 'pnpm-workspace.yaml'), 'utf8')
+  const packages = lock.slice(lock.indexOf('\npackages:\n'))
+
+  it('records every patch pnpm-workspace.yaml declares', () => {
+    const declared = [...workspace.matchAll(/^ {2}'([^']+)': (patches\/\S+)$/gm)]
+    expect(declared.length).toBeGreaterThan(0)
+    for (const [, name, path] of declared) {
+      expect(lock, `${name} is patched in pnpm-workspace.yaml`).toContain(
+        `\npatchedDependencies:\n`,
+      )
+      expect(lock).toContain(`  '${name}':\n    hash: `)
+      expect(lock).toContain(`    path: ${path}\n`)
+    }
+  })
+
+  it('has a package entry for every version released.json names', () => {
+    for (const [name, version] of Object.entries(read('standalone/released.json'))) {
+      const key = name.startsWith('@') ? `'${name}@${version}':` : `${name}@${version}:`
+      expect(packages, `${name}@${version} has no entry under packages:`).toContain(`\n  ${key}\n`)
+    }
+  })
+
+  it('names in each snapshot the same version of a package its key resolves against', () => {
+    const stale = [
+      ...lock.matchAll(/^ {2}'[^']+\(@theokit\/sdk@(\S+?)\(ws[^\n]*\n(?: {4}.*\n)*/gm),
+    ]
+      .filter(([block, keyed]) => {
+        const named = /'@theokit\/sdk': (\S+?)\(/.exec(block)?.[1]
+        return named !== undefined && named !== keyed
+      })
+      .map(([block]) => block.split('\n')[0])
+    expect(stale).toEqual([])
+  })
+})

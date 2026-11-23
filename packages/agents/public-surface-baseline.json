@@ -6770,7 +6770,7 @@
         },
         "WiredEntity": {
           "tier": "stable",
-          "declaration": "interface WiredEntity {\n    readonly active: readonly string[];\n    readonly requested: readonly string[];\n    readonly suppressedByTrust: boolean;\n}",
+          "declaration": "interface WiredEntity {\n    readonly active: readonly string[];\n    readonly requested: readonly string[];\n    readonly suppressedByTrust: boolean;\n    readonly entities: readonly WiredEntityScope[];\n    readonly off: WiringOffReason | undefined;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],

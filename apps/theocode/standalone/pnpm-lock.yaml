@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@theokit/tui@0.83.4':
+    hash: 8256b74c8ab098c347d3b2e71b385e4372a83cc4e84cba87545c636c9a4f0fc2
+    path: patches/@theokit__tui@0.83.4.patch
+
 importers:
 
   .:
@@ -30,8 +35,8 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12(vitest@4.1.12)
       create-theokit:
-        specifier: 3.3.2
-        version: 3.3.2
+        specifier: 3.3.1
+        version: 3.3.1
       dependency-cruiser:
         specifier: 18.2.0
         version: 18.2.0
@@ -1297,6 +1302,11 @@ packages:
   convert-to-spaces@2.0.1:
     resolution: {integrity: sha512-rcQ1bsQO9799wq24uE5AM2tAILy4gXGIK/njFWcVQkGNZ96edlpY+A7bjwvzjYvLDyzmG1MmMLZhpcsb+klNMQ==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  create-theokit@3.3.1:
+    resolution: {integrity: sha512-JyAnnO0pl9HnK+HQMSiSLOUnG4y+RRPeZBLM1EZ+zJ1sD55qYeGy1ce0OUaHUXx6U5Ua5WiFIaBCjSkurLmThQ==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
 
   croner@9.1.0:
     resolution: {integrity: sha512-p9nwwR4qyT5W996vBZhdvBCnMhicY5ytZkR4D1Xj0wuTDEiMnjwR57Q3RXYY/s0EpX6Ay3vgIcfaR+ewGHsi+g==}
@@ -2826,7 +2836,7 @@ snapshots:
 
   '@theokit/sdk-pty@0.3.6(@theokit/sdk@13.0.0(ws@8.23.0))':
     dependencies:
-      '@theokit/sdk': 12.0.0(ws@8.23.0)
+      '@theokit/sdk': 13.0.0(ws@8.23.0)
     optionalDependencies:
       node-pty: 1.1.0
 
@@ -3181,6 +3191,10 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   convert-to-spaces@2.0.1: {}
+
+  create-theokit@3.3.1:
+    dependencies:
+      cross-spawn: 7.0.6
 
   croner@9.1.0: {}
 
