@@ -1,5 +1,5 @@
 import type { GatewayHook, HookDecision, MessageEvent, PairingStore, PlatformName } from '@theokit/gateway'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
 import type { AuthorizationPolicy, DmPolicy } from '../src/authorization/policy.js'
