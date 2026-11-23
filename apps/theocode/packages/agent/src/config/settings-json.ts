@@ -69,11 +69,14 @@
 import { TheokitAgentError } from '@theokit/agents'
 // Both from `/config`: `PermissionRule` is re-exported there and NOT from the root barrel, which
 // the framework's own `names nothing a consumer cannot import` gate measured on 2026-09-12.
-import { permissionRulesFromSettings, type PermissionRule } from '@theokit/agents/config'
+import {
+  CLAUDE_SETTINGS_KEYS,
+  permissionRulesFromSettings,
+  type PermissionRule,
+} from '@theokit/agents/config'
 
 import { CLAUDE_HOOK_EVENT_ALIASES, parseClaudeHooks } from '@theokit/agents/hooks'
 import { DEFAULT_HOOK_TIMEOUT_MS as DEFAULT_HOOK_TIMEOUT_MS_OURS } from '../hooks/hooks-spec.js'
-import { FOREIGN_SETTINGS_KEYS } from './foreign-keys.js'
 
 /** Raised when `settings.json` carries a shape the SDK's own read of the same file would reject. */
 class SettingsShapeError extends TheokitAgentError {
@@ -429,7 +432,7 @@ export function translateSettings(raw: unknown, opts: TranslateOptions): Setting
     }
     if (ours.has(key)) {
       values[key] = value
-    } else if (FOREIGN_SETTINGS_KEYS.has(key) || isNonSettingConvention(key)) {
+    } else if (CLAUDE_SETTINGS_KEYS.has(key) || isNonSettingConvention(key)) {
       ignored.push(key)
     } else if (opts.foreignRoot) {
       // Their file, their vocabulary. Tolerated and named — never silently absorbed.
