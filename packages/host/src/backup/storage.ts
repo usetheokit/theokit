@@ -9,8 +9,8 @@ import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { packDirectory, unpackInto, verifyBackupDir } from './archive.js'
 import { BackupError } from './errors.js'
-import { isEmptyOrAbsent, mkdirPrivate, tempSibling } from './paths.js'
 import { MANIFEST_NAME } from './manifest.js'
+import { isEmptyOrAbsent, mkdirPrivate, tempSibling } from './paths.js'
 import {
   checkRemoteUrl,
   isRemoteRoot,
