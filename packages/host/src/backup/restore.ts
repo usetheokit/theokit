@@ -37,6 +37,14 @@ export interface RehomeTranscriptsOptions {
   readonly to: string
 }
 
+function trimSlashes(path: string): string {
+  let start = 0
+  let end = path.length
+  while (start < end && path[start] === '/') start++
+  while (end > start && path[end - 1] === '/') end--
+  return path.slice(start, end)
+}
+
 /**
  * A `restore` `transform` that moves the SDK's per-project transcripts from
  * `<projectsDir>/<encodeProjectDir(from)>/` to the folder named for `to`, so sessions resume from
@@ -45,7 +53,7 @@ export interface RehomeTranscriptsOptions {
 export function rehomeTranscripts(
   options: RehomeTranscriptsOptions,
 ): (relativePath: string, root: string) => string {
-  const base = options.projectsDir.replace(/^\/+|\/+$/g, '')
+  const base = trimSlashes(options.projectsDir)
   const prefix = `${base}/${encodeProjectDir(options.from)}/`
   const target = `${base}/${encodeProjectDir(options.to)}/`
   return (relativePath, root) =>
