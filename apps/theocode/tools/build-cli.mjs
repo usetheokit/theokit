@@ -14,7 +14,7 @@ import {
   inkCliBundleOptions,
   isReactRuntimeFile,
   pinReactToProduction,
-} from '../../../packages/create-theokit/tools/build-ink-cli.mjs'
+} from 'create-theokit/tools/build-ink-cli.mjs'
 
 export { isReactRuntimeFile, pinReactToProduction }
 

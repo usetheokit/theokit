@@ -531,6 +531,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.12
         version: 4.1.12(vitest@4.1.12)
+      create-theokit:
+        specifier: workspace:*
+        version: link:../../packages/create-theokit
       dependency-cruiser:
         specifier: 18.2.0
         version: 18.2.0
