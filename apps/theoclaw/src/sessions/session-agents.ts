@@ -130,6 +130,11 @@ export class SessionAgents {
     }
   }
 
+  /** The ids of every agent held open or resolving, retired generations still running a turn included. */
+  heldIds(): string[] {
+    return [...this.#entries.keys()]
+  }
+
   #refuseIfStopping(): void {
     if (this.#stopping) throw new Error('theoclaw is stopping: no new chat turn starts')
   }

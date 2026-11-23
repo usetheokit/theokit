@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1507 export(s) across 27 entry point(s).
+1518 export(s) across 27 entry point(s).
 
 Measured against `@theokit/sdk@5.32.0`.
 
@@ -748,7 +748,9 @@ Measured against `@theokit/sdk@5.32.0`.
 | `createControlClient` | value |
 | `createDevicePairing` | value |
 | `createSessionStore` | value |
+| `PairingRefusedError` | value |
 | `pairRoute` | value |
+| `redeemPairing` | value |
 | `Server` | value |
 | `AgentTurnUsage` | type |
 | `ControlClient` | type |
@@ -759,9 +761,14 @@ Measured against `@theokit/sdk@5.32.0`.
 | `DevicePairingOptions` | type |
 | `PairingApproval` | type |
 | `PairingRequestResult` | type |
+| `RedeemedPairing` | type |
+| `RedeemPairingOptions` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
+| `SocketOutcome` | type |
+| `SocketSessions` | type |
+| `SocketVerdict` | type |
 
 ## `@theokit/agents/testing`
 
@@ -1057,6 +1064,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `permissionRulesFromLayers` | value |
 | `permissionRulesFromSettings` | value |
 | `projectEnvStep` | value |
+| `projectEnvStepWith` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
 | `resolveFileMentions` | value |
@@ -1117,6 +1125,8 @@ Measured against `@theokit/sdk@5.32.0`.
 | `PermissionsBlock` | type |
 | `PermissionTranslation` | type |
 | `PrecedenceReport` | type |
+| `ProjectEnvRecord` | type |
+| `ProjectEnvStepOptions` | type |
 | `ProvenancePerKey` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
@@ -1282,6 +1292,7 @@ Measured against `@theokit/sdk@5.32.0`.
 |---|---|
 | `CodeModeInvalidArgumentsError` | value |
 | `CodeModePermissionDeniedError` | value |
+| `CodeModeResultTooLongError` | value |
 | `createCodeMode` | value |
 | `CodeModeApi` | type |
 | `CodeModeCallOptions` | type |

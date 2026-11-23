@@ -1,7 +1,7 @@
 import { render } from 'ink'
 import { createElement } from 'react'
 
-import { createControlClient } from '../control-client/control-client.js'
+import { connectControlClient } from '../control-client/control-client.js'
 import { runWithOutputMask } from '../control-client/masked-entry.js'
 import { readControlClientSettings } from '../control-client/settings.js'
 import { describeError } from '../control-plane/errors.js'
@@ -18,7 +18,7 @@ async function main(): Promise<number> {
   let settings
   try {
     settings = readControlClientSettings(process.env)
-    client = await createControlClient(settings)
+    client = await connectControlClient(settings)
   } catch (error) {
     process.stderr.write(`theoclaw-tui: ${describeError(error)}\n`)
     return 1

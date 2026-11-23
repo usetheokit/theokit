@@ -80,6 +80,10 @@ export interface CodeModeConfig {
   name?: string
   /** Tool description surfaced to the model. */
   description?: string
+  /** Only these tool names are reachable from the script; others are absent from the API. Default: all of `tools`. */
+  allowedTools?: readonly string[]
+  /** Longest result (in characters of its JSON text) the tool answers; a longer one throws `CodeModeResultTooLongError`. Default: no limit. */
+  maxResultChars?: number
 }
 
 /**
@@ -125,6 +129,21 @@ export class CodeModeInvalidArgumentsError extends TheokitAgentError {
       code: 'CODE_MODE_INVALID_ARGUMENTS',
       isRetryable: false,
     })
+  }
+}
+
+/** Thrown when a script's result is longer than `maxResultChars`. */
+export class CodeModeResultTooLongError extends TheokitAgentError {
+  override readonly name = 'CodeModeResultTooLongError'
+
+  constructor(
+    readonly limit: number,
+    readonly size: number,
+  ) {
+    super(
+      `code-mode: the script's result is ${size} characters, over the limit of ${limit} (maxResultChars). Return less data.`,
+      { code: 'CODE_MODE_RESULT_TOO_LONG', isRetryable: false },
+    )
   }
 }
 
@@ -219,7 +238,7 @@ function generateCodeModeInstructions(tools: CustomTool[], toolName: string): st
   return [
     `The \`${toolName}\` tool runs your code in a sandbox. Your code may call ONLY these functions (each bridges to a real, validated tool on the host):`,
     calls,
-    'Write an async function body that composes these calls and return exactly ONE structured result. Prefer `Promise.all` for independent calls; do arithmetic and aggregation in code, not in prose.',
+    'The code is JavaScript (ECMAScript), not Python. It runs as the body of an async function: call the functions above with `await api.<name>(input)` and return exactly ONE structured, JSON-serializable result. Prefer `Promise.all` for independent calls; do arithmetic and aggregation in code, not in prose.',
   ].join('\n\n')
 }
 
@@ -253,6 +272,14 @@ export function createCodeMode(config: CodeModeConfig): {
     )
   }
 
+  const { maxResultChars } = config
+  if (maxResultChars !== undefined && (!Number.isInteger(maxResultChars) || maxResultChars < 0)) {
+    throw new Error('createCodeMode maxResultChars must be a non-negative integer.')
+  }
+  const allowed = config.allowedTools === undefined ? undefined : new Set(config.allowedTools)
+  const tools =
+    allowed === undefined ? config.tools : config.tools.filter((t) => allowed.has(t.name))
+
   const plugins = config.plugins ?? []
   const refuseByPlugins = async (tool: string, input: Record<string, unknown>): Promise<void> => {
     if (plugins.length === 0) return
@@ -275,7 +302,7 @@ export function createCodeMode(config: CodeModeConfig): {
 
   // Assemble the restricted API: each declared tool becomes a permission-gated callable.
   const api: CodeModeApi = {}
-  for (const tool of config.tools) {
+  for (const tool of tools) {
     api[tool.name] = async (args: unknown, options?: CodeModeCallOptions): Promise<unknown> => {
       const input = checkArguments(tool, args)
       const decision = await config.onPermissionRequest({ tool: tool.name, args })
@@ -292,10 +319,12 @@ export function createCodeMode(config: CodeModeConfig): {
     name,
     description:
       config.description ??
-      'Run code that composes the available tools. Only the declared tools are callable.',
+      'Run JavaScript (an async function body) that composes the available tools via `await api.<name>(input)` and returns one result. Only the declared tools are callable.',
     inputSchema: {
       type: 'object',
-      properties: { code: { type: 'string', description: 'The code to run in the sandbox.' } },
+      properties: {
+        code: { type: 'string', description: 'The JavaScript to run in the sandbox.' },
+      },
       required: ['code'],
     },
     handler: async (input: Record<string, unknown>, ctx?: CodeModeCallOptions): Promise<string> => {
@@ -305,9 +334,12 @@ export function createCodeMode(config: CodeModeConfig): {
           ? await config.sandbox.run(code, api)
           : await config.sandbox.run(code, api, { signal: ctx.signal })
       // A result JSON has no text for still resolves the string the tool promises (B-697, #84).
-      if (typeof result === 'string') return result
-      return jsonTextOf(result)
+      const text = typeof result === 'string' ? result : jsonTextOf(result)
+      if (maxResultChars !== undefined && text.length > maxResultChars) {
+        throw new CodeModeResultTooLongError(maxResultChars, text.length)
+      }
+      return text
     },
   }
-  return { tool, instructions: generateCodeModeInstructions(config.tools, name) }
+  return { tool, instructions: generateCodeModeInstructions(tools, name) }
 }

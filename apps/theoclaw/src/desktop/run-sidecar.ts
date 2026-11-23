@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { type AgentStreamEvent, presentUIMessageStream } from '@theokit/agents/bridge'
 
 import { isAgentStreamEvent } from '../agent-port.js'
-import { type ControlClient, type ControlFrame, createControlClient } from '../control-client/control-client.js'
+import { type ControlClient, type ControlFrame, connectControlClient } from '../control-client/control-client.js'
 import { type ControlClientSettings, readControlClientSettings } from '../control-client/settings.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
@@ -63,7 +63,7 @@ export async function runDesktopSidecar(io: SidecarIo): Promise<number> {
   }
   let client: ControlClient
   try {
-    client = await createControlClient(settings)
+    client = await connectControlClient(settings)
   } catch {
     // The reason names the address or the HTTP status; the shell gets a stable code.
     return errorLine(io, 'connect_failed')
