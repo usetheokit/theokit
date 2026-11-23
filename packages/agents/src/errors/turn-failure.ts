@@ -116,7 +116,9 @@ export function classifyTurnFailure(err: unknown): TurnFailure {
     node = field(node, 'cause')
   }
   const message = nodeMessage(err) || BLANK_MESSAGE
-  return rawCode === undefined ? { code, transient, message } : { code, rawCode, transient, message }
+  return rawCode === undefined
+    ? { code, transient, message }
+    : { code, rawCode, transient, message }
 }
 
 /**

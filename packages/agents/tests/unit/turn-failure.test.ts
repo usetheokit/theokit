@@ -121,9 +121,7 @@ describe('turn failure', () => {
     expect(describeTurnFailure(f, { probe: () => 'custom' })).toContain(': custom')
     expect(describeTurnFailure(f, { probe: () => undefined })).toBe(describeTurnFailure(f))
     const odd = classifyTurnFailure(new Error('weird'))
-    expect(describeTurnFailure(odd, { probe: (x) => `saw ${x.message}` })).toBe(
-      'weird: saw weird',
-    )
+    expect(describeTurnFailure(odd, { probe: (x) => `saw ${x.message}` })).toBe('weird: saw weird')
   })
 
   it('appends a suffix after the attempts text', () => {
