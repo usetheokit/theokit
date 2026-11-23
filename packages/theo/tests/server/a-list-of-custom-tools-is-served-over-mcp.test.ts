@@ -301,6 +301,46 @@ describe('handleMcpToolsHttp', () => {
     expect(((await res.json()) as any).result.isError).toBe(true)
   })
 
+  it('forwards options so a blocking plugin answers tools/call with isError true', async () => {
+    let ran = false
+    const toolList = [
+      {
+        name: 'echo',
+        description: 'Echo text',
+        inputSchema: { type: 'object' },
+        handler: () => {
+          ran = true
+          return 'ok'
+        },
+      },
+    ] as unknown as CustomTool[]
+    const blockingPlugin = {
+      name: 'guard',
+      version: '1',
+      kind: 'general',
+      register: (ctx: any) => {
+        ctx.on('pre_tool_call', () => ({ block: true, message: 'no way http' }))
+      },
+    } as unknown as Plugin
+    const res = await handleMcpToolsHttp(
+      toolList,
+      'host',
+      post(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'echo', arguments: {} },
+        }),
+      ),
+      { plugins: [blockingPlugin] },
+    )
+    const json: any = await res.json()
+    expect(json.result.isError).toBe(true)
+    expect(json.result.content[0].text).toContain('no way http')
+    expect(ran).toBe(false)
+  })
+
   it('stdio returns null for a notification line', async () => {
     expect(
       await handleMcpStdioLine(
