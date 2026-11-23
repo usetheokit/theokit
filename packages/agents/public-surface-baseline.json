@@ -18836,6 +18836,14 @@
             "dist/config.d.ts#Settings": "type Settings = z.infer<typeof SETTINGS_SCHEMA>;"
           }
         },
+        "MANAGED_SETTINGS_PATHS": {
+          "tier": "stable",
+          "declaration": "MANAGED_SETTINGS_PATHS: readonly string[]",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "MEMORY_BYTE_CAP": {
           "tier": "stable",
           "declaration": "MEMORY_BYTE_CAP = 25000",
@@ -19014,9 +19022,17 @@
           "references": [],
           "internals": {}
         },
+        "ReadManagedSettingsOptions": {
+          "tier": "stable",
+          "declaration": "interface ReadManagedSettingsOptions {\n    readonly paths?: readonly string[];\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ReadSettingsFileOptions": {
           "tier": "stable",
-          "declaration": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n}",
+          "declaration": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n    readonly throwOnMalformed?: boolean;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -19399,7 +19415,7 @@
             "dist/config.d.ts#SettingsFileRead"
           ],
           "internals": {
-            "dist/config.d.ts#ReadSettingsFileOptions": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n}",
+            "dist/config.d.ts#ReadSettingsFileOptions": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n    readonly throwOnMalformed?: boolean;\n}",
             "dist/config.d.ts#SettingsCandidate": "interface SettingsCandidate {\n    readonly path: string;\n    readonly foreignRoot: boolean;\n}",
             "dist/config.d.ts#SettingsFileRead": "interface SettingsFileRead {\n    readonly path: string;\n    readonly values: Record<string, unknown>;\n    readonly ignored: readonly string[];\n    readonly unrecognised: readonly string[];\n    readonly permissionRules: readonly PermissionRule[];\n    readonly unsupportedPermissions: readonly {\n        readonly entry: string;\n        readonly reason: string;\n    }[];\n    readonly hooks?: unknown;\n}"
           }
@@ -19587,6 +19603,20 @@
             "dist/config.d.ts#ProjectEnvStepOptions": "interface ProjectEnvStepOptions {\n    readonly protectedKeys?: readonly string[];\n}"
           }
         },
+        "readManagedSettings": {
+          "tier": "stable",
+          "declaration": "declare function readManagedSettings(options: ReadManagedSettingsOptions): SettingsFileRead | undefined;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/config.d.ts#ReadManagedSettingsOptions",
+            "dist/config.d.ts#SettingsFileRead"
+          ],
+          "internals": {
+            "dist/config.d.ts#ReadManagedSettingsOptions": "interface ReadManagedSettingsOptions {\n    readonly paths?: readonly string[];\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n}",
+            "dist/config.d.ts#SettingsFileRead": "interface SettingsFileRead {\n    readonly path: string;\n    readonly values: Record<string, unknown>;\n    readonly ignored: readonly string[];\n    readonly unrecognised: readonly string[];\n    readonly permissionRules: readonly PermissionRule[];\n    readonly unsupportedPermissions: readonly {\n        readonly entry: string;\n        readonly reason: string;\n    }[];\n    readonly hooks?: unknown;\n}"
+          }
+        },
         "readSettingsFile": {
           "tier": "stable",
           "declaration": "declare function readSettingsFile(candidate: SettingsCandidate, options: ReadSettingsFileOptions): SettingsFileRead | undefined;",
@@ -19598,7 +19628,7 @@
             "dist/config.d.ts#SettingsFileRead"
           ],
           "internals": {
-            "dist/config.d.ts#ReadSettingsFileOptions": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n}",
+            "dist/config.d.ts#ReadSettingsFileOptions": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n    readonly throwOnMalformed?: boolean;\n}",
             "dist/config.d.ts#SettingsCandidate": "interface SettingsCandidate {\n    readonly path: string;\n    readonly foreignRoot: boolean;\n}",
             "dist/config.d.ts#SettingsFileRead": "interface SettingsFileRead {\n    readonly path: string;\n    readonly values: Record<string, unknown>;\n    readonly ignored: readonly string[];\n    readonly unrecognised: readonly string[];\n    readonly permissionRules: readonly PermissionRule[];\n    readonly unsupportedPermissions: readonly {\n        readonly entry: string;\n        readonly reason: string;\n    }[];\n    readonly hooks?: unknown;\n}"
           }
@@ -19703,7 +19733,7 @@
         },
         "settingsCandidates": {
           "tier": "stable",
-          "declaration": "declare function settingsCandidates(input: {\n    readonly cwd: string;\n    readonly home: string;\n    readonly ownRoot: string;\n    readonly foreignRoot?: string | false;\n}): SettingsCandidates;",
+          "declaration": "declare function settingsCandidates(input: {\n    readonly cwd: string;\n    readonly home: string;\n    readonly ownRoot: string | readonly string[];\n    readonly foreignRoot?: string | false;\n}): SettingsCandidates;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
