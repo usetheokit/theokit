@@ -6,103 +6,12 @@ function oneLine(value: string, max = 120): string {
 }
 
 /**
- * B-027 — the `Blocked <cmd>` rendering was DELETED, not repaired.
- *
- * `vetoReason` detected `{ exitCode: 126, stderr }` and could never fire, on three independent
- * counts: it bailed on `'ok' in p` and every SDK tool result carries `ok`; it read `p.exitCode`
- * where results use `exit_code` (the sibling below gets it right); and nothing in this repository or
- * the SDK produces exit code 126, which is a shell convention this product never emits. Its only
- * consumer populated the WeakMap that the header branch read, so the whole chain was unreachable —
- * a feature that read as protection and provided none.
- *
- * It was not rewired because the correct shape is not known here without guessing. A hook veto is
- * `{ block: true, message }` (`@theokit/sdk` `PreToolCallDecision`), which the SDK "surfaces to the
- * model" — what that becomes on the wire the renderer sees was not measured, and inventing a shape
- * is how the original was written. B-055 carries the wiring with that contract as its evidence.
+ * A refused call arrives with a typed `refusal` (`@theokit/tui` `ToolRefusal`), so nothing here reads
+ * the result text or an exit code to decide that a call was refused. `human` and `timeout` read as
+ * `Rejected`, `policy` and `hook` as `Blocked` — the toolkit's own split.
  */
-
-/**
- * B-027, MEASURED — the shape that comment said could never arrive does arrive.
- *
- * B-027 deleted a `Blocked <cmd>` rendering because its detector keyed on
- * `{ exitCode: 126, stderr }` and, in its words, "nothing in this repository or the SDK produces
- * exit code 126, which is a shell convention this product never emits". It also said the shape a
- * veto takes on the wire "was not measured, and inventing a shape is how the original was written".
- *
- * It has now been measured, by rejecting a real approval in the TUI and dumping the event:
- *
- *     {"kind":"tool","name":"Ran echo probe2","status":"failed",
- *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'Bash' denied by human approver\",
- *                \"exitCode\":126}"}
- *
- * `@theokit/agents@11.0.0` turns a `{block: true, message}` decision into exactly that — camelCase
- * `exitCode`, 126, and the message on `stderr`. So the deleted detector had the RIGHT shape and the
- * wrong conclusion about whether it occurs. Keyed on the message rather than on 126 alone, because
- * 126 is also what a real shell returns for "command not executable" and the two deserve different
- * words.
- */
-const DENIED_MARK = 'denied by human approver'
-
-/** The body `shellBody` renders for a rejection — and the mark the header recognises it by. */
-export const REJECTED_BODY = 'rejected — nothing ran'
-
-/**
- * The prefix `shellBody` puts on a call something OTHER than the human refused — the permissions
- * gate, the sandbox's tool-level gating, a hook. Measured 2026-10-02: a refusal from the permissions
- * gate arrives in the same veto shape as a human rejection (camelCase `exitCode` 126, the reason on
- * `stderr`) and the header printed `Edited hello.txt (+1 -0)` for a patch that wrote nothing.
- */
-const BLOCKED_BODY_PREFIX = 'blocked — nothing ran: '
-
-/**
- * The JSON object `output` starts with. The TUI's `onError` passes every failure through
- * `turnErrorText`, which appends ` — <hint>` after the payload, so the event the header sees is
- * `{...} — set THEOCODE_DIAGNOSTICS=stderr ...` and not parseable as a whole.
- */
-function leadingJsonObject(output: string): Record<string, unknown> | undefined {
-  const whole = parseJsonObject(output)
-  if (whole !== undefined) return whole
-  for (let end = output.indexOf('} — '); end !== -1; end = output.indexOf('} — ', end + 1)) {
-    const prefix = parseJsonObject(output.slice(0, end + 1))
-    if (prefix !== undefined) return prefix
-  }
-  return undefined
-}
-
-/** The reason a policy gave for refusing, when `output` is the runtime's raw veto payload. */
-function vetoReason(output: string): string | undefined {
-  if (!output.startsWith('{')) return undefined
-  const p = leadingJsonObject(output)
-  if (p === undefined || p.exitCode !== 126 || typeof p.stderr !== 'string') return undefined
-  return p.stderr.includes(DENIED_MARK) ? undefined : p.stderr
-}
-
-/**
- * Whether this event is a call the human refused.
- *
- * TWO forms are accepted, and the reason is the order the framework applies things in: since
- * usetheokit/theokit-tui#156 the RESULT formatter runs before the header formatter and REPLACES
- * `output`. So by the time the header sees the event, the runtime's raw payload has already become
- * `REJECTED_BODY` — and matching only the raw form silently stopped working the moment the upstream
- * fix landed, which is exactly how it was caught: the body read `rejected — nothing ran` under a
- * header that still said `Ran echo parity-final`.
- *
- * The raw form is kept because `shellBody` only handles `Bash`; a rejected `ApplyPatch` or
- * `Edit` still arrives with the runtime's own payload.
- */
-function wasDenied(event: AgentToolEvent): boolean {
-  if (event.status !== 'failed') return false
-  const output = (event as { output?: unknown }).output
-  if (typeof output !== 'string') return false
-  return output === REJECTED_BODY || output.includes(DENIED_MARK)
-}
-
-/** Whether this event is a call a policy refused before it ran — raw payload or `shellBody` form. */
-function wasBlocked(event: AgentToolEvent): boolean {
-  if (event.status !== 'failed') return false
-  const output = (event as { output?: unknown }).output
-  if (typeof output !== 'string') return false
-  return output.startsWith(BLOCKED_BODY_PREFIX) || vetoReason(output) !== undefined
+function refusalVerb(refusal: NonNullable<AgentToolEvent['refusal']>): 'Rejected' | 'Blocked' {
+  return refusal.by === 'human' || refusal.by === 'timeout' ? 'Rejected' : 'Blocked'
 }
 
 /**
@@ -135,20 +44,18 @@ export function formatToolHeader(
   const input = (event.input ?? {}) as Record<string, unknown>
   const header = HEADERS_BY_TOOL.get(String(event.name))?.(input, active)
   if (header === undefined) return undefined
-  if (wasBlocked(event)) {
-    return {
-      name: refusedName('Blocked', String(event.name), input),
-      summary: 'refused before it ran — nothing ran and nothing changed',
-    }
-  }
-  if (!wasDenied(event)) return header
+  const { refusal } = event
+  if (refusal === undefined) return header
 
-  // The past tense was a lie. A rejected call renders `status: "failed"`, and every header here
-  // reads that as "not active" and prints `Ran <cmd>` — for a command that never ran. Whether the
-  // shell executed is the single fact this line exists to convey.
+  // The past tense would be a lie: a refused call renders `status: "failed"`, and every header here
+  // reads that as "not active" and prints `Ran <cmd>` for a command that never ran.
+  const verb = refusalVerb(refusal)
   return {
-    name: refusedName('Rejected', String(event.name), input),
-    summary: 'you rejected this call — nothing ran and nothing changed',
+    name: refusedName(verb, String(event.name), input),
+    summary:
+      verb === 'Rejected'
+        ? 'you rejected this call — nothing ran and nothing changed'
+        : 'refused before it ran — nothing ran and nothing changed',
   }
 }
 
@@ -313,18 +220,6 @@ function planBody(p: ParsedResult): { output: string } | undefined {
 
 function shellBody(p: ParsedResult): { output: string } | undefined {
   if (p.ok === false) return { output: `Bash: ${errorText(p)}` }
-  // A rejected call, now that the formatter is reached on the failure path at all
-  // (usetheokit/theokit-tui#156 — the override used to be gated on a field an errored part never
-  // populates, so the raw payload was printed verbatim). The runtime renders the veto as a shell
-  // result with camelCase `exitCode` 126 and the message on `stderr`; `exit_code` below is the
-  // snake_case a real shell run uses, and the two are deliberately not merged — 126 from a real
-  // shell means "not executable", which deserves different words.
-  if (typeof p.stderr === 'string' && p.stderr.includes(DENIED_MARK)) {
-    return { output: REJECTED_BODY }
-  }
-  if (p.exitCode === 126 && typeof p.stderr === 'string') {
-    return { output: `${BLOCKED_BODY_PREFIX}${p.stderr}` }
-  }
   const body = [p.stdout, p.stderr]
     .map((s) =>
       typeof s === 'string' ? s.replace(/\r\n/g, '\n').replace(/\r/g, '').trimEnd() : '',

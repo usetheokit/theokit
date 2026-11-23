@@ -6,7 +6,6 @@ import {
   formatApproval,
   formatToolHeader,
   formatToolResult,
-  REJECTED_BODY,
 } from '../../src/formatting/tool-header.js'
 
 /**
@@ -98,11 +97,7 @@ const denied = (name: string, input: Record<string, unknown>) =>
     name,
     status: 'failed',
     input,
-    output: JSON.stringify({
-      stdout: '',
-      stderr: `Tool '${name}' denied by human approver`,
-      exitCode: 126,
-    }),
+    refusal: { by: 'human' },
   }) as never
 
 describe('a rejected tool call is not reported as one that ran', () => {
@@ -126,20 +121,11 @@ describe('a rejected tool call is not reported as one that ran', () => {
     expect(formatToolHeader(denied('Edit', { path: 'a.ts' }))?.name).toBe('Rejected the edit')
   })
 
-  it('test_it_recognises_the_body_the_RESULT_formatter_already_produced', () => {
-    // The ordering trap. Since usetheokit/theokit-tui#156 the result formatter runs FIRST and
-    // replaces `output`, so the header no longer sees the runtime's raw payload — it sees
-    // `REJECTED_BODY`. Matching only the raw form stopped working the moment that fix landed, and
-    // the symptom was a body reading `rejected — nothing ran` under a header saying `Ran echo …`.
-    const afterResultFormatter = {
-      kind: 'tool',
-      name: 'Bash',
-      status: 'failed',
-      input: { command: 'echo parity-final' },
-      output: REJECTED_BODY,
-    } as never
-
-    expect(formatToolHeader(afterResultFormatter)?.name).toBe('Rejected echo parity-final')
+  it('test_a_timeout_reads_as_a_rejection', () => {
+    expect(
+      formatToolHeader({ ...(denied('Bash', { command: 'ls' }) as object), refusal: { by: 'timeout' } } as never)
+        ?.name,
+    ).toBe('Rejected ls')
   })
 
   it('test_a_call_that_actually_ran_is_untouched', () => {
@@ -182,10 +168,10 @@ describe('the body of a rejected call', () => {
   const result = (raw: unknown) =>
     formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
 
-  it('test_a_rejection_reads_as_a_rejection_not_as_a_shell_result', () => {
+  it('test_marker_text_in_the_output_is_not_a_refusal', () => {
     expect(
       result(JSON.stringify({ stdout: '', stderr: "Tool 'Bash' denied by human approver", exitCode: 126 })),
-    ).toBe('rejected — nothing ran')
+    ).not.toMatch(/rejected|blocked/)
   })
 
   it('test_a_real_shell_failure_still_shows_its_output_and_code', () => {
@@ -260,13 +246,7 @@ const refused = (name: string, input: Record<string, unknown>) =>
     name,
     status: 'failed',
     input,
-    output: JSON.stringify({
-      stdout: '',
-      stderr:
-        `\`${name}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
-        'approval_policy="on-request" means that decision is yours.',
-      exitCode: 126,
-    }),
+    refusal: { by: 'policy', reason: `\`${name}\` matched no rule in your \`permissions\` block` },
   }) as never
 
 describe('a tool call a policy refused is not reported as one that ran', () => {
@@ -280,61 +260,29 @@ describe('a tool call a policy refused is not reported as one that ran', () => {
     expect(header?.summary).toContain('nothing ran')
   })
 
-  it('test_the_payload_as_the_TUI_receives_it_with_the_diagnostics_hint_appended', () => {
-    // The fixture above is the runtime's payload; the event the renderer received on 2026-10-02 had
-    // already gone through `turnErrorText`, which appends ` — <hint>` after the JSON. A unit test on
-    // the bare payload passed while the real binary still printed `Edited hello.txt (+1 -0)`.
-    const raw = (refused('ApplyPatch', {}) as { output: string }).output
-    const received = {
-      kind: 'tool',
-      name: 'ApplyPatch',
-      status: 'failed',
-      input: {},
-      output: `${raw} — set THEOCODE_DIAGNOSTICS=stderr to see the retry sequence and the underlying error`,
-    } as never
-
-    expect(formatToolHeader(received)?.name).toBe('Blocked the patch')
-  })
-
   it('test_a_refused_command_is_not_reported_as_run', () => {
     expect(formatToolHeader(refused('Bash', { command: 'ls' }))?.name).toBe('Blocked ls')
   })
 
-  it('test_the_shell_body_says_it_was_blocked_and_why', () => {
-    const raw = (refused('Bash', { command: 'ls' }) as { output: string }).output
-    const body = formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
-
-    expect(body).toMatch(/^blocked — nothing ran: /)
-    expect(body).toContain('matched no rule in your `permissions` block')
-  })
-
-  it('test_the_header_recognises_the_body_the_result_formatter_produced', () => {
-    const raw = (refused('Bash', { command: 'ls' }) as { output: string }).output
-    const body = formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
-    const afterResultFormatter = {
-      kind: 'tool',
-      name: 'Bash',
-      status: 'failed',
-      input: { command: 'ls' },
-      output: body,
-    } as never
-
-    expect(formatToolHeader(afterResultFormatter)?.name).toBe('Blocked ls')
+  it('test_a_hook_refusal_reads_as_a_block', () => {
+    expect(
+      formatToolHeader({ ...(refused('Bash', { command: 'ls' }) as object), refusal: { by: 'hook' } } as never)
+        ?.name,
+    ).toBe('Blocked ls')
   })
 
   it('test_a_human_rejection_still_reads_as_a_rejection', () => {
     expect(formatToolHeader(denied('ApplyPatch', {}))?.name).toBe('Rejected the patch')
   })
 
-  it('test_a_real_shell_126_is_not_a_block', () => {
-    // snake_case `exit_code` is what a real shell run carries; only the runtime's camelCase veto
-    // shape is a refusal.
+  it('test_a_real_shell_126_without_a_refusal_is_not_a_block', () => {
+    // Only a typed `refusal` marks a refused call; the exit code and the text never do.
     const ran = {
       kind: 'tool',
       name: 'Bash',
       status: 'failed',
       input: { command: './x' },
-      output: JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
+      output: JSON.stringify({ stdout: '', stderr: 'denied by human approver', exitCode: 126 }),
     } as never
 
     expect(formatToolHeader(ran)?.name).toBe('Ran ./x')
