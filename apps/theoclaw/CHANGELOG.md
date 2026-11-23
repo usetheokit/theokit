@@ -17,6 +17,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
 
+- Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
+
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
 
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
