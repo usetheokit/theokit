@@ -7,7 +7,9 @@
  * in-process only.
  */
 import { existsSync, readFileSync } from 'node:fs'
+
 import { atomicWriteJson, withFileLock } from '@theokit/sdk/persistence'
+
 import { ensureSecureDir } from '../hooks/secure-store.js'
 
 export interface SessionGenerations {
