@@ -52,7 +52,7 @@ export class CapabilityRegistry {
 }
 
 /**
- * **Composite** — a preset behaves like ONE capability, so a caller says `codingAgent()` instead of
+ * **Composite** — a preset behaves like ONE capability, so a caller says `codingAgentPreset()` instead of
  * spreading an array at the call site. Members apply in declaration order (deterministic).
  */
 export class CapabilityPreset implements Capability {
