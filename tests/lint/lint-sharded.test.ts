@@ -3,7 +3,12 @@
  * resident and was killed by earlyoom. Splitting must never drop a file.
  */
 import { describe, expect, it } from 'vitest'
-import { planShards, MAX_FILES_PER_SHARD, LINTABLE } from '../../scripts/lint-sharded.mjs'
+import {
+  planShards,
+  lintShard,
+  MAX_FILES_PER_SHARD,
+  LINTABLE,
+} from '../../scripts/lint-sharded.mjs'
 
 const make = (dir: string, n: number): string[] =>
   Array.from({ length: n }, (_, i) => `${dir}/f${i}.ts`)
@@ -32,5 +37,36 @@ describe('lint-sharded planShards', () => {
     expect(LINTABLE.test('a/b.tsx')).toBe(true)
     expect(LINTABLE.test('a/b.mjs')).toBe(true)
     expect(LINTABLE.test('a/b.md')).toBe(false)
+  })
+})
+
+describe('lint-sharded lintShard', () => {
+  const oom = { status: null, signal: 'SIGABRT' }
+  const ok = { status: 0, signal: null }
+
+  it('splits an aborted shard and lints every file', () => {
+    const linted: string[] = []
+    const files = ['a', 'b', 'c', 'd', 'e']
+    const result = lintShard(files, (s: string[]) => {
+      if (s.length > 2) return oom
+      linted.push(...s)
+      return ok
+    })
+    expect(result).toBe(true)
+    expect(linted).toEqual(files)
+  })
+
+  it('keeps ordinary lint failures as failures without retrying', () => {
+    let calls = 0
+    const result = lintShard(['a', 'b'], () => {
+      calls++
+      return { status: 1, signal: null }
+    })
+    expect(result).toBe(false)
+    expect(calls).toBe(1)
+  })
+
+  it('fails when a single file still aborts', () => {
+    expect(lintShard(['a'], () => oom)).toBe(false)
   })
 })
