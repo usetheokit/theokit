@@ -160,4 +160,13 @@ describe('createA2ATool with protocol jsonrpc', () => {
     controller.abort(reason)
     await expect(call).rejects.toBe(reason)
   })
+
+  it('names the tool when the connection fails, keeping the original as cause', async () => {
+    const error = new TypeError('fetch failed')
+    const fetchImpl = vi.fn(() => Promise.reject(error))
+    const rejection: unknown = await (async () =>
+      peer(fetchImpl).handler({ message: 'hi' }))().catch((e: unknown) => e)
+    expect((rejection as Error).message).toMatch(/^A2A call to "peer_b" failed: /)
+    expect((rejection as Error).cause).toBe(error)
+  })
 })

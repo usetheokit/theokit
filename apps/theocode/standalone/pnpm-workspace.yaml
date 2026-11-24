@@ -3,5 +3,3 @@ packages:
 allowBuilds:
   esbuild: true
   node-pty: true
-patchedDependencies:
-  '@theokit/tui@0.83.4': patches/@theokit__tui@0.83.4.patch

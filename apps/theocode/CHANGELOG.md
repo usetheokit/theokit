@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `/image`, `/model` and custom-command model overrides travel with the message as the send body that `InProcessTransport` now forwards; the take-on-next-turn closures in the chat transport and `takeModel`/`setModel` are gone (#2900).
+- `/goal` waits for each turn through `useAgent`'s `sendAndWait` and `asGoalLoopAgent` instead of polling the store every 120 ms; `goal-store-agent.ts` is gone. A turn Esc aborts now ends the goal with `GoalTurnFailedError` (status `aborted`) rather than the store's status (#2917).
+- A malformed project `.mcp.json` no longer makes personal MCP servers appear as "also declared by the project" or as servers withheld by trust; the framework now warns once and keeps the personal scope, and the retry is gone (#2895).
 - Removed `classifyEntry` (no caller) and `legacyRootHint`; the TUI uses the framework's `transcriptRootHint`, so the empty-session hint now reads "No sessions under …" (#2937).
 - Removed `tools/check-theokit-updates.mjs`, `tools/report-theokit-staleness.mjs` and the `deps:theokit`, `deps:theokit:json` and `deps:theokit:report` scripts; run `pnpm check:app-deps apps/theocode` from the repository root instead (#2938).
 - Removed `npm run blockers` and `tools/check-upstream-blockers.mjs`: the three SDK gaps it checked have landed, and its issue numbers pointed at unrelated issues here (#2939).
@@ -59,7 +62,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 
-- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` 0.83.4 has no controller, so a local pnpm patch (`patches/@theokit__tui@0.83.4.patch`, root and standalone) backports one that accepts any theme prop — a built-in name, an override, or `{base, override}` — and `<TheoTUIProvider controller>`. Drop the patch when `theokit-tui` ships a controller that takes theme objects (usetheokit/theokit-tui#294); it must be removed once that release lands.
+- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` is `^0.83.10`, whose `createThemeController({ initial })` takes any theme prop — a built-in name, an override, or `{base, override}` — so the local pnpm patch for 0.83.4 (`patches/@theokit__tui@0.83.4.patch`, root and standalone) is gone (usetheokit/theokit-tui#294, #2901).
 - The standalone consumer pins `@theokit/sdk` 11.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`; the registry and live-session protections and the output are unchanged.
 

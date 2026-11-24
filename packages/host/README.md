@@ -202,6 +202,32 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `createChannelAssistant` (`@theokit/host/channel-assistant`)
+
+Turns channels, an agent factory and an access policy into a running chat assistant. Needs the optional peers `@theokit/gateway` and `@theokit/gateway-agent`.
+
+```ts
+const assistant = createChannelAssistant({
+  channels: [{ platform: 'telegram', build: () => adapter, descriptor }],
+  sessions: { agent: ({ key, agentId, context }) => buildAgent(key) }, // feeds Agent.sessionPool; or `{ pool }` with your own `handler`
+  access: { owners, dm: 'pairing', pairing, isAuthenticated }, // or `accessHook`; exactly one is required
+  preHooks: [emailHook], // before the access policy
+  hooks: [appHook], // after the access policy, before `help`
+  help: helpHook,
+  reply: { decorateReply, onTurnEnd },
+  maskStreams: [process.stdout, process.stderr], // masked with `secrets`; `assistant.flushMask()` on exit
+  transcripts: { start: (heldIds) => startSweeper(heldIds) },
+  services: [{ name: 'control-plane', start, stop }], // after the channels, stopped first
+  events: { agent: () => toolLessAgent() }, // assistant.withEventAgent(work)
+  secrets: [token], // masked in every reply and written line
+})
+await assistant.start() // `background: true` returns before the platforms connect
+assistant.router // webhook routes
+await assistant.close() // channels stop, then session agents are disposed; once
+```
+
+Hook order is `preHooks`, access policy, `hooks`, `help`. An assistant with no access policy is refused; to serve everyone, say `access: { dm: 'open', owners: new Set(), isAuthenticated: () => false }`. `close()` stops the services, the channels, the sweeper, then the sessions.
+
 ## `applyOutboundProxy` and `validateProxy`
 
 ```ts

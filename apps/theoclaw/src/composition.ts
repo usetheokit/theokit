@@ -4,12 +4,12 @@ import { mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { redactSecrets } from '@theokit/gateway'
-import { createFilePairingStore, createWebhookHandler } from '@theokit/gateway'
-import type { BuiltChannel, ChannelDescriptor, PairingStore, PlatformName } from '@theokit/gateway'
+import { createFilePairingStore } from '@theokit/gateway'
+import type { ChannelDescriptor, PairingStore, PlatformName } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
-import { createContainer } from './agent-container.js'
+import { type AgentComposition, createContainer } from './agent-container.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
 import {
   type AuthorizationPolicy,
@@ -19,9 +19,10 @@ import {
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { maskSecrets } from '@theokit/gateway'
-import { startChannelLoop } from './channels/channel-loop.js'
+import { type AppHostCloseResult } from '@theokit/host/app-host'
+import { createChannelAssistant } from '@theokit/host/channel-assistant'
 import type { RetryPolicy } from './channels/channel-loop.js'
-import { channelHooks } from './channel-hooks.js'
+import { channelHookParts } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
 import { readAdvisorSettings } from './channels/advisor.js'
 import type { MessageEvent } from '@theokit/gateway'
@@ -54,7 +55,8 @@ import { peerTools } from './a2a/peer-tools.js'
 import { RelayClient, RelayTurnGate, relayTools } from './relay/relay-client.js'
 import { relayRoute } from './relay/relay-server.js'
 import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
-import { mcpRelaySecrets, readMcpRelaySettings, startMcpRelayConnector, type McpRelayConnector } from './mcp-relay/connector.js'
+import { startMcpRelayConnector, type McpRelayConnector } from '@theokit/agents/mcp-relay'
+import { mcpRelayDispatch, mcpRelaySecrets, readMcpRelaySettings } from './mcp-relay/command.js'
 import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
@@ -73,7 +75,7 @@ import type { MemoryWiring } from './memory/wiring.js'
 import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
 import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
-import { startTranscriptSweeper, type TranscriptSweeper } from './sessions/transcript-gc.js'
+import { startTranscriptSweeper } from './sessions/transcript-gc.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
 import { withFailedStatusLog } from './channels/whatsapp-status-log.js'
 import { describeError } from './control-plane/errors.js'
@@ -165,7 +167,11 @@ export interface TheoClawOptions {
 
 export interface ComposedTheoClaw {
   readonly loop: ChannelLoop
+  /** Stops the channels, the transcript sweeper, then disposes the session agents, once. */
+  stopApp(): Promise<AppHostCloseResult>
   readonly router: (request: Request) => Promise<Response>
+  /** The one request boundary of every event run: a fresh tool-less agent per run. */
+  readonly withEventAgent: EventWithAgent
   /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
   readonly sessions: SessionAgents
   /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
@@ -176,18 +182,25 @@ export interface ComposedTheoClaw {
   readonly memory?: MemoryWiring | undefined
 }
 
+type EventWithAgent = AgentComposition<TurnAgent>['withAgent']
+
+/** The one boundary every event run (trigger route, e-mail trigger, MCP event) opens: a fresh tool-less agent per run. */
+function eventAgentBoundary(options: Pick<TheoClawOptions, 'env' | 'triggerAgentFactory'>): EventWithAgent {
+  const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
+  return createContainer<TurnAgent>({ factory }).withAgent
+}
+
 /** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter, its reply masked (B-398 FR-006). */
 function composedTriggers(
-  options: TheoClawOptions,
+  withAgent: EventWithAgent,
   events: EventSettings,
   loop: ChannelLoop,
   write: (line: string) => void,
   secrets: readonly string[],
 ): ReadonlyMap<string, WebhookRoute> {
-  const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
   return triggerRoutes(events.triggers, {
     adapterFor: (platform) => loop.started.get(platform)?.adapter,
-    withAgent: createContainer<TurnAgent>({ factory }).withAgent,
+    withAgent,
     write,
     secrets,
   })
@@ -278,30 +291,27 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       await adapter.sendMessage({ channel: event.channel, text })
     },
   })
+  const withEventAgent = eventAgentBoundary(options)
   const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   reportUnservedPlatforms(skipped, configured.filter((entry) => entry.platform !== 'email' || events.emailTrigger === undefined), policy, options.write)
   const emailTrigger = events.emailTrigger === undefined ? undefined : createEmailTrigger({
     settings: events.emailTrigger,
     adapterFor: (platform) => loop.started.get(platform)?.adapter,
-    withAgent: createContainer<TurnAgent>({ factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env) }).withAgent,
+    withAgent: withEventAgent,
     write: maskedWrite,
     secrets,
   })
-  // Each adapter the loop builds, paired with its gateway descriptor: the webhook handler routes by it.
-  const built: BuiltChannel[] = []
+  // Each adapter is paired with its gateway descriptor: the webhook handler routes by it.
   const descriptors = new Map<PlatformName, ChannelDescriptor>(
     configured.map((entry) => [entry.platform, entry.platform === 'whatsapp' ? withFailedStatusLog(descriptorFor(entry.platform, entry.settings), maskedWrite) : descriptorFor(entry.platform, entry.settings)]),
   )
-  const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map(({ platform, build }) => ({
-      platform,
-      build: () => {
-        const adapter = build()
-        const descriptor = descriptors.get(platform)
-        if (descriptor !== undefined) built.push({ descriptor, adapter })
-        return adapter
-      },
-    })),
+  const hookParts = channelHookParts({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) })
+  const { generations, sessionSettings } = options
+  const sweeper = generations === undefined || sessionSettings === undefined ? undefined : (heldIds: () => readonly string[]) => startTranscriptSweeper({ workspace: sessionSettings.workspace, generations, heldIds, retentionDays: sessionSettings.transcriptRetentionDays, write: options.write })
+  const assistant = createChannelAssistant({
+    channels: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map(({ platform, build }) => ({ platform, build, ...(descriptors.get(platform) === undefined ? {} : { descriptor: descriptors.get(platform) }) })),
+    // The sessions are the app's own (memory recording, incognito cleanup): the assistant disposes them last.
+    sessions: { pool: chat.sessions },
     handler: withVoiceReplies(createReplyHandler({
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
@@ -322,7 +332,10 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       ...(advisor === undefined ? {} : { advisor }),
       ...(ackReaction === undefined ? {} : { ack: { emoji: ackReaction, adapters: () => [...loop.started.values()].map((entry) => entry.adapter) } }),
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
+    preHooks: hookParts.pre,
+    accessHook: hookParts.access,
+    hooks: hookParts.app,
+    help: hookParts.help,
     secrets,
     write: options.write,
     retry: options.retry ?? { initialDelayMs: 1000, maxDelayMs: 30_000, maxAttempts: 40 },
@@ -332,22 +345,30 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       : configured.some((entry) => entry.platform === 'whatsapp' && isBaileys(entry.settings))
         ? { startTimeoutMs: PAIRING_WAIT_MS }
         : {}),
-  })
-  const voiceCall = readVoiceCallSettings(options.env)
-  // A platform stopped since answers 503 (D7); a route that throws is written, masked, and answers 500.
-  const channels = createWebhookHandler({
-    channels: built,
-    isStarted: (platform) => loop.started.has(platform),
     platformFor: webhookPlatformOf,
-    onError: (platform, error) => maskedWrite(`${platform}: webhook failed: ${describeError(error)}`),
+    // Returns at once: the platforms keep connecting while the router already serves (EC-2).
+    background: true,
+    ...(sweeper === undefined ? {} : { transcripts: { start: sweeper } }),
   })
+  const loop: ChannelLoop = {
+    get started() {
+      return assistant.started
+    },
+    get failed() {
+      return assistant.failed
+    },
+    ready: assistant.ready,
+    stopAll: () => assistant.stopChannels(),
+  }
+  void assistant.start().catch((error: unknown) => maskedWrite(`start failed: ${describeError(error)}`))
+  const voiceCall = readVoiceCallSettings(options.env)
   const router = createWebhookRouter({
-    channels,
+    channels: assistant.router,
     ...(voiceCall === undefined ? {} : { named: new Map([['voice', { methods: ['POST'], handle: createVoiceCallRoute({ settings: voiceCall, withChatAgent: chat.withAgent, write: maskedWrite, secrets }) }]]) }),
     write: maskedWrite,
-    triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
+    triggers: composedTriggers(withEventAgent, events, loop, maskedWrite, secrets),
   })
-  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent, think: chat.think, memory: chat.memory }
+  return { loop, router, stopApp: () => assistant.close(), withEventAgent, sessions: chat.sessions, withChatAgent: chat.withAgent, think: chat.think, memory: chat.memory }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -609,7 +630,6 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   let acpSessions: AcpSessions | undefined
   let mcpConnector: McpRelayConnector | undefined
   let mcpEvents: McpEvents | undefined
-  let transcriptSweeper: TranscriptSweeper | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
@@ -621,9 +641,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     await scheduled?.stop()
     await closeScheduleStore()
     await acpSessions?.stopAll()
-    await composedApp?.loop.stopAll()
-    await transcriptSweeper?.stop()
-    await composedApp?.sessions.disposeAll()
+    await composedApp?.stopApp()
     // After the sessions: their browser servers are gone before the browser they were attached to.
     await shared.browser?.close()
   }
@@ -665,13 +683,6 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     secrets: secretValues,
   })
   composedApp = composed
-  transcriptSweeper = startTranscriptSweeper({
-    workspace: sessionSettings.workspace,
-    generations,
-    heldIds: () => composed.sessions.heldIds(),
-    retentionDays: sessionSettings.transcriptRetentionDays,
-    write: stderr,
-  })
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
@@ -718,7 +729,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     mcpEvents = await startMcpEvents({
       settings: mcpEventsSettings,
       adapterFor: (platform) => composed.loop.started.get(platform)?.adapter,
-      withAgent: createContainer<TurnAgent>({ factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env) }).withAgent,
+      withAgent: composed.withEventAgent,
       write: stderr,
       secrets: secretValues,
     })
@@ -735,7 +746,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     stderr,
   })
   if (mcpRelay !== undefined) {
-    mcpConnector = startMcpRelayConnector({ settings: mcpRelay, controlTools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools, toolSettings: tools, log: stderr })
+    mcpConnector = startMcpRelayConnector({ url: mcpRelay.url, token: mcpRelay.token, tools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools, dispatch: mcpRelayDispatch(tools), log: stderr })
   }
   const listen = options.listen ?? listenControlPlane
   const geoDb = options.env?.THEOCLAW_GEOIP_DB?.trim() || undefined
