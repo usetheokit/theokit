@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { vi } from 'vitest'
 
 import { createDelegateToTeamTool } from '../../src/delegation/squad.js'
@@ -26,13 +30,22 @@ export function fakeMember(opts: {
   }
 }
 
-export function runTool(): Promise<string> {
+export async function runTool(): Promise<string> {
+  const cwd = mkdtempSync(join(tmpdir(), 'theocode-team-'))
+  try {
+    return await invoke(cwd)
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+}
+
+function invoke(cwd: string): Promise<string> {
   const tool = createDelegateToTeamTool({
     model: 'm',
     reasoning_effort: undefined,
     sandbox_mode: 'workspace-write',
     posture: 'trusted',
-    cwd: process.cwd(),
+    cwd,
   } as never) as unknown as { handler: (i: { task: string }) => Promise<string> }
   return tool.handler({ task: 'do it' })
 }
