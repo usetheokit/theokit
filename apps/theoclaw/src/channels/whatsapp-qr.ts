@@ -1,6 +1,6 @@
 import qrcode from 'qrcode-terminal'
 
-import { whatsappBaileysAdapter } from './adapter-factory.js'
+import { descriptorFor } from './platforms.js'
 
 /** The terminal drawing of a pairing QR, a few lines of block characters. */
 export function renderQr(qr: string): Promise<string> {
@@ -22,7 +22,7 @@ export function qrWriter(write: (text: string) => void): (qr: string) => void {
  * it, and resolve true when the session opens (the pairing is then saved in `sessionDir`).
  */
 export async function loginWhatsApp(sessionDir: string, write: (text: string) => void, connectTimeoutMs = 120_000): Promise<boolean> {
-  const adapter = whatsappBaileysAdapter(sessionDir, { onQr: qrWriter(write), connectTimeoutMs })
+  const adapter = descriptorFor('whatsapp', { sessionDir }).create({ sessionDir }, { onQr: qrWriter(write), connectTimeoutMs })
   try {
     return await adapter.connect()
   } finally {

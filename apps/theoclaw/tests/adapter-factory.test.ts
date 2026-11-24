@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 
-import { adapterBuilders } from '../src/channels/adapter-factory.js'
+import { adapterBuilders, depsFor } from '../src/channels/adapter-factory.js'
 import type { ConfiguredPlatform } from '../src/channels/platforms.js'
 
 /** A service-account key file with a placeholder key: the adapter only reads it at construction. */
@@ -152,5 +152,28 @@ describe('signal sender id', () => {
     expect(senderKey).toBe('number')
     const envelope = { source: '+5511888880000', sourceNumber: '+5511888880000', sourceUuid: 'uuid-1', timestamp: 1, dataMessage: { message: 'pong', timestamp: 1 } }
     expect(signalEnvelopeToMessageEvent(envelope as never, 1, senderKey as 'number')?.sender.id).toBe('+5511888880000')
+  })
+})
+
+describe('depsFor', () => {
+  it('gives X a store that keeps the rotated token under x-refresh-token, whichever key the descriptor asks for', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'x-deps-'))
+    const deps = depsFor({ platform: 'x', settings: {} }, {}, dir)
+    const store = deps?.credentialStore as { get(k: string): Promise<string | undefined>; set(k: string, v: string): Promise<void> }
+    await store.set('x-refresh-token:42', 'rotated')
+    expect(readFileSync(join(dir, 'x-refresh-token'), 'utf8')).toBe('rotated')
+    expect(await store.get('x-refresh-token:42')).toBe('rotated')
+  })
+
+  it('gives X nothing without a state directory', () => {
+    expect(depsFor({ platform: 'x', settings: {} }, {}, '  ')).toBeUndefined()
+  })
+
+  it('gives Baileys the QR sink and the pairing wait only when set', () => {
+    const baileys: ConfiguredPlatform = { platform: 'whatsapp', settings: { sessionDir: '/tmp/s' } }
+    const onQr = vi.fn()
+    expect(depsFor(baileys, { onQr, connectTimeoutMs: 5 })).toEqual({ onQr, connectTimeoutMs: 5 })
+    expect(depsFor(baileys, {})).toEqual({})
+    expect(depsFor({ platform: 'telegram', settings: { token: 't' } }, { onQr })).toBeUndefined()
   })
 })
