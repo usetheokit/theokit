@@ -245,7 +245,7 @@ describe('refreshing an expiring sign-in', () => {
 
     await expect(
       resolveFreshCredential({ env, home, fetch: rejected, now: () => 10_000_000 }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/failure refreshing the credential/)
   }, 20_000)
 })
 
