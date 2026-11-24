@@ -1,11 +1,13 @@
 import { Bonjour, type Service, type ServiceConfig } from 'bonjour-service'
 
 import {
+  DiscoveryError,
   type DiscoveryErrorRoute,
   type PublishedService,
   type ServicePublisher,
-  TheoClawDiscoveryError,
-} from './publisher.js'
+} from '../discovery/index.js'
+
+export { DiscoveryError, type DiscoveryErrorRoute } from '../discovery/index.js'
 
 type SendCallback = (error?: unknown, ...rest: unknown[]) => void
 
@@ -16,7 +18,8 @@ interface MdnsEmitter {
 }
 
 export interface BonjourPublisherOptions {
-  onError(error: TheoClawDiscoveryError): void
+  /** Called for every error the library raises, in the library's own tick. May be omitted when `announceService`'s `onError` is used. */
+  readonly onError?: (error: DiscoveryError) => void
   /** The interface the multicast socket binds; only the adapter's own tests set it. */
   readonly interface?: string
   /** The address packets are sent to; only the adapter's own tests set it. */
@@ -25,8 +28,8 @@ export interface BonjourPublisherOptions {
 
 /**
  * The emitter sits on `server`, a member the library's types mark private. This cast is the one
- * access to it, and is why the dependency is pinned at exactly 1.4.4 (plan D1): a release that moves
- * the member fails `tests/lan-publisher.test.ts`.
+ * access to it, and is why the dependency is pinned at exactly 1.4.4 : a release that moves
+ * the member fails `the adapter's real-library test`.
  */
 function emitterOf(bonjour: Bonjour): MdnsEmitter {
   return (bonjour as unknown as { readonly server: { readonly mdns: MdnsEmitter } }).server.mdns
@@ -35,10 +38,13 @@ function emitterOf(bonjour: Bonjour): MdnsEmitter {
 /**
  * Every packet the library sends goes through the emitter's `send`, announcements and probe queries
  * included, whose callers ignore the callback's error. Wrapping `send` is what keeps a host that
- * cannot send from claiming it publishes (plan D5). The wrapper normalises the arguments itself, so
+ * cannot send from claiming it publishes . The wrapper normalises the arguments itself, so
  * the original never calls back into it and each packet is seen once.
  */
-function observeSends(emitter: MdnsEmitter, report: (error: unknown, route: DiscoveryErrorRoute) => void): void {
+function observeSends(
+  emitter: MdnsEmitter,
+  report: (error: unknown, route: DiscoveryErrorRoute) => void,
+): void {
   const send = emitter.send.bind(emitter)
   emitter.send = (value, rinfo, callback) => {
     const done = typeof rinfo === 'function' ? (rinfo as SendCallback) : callback
@@ -55,7 +61,7 @@ function observeSends(emitter: MdnsEmitter, report: (error: unknown, route: Disc
   }
 }
 
-/** The cause of a conflict: `codeOf` reads its `code`, and the message names the contested name (plan D2). */
+/** The cause of a conflict: `codeOf` reads its `code`, and the message names the contested name . */
 function nameInUse(name: string): Error & { readonly code: 'NAME_IN_USE' } {
   return Object.assign(new Error(`mDNS name "${name}" is already in use on the network`), {
     code: 'NAME_IN_USE' as const,
@@ -64,51 +70,71 @@ function nameInUse(name: string): Error & { readonly code: 'NAME_IN_USE' } {
 
 /**
  * The library answers a probe that finds the name taken only by calling the service's own `stop` and
- * writing `console.log`; TheoClaw's withdrawals go through `unpublishAll`, never `stop`. So a `stop`
- * outside a withdrawal is the conflict, reported before the library tears the service down (plan D1).
+ * writing `console.log`; the adapter's withdrawals go through `unpublishAll`, never `stop`. So a `stop`
+ * outside a withdrawal is the conflict, reported before the library tears the service down .
  * The probe answers asynchronously, so the wrap is in place before any answer can arrive. `withdrawing`
  * is per service and never cleared for the services a withdrawal covered: a probe answer can still arrive
- * after `unpublishAll` resolved, and that late `stop` is TheoClaw's withdrawal, not a conflict. `onConflict` never throws: it goes through `deliver`.
+ * after `unpublishAll` resolved, and that late `stop` is the adapter's withdrawal, not a conflict. `onConflict` never throws: it goes through `deliver`.
  */
-function observeConflict(published: Service, withdrawing: () => boolean, onConflict: () => void): void {
-  const stop = published.stop?.bind(published)
+function observeConflict(
+  published: Service,
+  withdrawing: () => boolean,
+  onConflict: () => void,
+): void {
+  const stop = published.stop.bind(published) as (callback?: CallableFunction) => void
   published.stop = (callback?: CallableFunction) => {
     if (!withdrawing()) onConflict()
-    stop?.(callback)
+    stop(callback)
   }
 }
 
 /**
  * Every report runs on the library's socket callbacks, where a throw is an uncaught exception that
- * exits the process (FR-006). So a throw from `onError` stays here, and is written as a process
+ * exits the process . So a throw from `onError` stays here, and is written as a process
  * warning naming both the report and what `onError` threw.
  */
-function deliver(onError: (error: TheoClawDiscoveryError) => void, error: TheoClawDiscoveryError): void {
+function deliver(
+  onError: ((error: DiscoveryError) => void) | undefined,
+  error: DiscoveryError,
+): void {
   try {
-    onError(error)
+    onError?.(error)
   } catch (thrown) {
     const reason = thrown instanceof Error ? thrown.message : String(thrown)
-    process.emitWarning(`onError threw while reporting ${error.code} on route ${error.route}: ${reason}`, {
-      type: 'TheoClawDiscoveryWarning',
-    })
+    process.emitWarning(
+      `onError threw while reporting ${error.code} on route ${error.route}: ${reason}`,
+      {
+        type: 'DiscoveryWarning',
+      },
+    )
   }
 }
 
 /**
  * The one adapter over the DNS-SD library. Both of its error routes, the socket's `error` event and
  * the answer path's `errorCallback`, are wired in the constructing tick; the library's default for
- * either exits the process (FR-006).
+ * either exits the process .
  */
 export function createBonjourPublisher(options: BonjourPublisherOptions): ServicePublisher {
   const { onError, interface: iface, ip } = options
+  const listeners = new Set<(error: unknown) => void>()
   const report = (error: unknown, route: DiscoveryErrorRoute): void => {
-    deliver(onError, new TheoClawDiscoveryError(error, route))
+    const reported = new DiscoveryError(error, route)
+    deliver(onError, reported)
+    for (const listener of [...listeners]) deliver(listener, reported)
   }
-  const config = { ...(iface === undefined ? {} : { interface: iface }), ...(ip === undefined ? {} : { ip }) }
-  const bonjour = new Bonjour(config as Partial<ServiceConfig>, (error: unknown) => report(error, 'answer'))
+  const config = {
+    ...(iface === undefined ? {} : { interface: iface }),
+    ...(ip === undefined ? {} : { ip }),
+  }
+  const bonjour = new Bonjour(config as Partial<ServiceConfig>, (error: unknown) => {
+    report(error, 'answer')
+  })
   try {
     const emitter = emitterOf(bonjour)
-    emitter.on('error', (error) => report(error, 'socket'))
+    emitter.on('error', (error) => {
+      report(error, 'socket')
+    })
     observeSends(emitter, report)
   } catch (error) {
     // Without its listeners the instance must not keep a socket open: release it, then refuse.
@@ -117,12 +143,18 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
   }
 
   // A withdrawal covers the services published before it, never one published after (a late probe
-  // answer for those is TheoClaw's own withdrawal; a conflict on a later publish is still a conflict).
+  // answer for those is the adapter's own withdrawal; a conflict on a later publish is still a conflict).
   const live = new Set<{ withdrawn: boolean }>()
   const withdrawAll = (): void => {
     for (const entry of live) entry.withdrawn = true
   }
   return {
+    onError: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
     publish: (service: PublishedService) => {
       const published = bonjour.publish({
         name: service.name,
@@ -132,13 +164,19 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
       })
       const entry = { withdrawn: false }
       live.add(entry)
-      observeConflict(published, () => entry.withdrawn, () => report(nameInUse(service.name), 'publish'))
+      observeConflict(
+        published,
+        () => entry.withdrawn,
+        () => {
+          report(nameInUse(service.name), 'publish')
+        },
+      )
     },
     unpublishAll: () =>
       new Promise<void>((resolve, reject) => {
         withdrawAll()
         bonjour.unpublishAll((error?: unknown) => {
-          if (error) reject(new TheoClawDiscoveryError(error, 'send-respond'))
+          if (error) reject(new DiscoveryError(error, 'send-respond'))
           else resolve()
         })
       }),
@@ -146,9 +184,11 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
       new Promise<void>((resolve, reject) => {
         withdrawAll()
         try {
-          bonjour.destroy(() => resolve())
+          bonjour.destroy(() => {
+            resolve()
+          })
         } catch (error) {
-          reject(new TheoClawDiscoveryError(error, 'socket'))
+          reject(new DiscoveryError(error, 'socket'))
         }
       }),
   }

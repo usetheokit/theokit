@@ -25,6 +25,7 @@ import {
 } from '@theokit/sdk-tools'
 
 import type { SubagentAgentDefinition } from '../bridge/define-agent.js'
+import type { CompatSurface } from '../bridge/setting-sources-gate.js'
 import { ConfigurationError } from '../errors.js'
 import { bindToolScope } from '../tools/tool-scope.js'
 import type { HumanInTheLoopOptions } from '../types.js'
@@ -82,6 +83,11 @@ export interface CodingAgentPresetOptions {
   /** Project subagents. Dropped unless the posture grants `projectSettings`. */
   readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>
   /**
+   * Import surfaces of the Claude Code dialect (`<cwd>/.claude/`). Granted under the same
+   * `projectSettings` posture as the rest; with a denying posture it is dropped, not thrown on.
+   */
+  readonly claudeCode?: { readonly import: readonly CompatSurface[] }
+  /**
    * Pre-spawn approval for hooks that setting sources load. Defaults to refusing every one: a hook is
    * arbitrary shell, and trusting the directory is not approving each command.
    */
@@ -137,12 +143,35 @@ function readOnlyOff(mode: SandboxMode, delegates: boolean): OffTool[] {
 export interface CodingAgentTools {
   readonly tools: CustomTool[]
   readonly off: OffTool[]
+  /** The approval gate of each side-effecting tool registered: the defaults with `approvals` applied. */
+  readonly gates: ReadonlyMap<string, HumanInTheLoopOptions>
 }
 
 /** The tool half of {@link codingAgentPreset}, for a consumer that composes its own agent around the tools. */
 export function codingAgentTools(
   options: Omit<CodingAgentPresetOptions, 'posture'>,
 ): CodingAgentTools {
+  const built = buildCodingTools(options)
+  const names = new Set(built.tools.map((tool) => tool.name))
+  const gates = new Map<string, HumanInTheLoopOptions>()
+  for (const [tool, gate] of Object.entries(DEFAULT_GATES))
+    if (names.has(tool)) gates.set(tool, gate)
+  for (const [tool, gate] of Object.entries(options.approvals ?? {})) {
+    if (!names.has(tool)) {
+      throw new ConfigurationError(
+        `codingAgentPreset: approval for "${tool}", which this preset did not register in ` +
+          `${options.sandboxMode} mode (registered: ${[...names].join(', ')})`,
+      )
+    }
+    gates.set(tool, gate)
+  }
+  return { ...built, gates }
+}
+
+function buildCodingTools(options: Omit<CodingAgentPresetOptions, 'posture'>): {
+  tools: CustomTool[]
+  off: OffTool[]
+} {
   const { cwd, sandboxMode } = options
   const sandbox = options.sandbox ?? createSandboxBackend({ mode: sandboxMode, workDir: cwd })
   const bound = bindToolScope({
@@ -217,21 +246,7 @@ export function codingAgentTools(
  * ```
  */
 export function codingAgentPreset(options: CodingAgentPresetOptions): CapabilityPreset {
-  const { tools, off } = codingAgentTools(options)
-  const names = new Set(tools.map((tool) => tool.name))
-
-  const gates = new Map<string, HumanInTheLoopOptions>()
-  for (const [tool, gate] of Object.entries(DEFAULT_GATES))
-    if (names.has(tool)) gates.set(tool, gate)
-  for (const [tool, gate] of Object.entries(options.approvals ?? {})) {
-    if (!names.has(tool)) {
-      throw new ConfigurationError(
-        `codingAgentPreset: approval for "${tool}", which this preset did not register in ` +
-          `${options.sandboxMode} mode (registered: ${[...names].join(', ')})`,
-      )
-    }
-    gates.set(tool, gate)
-  }
+  const { tools, off, gates } = codingAgentTools(options)
 
   const trusted = options.posture.allows.projectSettings
   const members: Capability[] = [
@@ -242,7 +257,15 @@ export function codingAgentPreset(options: CodingAgentPresetOptions): Capability
     // `project` is OMITTED rather than passed with a denying posture: the gate throws on a requested
     // but ungranted root, and an untrusted directory should degrade to user-only, not fail.
     new SettingSourcesCapability(
-      trusted ? { user: true, project: { trustedBy: options.posture } } : { user: true },
+      trusted
+        ? {
+            user: true,
+            project: { trustedBy: options.posture },
+            ...(options.claudeCode !== undefined && {
+              claudeCode: { trustedBy: options.posture, import: options.claudeCode.import },
+            }),
+          }
+        : { user: true },
     ),
     new HookApprovalCapability(options.hookApproval ?? { approve: () => false }),
   ]

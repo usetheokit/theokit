@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { sdkMessage } from './fakes.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -69,7 +70,7 @@ function fakeDescriber(behaviour: 'answers' | 'errors' | 'hangs', answer = 'a wi
         return {
           stream: async function* () {
             if (behaviour === 'hangs') await gate
-            if (behaviour === 'errors') yield { type: 'error' }
+            if (behaviour === 'errors') yield sdkMessage({ type: 'error' })
           },
           wait: async () => {
             if (behaviour === 'hangs') await gate

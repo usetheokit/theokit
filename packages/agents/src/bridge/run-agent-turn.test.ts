@@ -219,6 +219,40 @@ describe('completeFromTurn', () => {
     )
     expect(response?.status).toBe(502)
   })
+
+  const cancelled = (): Parameters<typeof completeFromTurn>[0] => (work) =>
+    work(fakeAgent({ deltas: ['so', ' far'], status: 'cancelled' }).agent) as never
+  const request = { model: 'm', messages: [{ role: 'user' as const, content: 'hi' }] }
+
+  it('throws on a cancelled run by default', async () => {
+    await expect(completeFromTurn(cancelled())(request)).rejects.toThrow(
+      'the run ended with status cancelled',
+    )
+  })
+
+  it('returns the text so far on a cancelled run with onCancelled: complete', async () => {
+    const reasons: string[] = []
+    const complete = completeFromTurn(cancelled(), {
+      onCancelled: 'complete',
+      onFailure: (r) => reasons.push(r),
+    })
+    expect(await complete(request)).toMatchObject({ text: 'so far' })
+    expect(reasons).toEqual([])
+  })
+
+  it('reports a failed turn to onFailure, and accepts a send-only agent', async () => {
+    const reasons: string[] = []
+    const failing = completeFromTurn(withFailing, { onFailure: (r) => reasons.push(r) })
+    await expect(failing(request)).rejects.toThrow('boom')
+    expect(reasons).toHaveLength(1)
+
+    const { agent } = fakeAgent({ deltas: ['x'] })
+    const sendOnly = { send: agent.send.bind(agent) }
+    const complete = completeFromTurn(<R>(work: (a: typeof sendOnly) => Promise<R>) =>
+      work(sendOnly),
+    )
+    expect(await complete(request)).toMatchObject({ text: 'x' })
+  })
 })
 
 describe('runAgentTurn: secrets', () => {

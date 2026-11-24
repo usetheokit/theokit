@@ -16,6 +16,20 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `resolveFreshCredential` passes `requestTimeoutMs` and `onTransientFailure: 'use-stored'` to `AuthProvider` instead of wrapping `fetch` and catching transient errors itself; on a transient failure it now returns the credential re-read under the lock (#2924).
+- `composeInstructions` in `context/agents-md.ts` is now `composeTheoCodePrompt`, so it no longer shares a name with the framework's; the docblock lists the three differences (base never cut, one summed `rules` cut, group headers). No behaviour change (#2922).
+- `web_search` is chosen by `resolveWebSearchAdapter` from `@theokit/agents/tools`: `BRAVE_API_KEY`, `TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` now enable it, and `THEOKIT_SEARCH=off` disables it. A generic endpoint now needs `THEOKIT_SEARCH_API_KEY` as well as `THEOKIT_SEARCH_API_URL`, so a key-less endpoint stops working, and an unknown `THEOKIT_SEARCH` value fails agent construction (#2926).
+- The `ask` verdict of the `permissions` plugin is answered by `onAskForPolicy` from `@theokit/agents`; `askGateFor` is removed and the refusal wording stays here as `refusalMessage` (#2905).
+- The `THEOKIT_HOME` entry in `ENV_KNOBS` cites one resolvable reader (`backtrack.ts:transcriptRootHint`) instead of a comma-joined list the path-existence invariant could not resolve (#2982).
+- Headless approval is decided by `approvalPostureFor` from `@theokit/agents`; `resolveHeadlessApproval` and `headlessApprovalPosture` keep only the remediation and `danger-full-access` wording, and take a full `SandboxPosture` (#2903).
+- The `openai-chatgpt/` route picks its credential in `resolveAgentCredential` (the stored OpenAI login, never an environment key); `storeLocationOnly` is gone (#2902).
+- `/image`, `/model` and custom-command model overrides travel with the message as the send body that `InProcessTransport` now forwards; the take-on-next-turn closures in the chat transport and `takeModel`/`setModel` are gone (#2900).
+- `/goal` waits for each turn through `useAgent`'s `sendAndWait` and `asGoalLoopAgent` instead of polling the store every 120 ms; `goal-store-agent.ts` is gone. A turn Esc aborts now ends the goal with `GoalTurnFailedError` (status `aborted`) rather than the store's status (#2917).
+- A malformed project `.mcp.json` no longer makes personal MCP servers appear as "also declared by the project" or as servers withheld by trust; the framework now warns once and keeps the personal scope, and the retry is gone (#2895).
+- Removed `classifyEntry` (no caller) and `legacyRootHint`; the TUI uses the framework's `transcriptRootHint`, so the empty-session hint now reads "No sessions under …" (#2937).
+- Removed `tools/check-theokit-updates.mjs`, `tools/report-theokit-staleness.mjs` and the `deps:theokit`, `deps:theokit:json` and `deps:theokit:report` scripts; run `pnpm check:app-deps apps/theocode` from the repository root instead (#2938).
+- The end-of-turn diff takes `changedPathsOf` and `turnDiff` from `@theokit/agents/presets`; `runtime/changed-paths.ts` and `runtime/turn-diff.ts` are gone (#2936).
+- Removed `npm run blockers` and `tools/check-upstream-blockers.mjs`: the three SDK gaps it checked have landed, and its issue numbers pointed at unrelated issues here (#2939).
 - `protectedSessions` returns the `last-session` pointer's transcript once, under the name of the file on disk, and still blocks deletion when the pointer is unreadable (#2869).
 - `ToolRegistry` builds its tools from `codingAgentTools` in `@theokit/agents/presets` instead of binding each factory itself (#2741).
 - `sessions gc` leaves identity and legacy-name protection to `planTranscriptGC` (`knownIds`, `isProtected`); `assignOwnIdentities` and `withholdLegacyNamed` are gone (#2746).
@@ -56,7 +70,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 
-- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` 0.83.4 has no controller, so a local pnpm patch (`patches/@theokit__tui@0.83.4.patch`, root and standalone) backports one that accepts any theme prop — a built-in name, an override, or `{base, override}` — and `<TheoTUIProvider controller>`. Drop the patch when `theokit-tui` ships a controller that takes theme objects (usetheokit/theokit-tui#294); it must be removed once that release lands.
+- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` is `^0.83.10`, whose `createThemeController({ initial })` takes any theme prop — a built-in name, an override, or `{base, override}` — so the local pnpm patch for 0.83.4 (`patches/@theokit__tui@0.83.4.patch`, root and standalone) is gone (usetheokit/theokit-tui#294, #2901).
 - The standalone consumer pins `@theokit/sdk` 11.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`; the registry and live-session protections and the output are unchanged.
 

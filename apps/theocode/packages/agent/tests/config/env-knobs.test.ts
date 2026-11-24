@@ -85,5 +85,8 @@ describe('B-041 — the config invariants are enforced, not merely written', () 
       .filter((f) => !existsSync(join(ROOT, f)))
 
     expect(missing, 'a knob cites a reader file that does not exist').toEqual([])
+    expect(ENV_KNOBS.find((k) => k.name === 'THEOKIT_HOME')?.reader).toBe(
+      'packages/tui/src/backtrack/backtrack.ts:transcriptRootHint',
+    )
   })
 })
