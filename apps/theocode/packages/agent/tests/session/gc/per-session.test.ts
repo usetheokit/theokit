@@ -18,7 +18,6 @@ import { planTranscriptGC, runTranscriptGC, sessionPointerPath } from '@theokit/
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
-import { readPointerId } from '../../../src/session/session-ops.js'
 
 const LIVE = 'live-session'
 const OLD = 'old-session'
@@ -122,23 +121,17 @@ describe('runSessionGC', () => {
     // The plan is a snapshot: a pointer written AFTER planning must still stop the apply.
     seed('newest', 1)
     const late = seed(LIVE, 99)
-    // The framework reads `last-session` itself; this provider adds the fail-closed read.
-    const protectedIds = () => {
-      const id = readPointerId(cwd, root)
-      return new Map<string, string>(id === undefined ? [] : [[id, 'live-session pointer']])
-    }
     const plan = await planTranscriptGC({
       cwd,
       root,
       now: NOW,
       keepLast: 1,
       maxAgeDays: 1,
-      protectedIds,
     })
     expect(plan.candidates.map((c) => c.id)).toEqual([LIVE])
     point(LIVE)
 
-    const result = await runTranscriptGC(plan, { apply: true, protectedIds })
+    const result = await runTranscriptGC(plan, { apply: true })
 
     expect(result.removed).toEqual([])
     expect(existsSync(late)).toBe(true)

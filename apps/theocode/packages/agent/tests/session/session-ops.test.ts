@@ -97,10 +97,10 @@ describe('#2869 — the pointer is protected once, under the name on disk', () =
     // A directory where the pointer file should be: reading it fails with EISDIR, not ENOENT.
     mkdirSync(sessionPointerPath(cwd, base), { recursive: true })
 
-    await expect(protectedSessions(cwd, base)).rejects.toThrow(/refusing/)
+    await expect(protectedSessions(cwd, base)).rejects.toThrow(/last-session pointer/)
     await expect(
       deleteSession('old', { cwd, baseDir: base, removeFromRegistry: async () => {} }),
-    ).rejects.toThrow(/refusing/)
+    ).rejects.toThrow(/last-session pointer/)
     expect(existsSync(old)).toBe(true)
   })
 

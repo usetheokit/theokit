@@ -4,7 +4,6 @@ export {
   compactSession,
   forkSession,
   listSessions,
-  readPointerId,
   renameSession,
 } from './session-ops.js'
 
