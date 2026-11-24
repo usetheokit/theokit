@@ -181,4 +181,14 @@ describe('the standalone lockfile is one pnpm would accept frozen', () => {
       .map(([block]) => block.split('\n')[0])
     expect(stale).toEqual([])
   })
+
+  it('declares no script that runs a tools/ file which does not exist', () => {
+    for (const file of ['package.json', 'standalone/package.json']) {
+      for (const [name, cmd] of Object.entries(read(file).scripts)) {
+        for (const [, tool] of cmd.matchAll(/\bnode (tools\/[\w.-]+\.mjs)/g)) {
+          expect(existsSync(join(app, tool)), `${file} script ${name} runs ${tool}`).toBe(true)
+        }
+      }
+    }
+  })
 })
