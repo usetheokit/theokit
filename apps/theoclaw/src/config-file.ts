@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 
 import { InstanceConfigError, defineInstanceConfig } from '@theokit/host/instance-config'
+import { withFileLock } from '@theokit/sdk/persistence'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
-import { serializedPerFile } from './serial-queue.js'
 
 /**
  * TheoClaw's configuration file (B-374, plan D2), declared once with `defineInstanceConfig`: the
@@ -111,9 +113,11 @@ export function assertWritable(entries: Readonly<Record<string, string>>): void 
  */
 export async function writeConfiguration(path: string, entries: Readonly<Record<string, string>>, options: { readonly force: boolean }): Promise<void> {
   assertWritable(entries)
-  // Two calls in one process are queued per path, so the second checks for the file only after the first
-  // has finished and is the one refused without `force`.
-  await serializedPerFile(path, async () => {
+  // Two calls, in this process or another, are locked per path, so the second checks for the file only
+  // after the first has finished and is the one refused without `force`. The lock file sits beside the
+  // target, so the directory exists first.
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  await withFileLock(resolve(path), async () => {
     try {
       await theoclawConfig.write(path, entries, options)
     } catch (error) {

@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Config, MCP-relay grant, visitor grant and relay identity files are written under `withFileLock` from `@theokit/sdk/persistence` (a `<path>.lock` file, via `proper-lockfile`) instead of an in-process queue, so `theoclaw mcp` and the daemon no longer interleave writes to one file; `serial-queue.ts` is gone (#2943).
 - The computer live test tells the model the code is the six capital characters in the large heading, and renders the typed text small and monospace, so the describer no longer reports the typed word as the code (#2882).
 - The live authorization tests count a finished run once even when both the reply handler and the gateway handler wait on it, and the TUI live test matches the interruption notice regardless of case (#2876).
 - The TUI feeds `useAgentStream` from the framework's `createControlStreamSource`, replacing its own frame conversion.
