@@ -135,6 +135,20 @@ describe('startTheoClaw', () => {
     await occupied.close()
   })
 
+  it('a listen that fails stops each runner once, and closing again stops nothing more', async () => {
+    const { adapters, builders } = fakeBuilders()
+    const signals = new EventEmitter()
+    const listen: typeof listenControlPlane = () => Promise.reject(new TheoClawBindError('refused to bind'))
+
+    await expect(startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit: vi.fn(), listen, streams: [capturingStream()] })).rejects.toThrow(TheoClawBindError)
+
+    await waitFor(() => adapters.size === 2 && [...adapters.values()].every((adapter) => adapter.disconnects === 1), 1000, 'each runner to be stopped')
+    await new Promise((resolve) => setImmediate(resolve))
+    expect([...adapters.values()].map((adapter) => adapter.disconnects)).toEqual([1, 1])
+    expect(signals.listenerCount('SIGTERM')).toBe(0)
+    expect(signals.listenerCount('exit')).toBe(0)
+  })
+
   it('masks the THEOKIT_API_KEY model key', async () => {
     const { builders } = fakeBuilders()
     const capture = capturingStream()
