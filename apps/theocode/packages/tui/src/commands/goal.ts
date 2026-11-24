@@ -1,3 +1,5 @@
+import type { TurnBody } from '../agent-session/chat-transport.js'
+import type { TurnInput } from '../composition/use-tui-session.js'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
 import { asGoalLoopAgent } from '@theokit/agents/client'
@@ -18,7 +20,12 @@ export interface GoalRunState {
   tokens?: number
 }
 
-type TuiAgent = ReturnType<typeof useAgent<{ message: string }>>
+type TuiAgent = Omit<ReturnType<typeof useAgent<TurnBody>>, 'send' | 'sendAndWait'> & {
+  send: (input: TurnInput) => void
+  sendAndWait: (
+    input: TurnInput,
+  ) => ReturnType<ReturnType<typeof useAgent<TurnBody>>['sendAndWait']>
+}
 
 export interface RunGoalDeps {
   agentRef: MutableRefObject<TuiAgent>

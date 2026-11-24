@@ -19,11 +19,16 @@ import {
 import type { AttachedImage } from '@theocode/agent/context'
 import type { SessionPtyOwner } from '@theocode/agent/pty'
 import { workingDirectory } from '../working-directory.js'
+/** What `useAgent().send(input)` carries for one turn; the runner reads it from `input.body`. */
+export interface TurnBody {
+  message: string
+  model?: string
+  effort?: ReasoningEffort
+  images?: AttachedImage[]
+}
+
 export interface ChatTransportDeps {
-  getEffort: () => ReasoningEffort
   getSessionId: () => string
-  takePendingImages: () => AttachedImage[] | undefined
-  takePendingModel: () => string | undefined
   credential: () => ResolvedCredential | { error: Error }
   getSessionPty: () => SessionPtyOwner
   /**
@@ -39,18 +44,18 @@ export interface ChatTransportDeps {
 
 export function createChatTransport(deps: ChatTransportDeps): InProcessTransport {
   return new InProcessTransport({
-    run: (input) =>
+    run: ({ body: rawBody, ...input }) =>
       (async function* () {
         // B-088 — a failure belongs to the turn that hit it. Clearing here, at the start of the
         // run, is what stops `/mcp` reporting a server that has since recovered.
         startMcpFailureTurn()
         // A count carried over from the previous turn would be a number that is wrong, not missing.
         startRetryTurn()
-        const images = deps.takePendingImages()
+        const body = (rawBody ?? {}) as Partial<TurnBody>
+        const images = body.images
         const c = deps.credential()
-        const commandModel = deps.takePendingModel()
         const model =
-          commandModel ??
+          body.model ??
           routeToCredential(c, resolveEffectiveConfig({ cwd: workingDirectory() }).model)
         const key = (await resolveCredentialForModel(model, { env: process.env, home: homedir() }))
           .apiKey
@@ -67,7 +72,8 @@ export function createChatTransport(deps: ChatTransportDeps): InProcessTransport
               // disagree: this call resolved its directory inside `buildChatAgent` from the process
               // while the config beside it came from the seam.
               cwd: workingDirectory(),
-              reasoning_effort: deps.getEffort(),
+              reasoning_effort:
+                body.effort ?? resolveEffectiveConfig({ cwd: workingDirectory() }).reasoning_effort,
               ...(model !== undefined ? { model } : {}),
               sessionPty: deps.getSessionPty(),
               ...(deps.onHookVeto === undefined ? {} : { onHookVeto: deps.onHookVeto }),

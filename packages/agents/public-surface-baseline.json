@@ -17691,7 +17691,7 @@
             "dist/agent-handle-<hash>.d.ts#ChannelTurnHandlers": "interface ChannelTurnHandlers {\n    onLine: (line: string) => void;\n    onClose: () => void;\n    onError?: (err: unknown) => void;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessRunner": "type InProcessRunner = (input: InProcessRunInput) => AsyncGenerator<WireChunk>;",
             "dist/agent-handle-<hash>.d.ts#InProcessTransport": "declare class InProcessTransport implements AgentTransport {\n    #private;\n    constructor(options: InProcessTransportOptions);\n    get pending(): number;\n    sendMessages(options: Parameters<WireTransport['sendMessages']>[0]): Promise<ReadableStream<WireChunk>>;\n    reconnectToStream(): Promise<ReadableStream<WireChunk> | null>;\n    approve(approvalId: string, decision: ApprovalDecision): Promise<void>;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessTransportOptions": "interface InProcessTransportOptions {\n    run: InProcessRunner;\n}"
@@ -17868,7 +17868,7 @@
         },
         "InProcessRunInput": {
           "tier": "stable",
-          "declaration": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+          "declaration": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -17897,7 +17897,7 @@
             "dist/agent-handle-<hash>.d.ts#ApprovalDecision": "interface ApprovalDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}"
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}"
           }
         },
         "InProcessTransport": {
@@ -17919,7 +17919,7 @@
             "dist/agent-handle-<hash>.d.ts#ApprovalDecision": "interface ApprovalDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessRunner": "type InProcessRunner = (input: InProcessRunInput) => AsyncGenerator<WireChunk>;",
             "dist/agent-handle-<hash>.d.ts#InProcessTransportOptions": "interface InProcessTransportOptions {\n    run: InProcessRunner;\n}"
           }
@@ -17940,7 +17940,7 @@
             "dist/agent-handle-<hash>.d.ts#ApprovalDecision": "interface ApprovalDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessRunner": "type InProcessRunner = (input: InProcessRunInput) => AsyncGenerator<WireChunk>;"
           }
         },
@@ -18014,7 +18014,7 @@
             "dist/agent-handle-<hash>.d.ts#ChannelTurnHandlers": "interface ChannelTurnHandlers {\n    onLine: (line: string) => void;\n    onClose: () => void;\n    onError?: (err: unknown) => void;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessRunner": "type InProcessRunner = (input: InProcessRunInput) => AsyncGenerator<WireChunk>;",
             "dist/agent-handle-<hash>.d.ts#InProcessTransport": "declare class InProcessTransport implements AgentTransport {\n    #private;\n    constructor(options: InProcessTransportOptions);\n    get pending(): number;\n    sendMessages(options: Parameters<WireTransport['sendMessages']>[0]): Promise<ReadableStream<WireChunk>>;\n    reconnectToStream(): Promise<ReadableStream<WireChunk> | null>;\n    approve(approvalId: string, decision: ApprovalDecision): Promise<void>;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessTransportOptions": "interface InProcessTransportOptions {\n    run: InProcessRunner;\n}"
@@ -18119,7 +18119,7 @@
             "dist/agent-handle-<hash>.d.ts#ChannelTurnHandlers": "interface ChannelTurnHandlers {\n    onLine: (line: string) => void;\n    onClose: () => void;\n    onError?: (err: unknown) => void;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessRunner": "type InProcessRunner = (input: InProcessRunInput) => AsyncGenerator<WireChunk>;",
             "dist/agent-handle-<hash>.d.ts#InProcessTransport": "declare class InProcessTransport implements AgentTransport {\n    #private;\n    constructor(options: InProcessTransportOptions);\n    get pending(): number;\n    sendMessages(options: Parameters<WireTransport['sendMessages']>[0]): Promise<ReadableStream<WireChunk>>;\n    reconnectToStream(): Promise<ReadableStream<WireChunk> | null>;\n    approve(approvalId: string, decision: ApprovalDecision): Promise<void>;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessTransportOptions": "interface InProcessTransportOptions {\n    run: InProcessRunner;\n}"
@@ -18224,7 +18224,7 @@
             "dist/agent-handle-<hash>.d.ts#ChannelTurnHandlers": "interface ChannelTurnHandlers {\n    onLine: (line: string) => void;\n    onClose: () => void;\n    onError?: (err: unknown) => void;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessApprovalRequestLike": "interface InProcessApprovalRequestLike {\n    approvalId: string;\n    toolName: string;\n    opts: unknown;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessAwaitApproval": "type InProcessAwaitApproval = (req: InProcessApprovalRequestLike) => Promise<boolean | ApprovalDecision>;",
-            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n}",
+            "dist/agent-handle-<hash>.d.ts#InProcessRunInput": "interface InProcessRunInput<TBody = unknown> {\n    message: string;\n    sessionId?: string;\n    signal?: AbortSignal;\n    awaitApproval?: InProcessAwaitApproval;\n    context?: unknown;\n    body?: TBody;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessRunner": "type InProcessRunner = (input: InProcessRunInput) => AsyncGenerator<WireChunk>;",
             "dist/agent-handle-<hash>.d.ts#InProcessTransport": "declare class InProcessTransport implements AgentTransport {\n    #private;\n    constructor(options: InProcessTransportOptions);\n    get pending(): number;\n    sendMessages(options: Parameters<WireTransport['sendMessages']>[0]): Promise<ReadableStream<WireChunk>>;\n    reconnectToStream(): Promise<ReadableStream<WireChunk> | null>;\n    approve(approvalId: string, decision: ApprovalDecision): Promise<void>;\n}",
             "dist/agent-handle-<hash>.d.ts#InProcessTransportOptions": "interface InProcessTransportOptions {\n    run: InProcessRunner;\n}",

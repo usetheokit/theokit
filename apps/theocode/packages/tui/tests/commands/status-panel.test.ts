@@ -33,7 +33,6 @@ function session(over: Partial<ReturnType<SessionTheInterpreterUses['cfg']>> = {
     }),
     sessionModel: () => undefined,
     setSessionModel: vi.fn(),
-    setModel: vi.fn(),
     session: () => 'tui-1',
   } satisfies SessionTheInterpreterUses
 }
