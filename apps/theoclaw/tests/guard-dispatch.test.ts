@@ -3,8 +3,9 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { answerJob } from '../src/mcp-relay/connector.js'
-import type { McpRelayJob } from '../src/mcp-relay/connector.js'
+import { answerRelayJob } from '@theokit/agents/mcp-relay'
+
+import { mcpRelayDispatch } from '../src/mcp-relay/command.js'
 import { handleMcpRequest } from '../src/mcp/serve-tools.js'
 import { codeModeTool } from '../src/tools/code-mode-tools.js'
 import { pathVetoPlugin } from '../src/tools/path-veto.js'
@@ -55,8 +56,9 @@ async function viaMcp(settings: ToolSettings, path: string): Promise<{ isError: 
 }
 
 async function viaRelay(settings: ToolSettings, path: string): Promise<{ isError: boolean; text: string }> {
-  const job = { id: 'job-1', allowedTools: null, body: rpc(path) } as unknown as McpRelayJob
-  const reply = (await answerJob(job, buildTools(settings), settings)) as { result: { isError: boolean; content: { text: string }[] } }
+  const tools = buildTools(settings)
+  const job = { scopes: tools.map((t) => t.name), body: rpc(path) }
+  const reply = (await answerRelayJob(job, tools, mcpRelayDispatch(settings))) as { result: { isError: boolean; content: { text: string }[] } }
   return { isError: reply.result.isError, text: reply.result.content[0]?.text ?? '' }
 }
 
