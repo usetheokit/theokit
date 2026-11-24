@@ -17,7 +17,7 @@
  * This module answers only what is on disk. Whether a found skill is WIRED is a separate question the
  * trust gate already answers, and conflating them would produce a row that is wrong in a new way.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -215,6 +215,26 @@ describe('#67 — declared against what is on disk', () => {
     writeFileSync(join(plugins, 'skills'), 'a file named like a skills dir\n')
 
     expect(skillsOnDisk(cwd, []).bundledSkills).toEqual(['bundled'])
+  })
+
+  it('test_a_symlinked_bundle_directory_still_contributes_and_a_dangling_link_is_ignored', () => {
+    const plugins = join(cwd, '.claude', 'plugins')
+    const real = join(cwd, 'elsewhere')
+    mkdirSync(join(real, 'skills', 'linked'), { recursive: true })
+    writeFileSync(join(real, 'skills', 'linked', 'SKILL.md'), 'x\n')
+    mkdirSync(plugins, { recursive: true })
+    symlinkSync(real, join(plugins, 'viaLink'))
+    symlinkSync(join(cwd, 'nowhere'), join(plugins, 'dangling'))
+
+    expect(skillsOnDisk(cwd, []).bundledSkills).toEqual(['linked'])
+  })
+
+  it('test_a_plugins_path_that_is_a_file_is_no_bundle_and_does_not_throw', () => {
+    mkdirSync(join(cwd, '.claude'), { recursive: true })
+    writeFileSync(join(cwd, '.claude', 'plugins'), 'a file where the directory goes\n')
+
+    expect(skillsOnDisk(cwd, ['x']).bundledSkills).toEqual([])
+    expect(skillsOnDisk(cwd, ['x']).declaredButAbsent).toEqual(['x'])
   })
 
   it('test_no_skills_anywhere_is_not_an_error', () => {

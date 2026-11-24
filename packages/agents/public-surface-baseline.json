@@ -21932,7 +21932,7 @@
             "dist/doctor.d.ts#credential": "declare function credential(state: CredentialState, options?: {\n    name?: string;\n    remedy?: string;\n}): Check;",
             "dist/doctor.d.ts#leftovers": "declare function leftovers(name: string, paths: readonly string[], hint?: string): Check[];",
             "dist/doctor.d.ts#settingsReport": "declare function settingsReport(reports: readonly SettingsFileReport[]): Check[];",
-            "dist/doctor.d.ts#skillsInventory": "declare function skillsInventory(options: {\n    declared: readonly string[];\n    roots: readonly string[];\n}): Check;"
+            "dist/doctor.d.ts#skillsInventory": "declare function skillsInventory(options: {\n    declared: readonly string[];\n    roots: readonly string[];\n}): Check & {\n    readonly undeclared: readonly string[];\n    readonly missing: readonly string[];\n};"
           }
         },
         "credentialShape": {
