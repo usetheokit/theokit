@@ -1,4 +1,4 @@
-import { twiml } from '@theokit/gateway-sms'
+import { placeCall as sendCall, twiml } from '@theokit/gateway-sms'
 
 import { UsageError } from '../cli-args.js'
 import { maskSecrets } from '@theokit/gateway'
@@ -47,42 +47,16 @@ export async function placeCall(input: PlaceCallInput): Promise<string> {
   const secrets = [token, Buffer.from(`${sid}:${token}`).toString('base64')]
   const mask = (text: string): string => maskSecrets(text, secrets)
 
-  const body = new URLSearchParams({
-    To: to,
-    From: from,
-    Twiml: twiml.response(twiml.say(message)).replace(XML_DECLARATION, ''),
-  })
-  let response: Response
   try {
-    response = await (input.fetch ?? fetch)(
-      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Calls.json`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${secrets[1]}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body,
-        redirect: 'error',
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      },
-    )
+    return await sendCall({
+      to,
+      from,
+      twiml: twiml.response(twiml.say(message)).replace(XML_DECLARATION, ''),
+      credentials: { accountSid: sid, authToken: token },
+      ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      timeoutMs: TIMEOUT_MS,
+    })
   } catch (error) {
-    throw new Error(mask(`Twilio request failed: ${error instanceof Error ? error.message : String(error)}`))
+    throw new Error(mask(error instanceof Error ? error.message : String(error)))
   }
-  let json: unknown
-  try {
-    json = await response.json()
-  } catch {
-    json = undefined
-  }
-  const record = typeof json === 'object' && json !== null ? (json as Record<string, unknown>) : {}
-  if (!response.ok) {
-    const detail = typeof record.message === 'string' ? record.message : 'no message'
-    throw new Error(mask(`Twilio refused the call (HTTP ${response.status}): ${detail}`))
-  }
-  if (typeof record.sid !== 'string' || record.sid === '') {
-    throw new Error('Twilio answered without a call SID')
-  }
-  return record.sid
 }
