@@ -123,7 +123,7 @@ describe('#1893 — the ACP entry runs the shared bootstrap', () => {
       await import('../../src/chat/chat-acp.js')
       expect(seen.THEOKIT_HOME).toBe(dir)
       expect(seen.THEOKIT_AUTH_HOME).toMatch(/\.theocode$/)
-      expect(seen.CLAUDE_PROJECT_DIR).toBe(process.cwd())
+      expect(seen.CLAUDE_PROJECT_DIR).toBeUndefined()
     } finally {
       for (const [k, v] of saved) {
         if (v === undefined) delete process.env[k]
