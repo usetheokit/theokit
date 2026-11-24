@@ -13,6 +13,14 @@ export {
   type CodingAgentTools,
 } from './capability/coding-agent-preset.js'
 export {
+  assistantAgentPreset,
+  assistantAgentTools,
+  assistantWorkerTools,
+  type AssistantAgentPresetOptions,
+  type AssistantAgentProfile,
+  type AssistantAgentTools,
+} from './capability/assistant-agent-preset.js'
+export {
   changedPathsOf,
   type ChangedPathsOptions,
   type ChangedPathsTool,

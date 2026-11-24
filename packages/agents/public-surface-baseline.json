@@ -6479,9 +6479,9 @@
           "declaration": "type ToolComNome = NamedTool;",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/index.d.ts#NamedTool"],
+          "references": ["dist/toolset-<hash>.d.ts#NamedTool"],
           "internals": {
-            "dist/index.d.ts#NamedTool": "interface NamedTool {\n    readonly name: string;\n}"
+            "dist/toolset-<hash>.d.ts#NamedTool": "interface NamedTool {\n    readonly name: string;\n}"
           }
         },
         "ToolDeclaration": {
@@ -6809,9 +6809,9 @@
           "declaration": "declare class Toolset<T extends NamedTool> {\n    #private;\n    private constructor();\n    static from<T extends NamedTool>(tools: readonly T[], profiles?: Readonly<Record<string, readonly string[]>>): Toolset<T>;\n    profileNames(): readonly string[];\n    narrow(profile: string): Toolset<T>;\n    get(name: string): T;\n    resolve(names: readonly string[]): readonly T[];\n    names(): readonly string[];\n    all(): readonly T[];\n}",
           "runtime": true,
           "deprecatedSince": null,
-          "references": ["dist/index.d.ts#NamedTool"],
+          "references": ["dist/toolset-<hash>.d.ts#NamedTool"],
           "internals": {
-            "dist/index.d.ts#NamedTool": "interface NamedTool {\n    readonly name: string;\n}"
+            "dist/toolset-<hash>.d.ts#NamedTool": "interface NamedTool {\n    readonly name: string;\n}"
           }
         },
         "ToolsetError": {
@@ -24083,6 +24083,54 @@
     },
     "./presets": {
       "names": {
+        "AssistantAgentPresetOptions": {
+          "tier": "stable",
+          "declaration": "interface AssistantAgentPresetOptions {\n    readonly toolRoot: string;\n    readonly sandboxMode: SandboxMode;\n    readonly sandbox?: SandboxProvider;\n    readonly scope?: ToolScope;\n    readonly hostTools: boolean;\n    readonly webSearch?: CustomTool;\n    readonly interactive?: InteractiveBackend;\n    readonly gitDiff?: 'when-enforced' | 'off';\n    readonly gitRepository?: boolean;\n    readonly sandboxEnforced?: boolean;\n    readonly fetchImpl?: typeof fetch;\n    readonly lookup?: NonNullable<Parameters<typeof createWebFetchTool>[0]>['lookup'];\n    readonly imageResults?: boolean;\n    readonly extra?: readonly CustomTool[];\n    readonly profile?: AssistantAgentProfile;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/presets.d.ts#AssistantAgentProfile",
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope"
+          ],
+          "internals": {
+            "dist/presets.d.ts#AssistantAgentProfile": "type AssistantAgentProfile = 'minimal' | 'messaging' | 'coding' | 'full';",
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}"
+          }
+        },
+        "AssistantAgentProfile": {
+          "tier": "stable",
+          "declaration": "type AssistantAgentProfile = 'minimal' | 'messaging' | 'coding' | 'full';",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "AssistantAgentTools": {
+          "tier": "stable",
+          "declaration": "interface AssistantAgentTools {\n    readonly tools: CustomTool[];\n    readonly off: OffTool[];\n    readonly toolset: Toolset<CustomTool>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-compiler-<hash>.d.ts#OffTool",
+            "dist/toolset-<hash>.d.ts#NamedTool",
+            "dist/toolset-<hash>.d.ts#Toolset"
+          ],
+          "internals": {
+            "dist/agent-compiler-<hash>.d.ts#OffTool": "interface OffTool {\n    readonly name: string;\n    readonly reason: string;\n}",
+            "dist/toolset-<hash>.d.ts#NamedTool": "interface NamedTool {\n    readonly name: string;\n}",
+            "dist/toolset-<hash>.d.ts#Toolset": "declare class Toolset<T extends NamedTool> {\n    #private;\n    private constructor();\n    static from<T extends NamedTool>(tools: readonly T[], profiles?: Readonly<Record<string, readonly string[]>>): Toolset<T>;\n    profileNames(): readonly string[];\n    narrow(profile: string): Toolset<T>;\n    get(name: string): T;\n    resolve(names: readonly string[]): readonly T[];\n    names(): readonly string[];\n    all(): readonly T[];\n}"
+          }
+        },
         "ChangedPathsOptions": {
           "tier": "stable",
           "declaration": "interface ChangedPathsOptions {\n    readonly aliases?: Readonly<Record<string, ChangedPathsTool>>;\n}",
@@ -24205,6 +24253,154 @@
             "dist/presets.d.ts#GitRun": "type GitRun = (args: string[]) => {\n    ok: boolean;\n    stdout: string;\n};"
           }
         },
+        "assistantAgentPreset": {
+          "tier": "stable",
+          "declaration": "declare function assistantAgentPreset(o: AssistantAgentPresetOptions): CapabilityPreset;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-compiler-<hash>.d.ts#Capability",
+            "dist/agent-compiler-<hash>.d.ts#CodePlugin",
+            "dist/agent-compiler-<hash>.d.ts#CompiledAgentOptions",
+            "dist/agent-compiler-<hash>.d.ts#CompiledAgentOptionsDraft",
+            "dist/agent-compiler-<hash>.d.ts#CompiledSubAgent",
+            "dist/agent-compiler-<hash>.d.ts#CompiledTool",
+            "dist/agent-compiler-<hash>.d.ts#Guardrail",
+            "dist/agent-compiler-<hash>.d.ts#GuardrailAction",
+            "dist/agent-compiler-<hash>.d.ts#GuardrailResult",
+            "dist/agent-compiler-<hash>.d.ts#OffTool",
+            "dist/agent-compiler-<hash>.d.ts#ProvenanceEntry",
+            "dist/agent-compiler-<hash>.d.ts#SkillsRequestContext",
+            "dist/agent-compiler-<hash>.d.ts#SkillsSelection",
+            "dist/agent-compiler-<hash>.d.ts#SubagentAgentDefinition",
+            "dist/presets.d.ts#AssistantAgentPresetOptions",
+            "dist/presets.d.ts#AssistantAgentProfile",
+            "dist/setting-sources-gate-<hash>.d.ts#CompatSurface",
+            "dist/setting-sources-gate-<hash>.d.ts#GATED",
+            "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource",
+            "dist/setting-sources-gate-<hash>.d.ts#GatedSettingSource",
+            "dist/setting-sources-gate-<hash>.d.ts#ResolvedCompatSource",
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope",
+            "dist/toolset-<hash>.d.ts#CapabilityPreset",
+            "dist/types-<hash>.d.ts#CheckpointOptions",
+            "dist/types-<hash>.d.ts#HumanInTheLoopOptions",
+            "dist/types-<hash>.d.ts#IndexStrategy",
+            "dist/types-<hash>.d.ts#McpServersMap",
+            "dist/types-<hash>.d.ts#MemoryOptions",
+            "dist/types-<hash>.d.ts#MemoryProvider",
+            "dist/types-<hash>.d.ts#MemoryScope",
+            "dist/types-<hash>.d.ts#ProjectContextOptions",
+            "dist/types-<hash>.d.ts#ReasoningEffort",
+            "dist/types-<hash>.d.ts#RelevanceStrategy",
+            "dist/types-<hash>.d.ts#TimeoutAction"
+          ],
+          "internals": {
+            "dist/agent-compiler-<hash>.d.ts#Capability": "interface Capability {\n    readonly name: string;\n    apply(draft: CompiledAgentOptionsDraft): void;\n}",
+            "dist/agent-compiler-<hash>.d.ts#CodePlugin": "type CodePlugin = {\n    readonly name: string;\n} & ({\n    readonly register: (...args: never[]) => unknown;\n} | {\n    readonly profile: unknown;\n} | {\n    readonly createProvider: (...args: never[]) => unknown;\n});",
+            "dist/agent-compiler-<hash>.d.ts#CompiledAgentOptions": "interface CompiledAgentOptions {\n    model?: string;\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    systemPrompt?: string | SystemPromptResolver;\n    settingSources?: readonly GatedSettingSource[];\n    subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    compatSources?: readonly GatedCompatSource[];\n    hookApproval?: HookApprovalGate;\n    withheldBuiltinTools?: readonly BuiltinToolName[];\n    plugins?: readonly CodePlugin[];\n    sessionStore?: SessionStore;\n    canUseTool?: PermissionGate;\n    tools: CompiledTool[];\n    agents: Record<string, CompiledSubAgent>;\n    memory?: MemoryOptions | MemorySettings;\n    skills?: SkillsSettings;\n    sendDefaults?: AgentOptions['sendDefaults'];\n    modelFallback?: ModelFallbackOptions;\n    sessionDir?: string;\n    thinking?: string;\n    context?: ContextSettings;\n    telemetry?: TelemetrySettings;\n    runContext?: Record<string, unknown>;\n    projectContext?: ProjectContextOptions;\n    mcpServers?: McpServersMap;\n    maxIterations?: number;\n    timeoutMs?: number;\n    stream: boolean;\n    hitl?: Map<string, HumanInTheLoopOptions>;\n    checkpoint?: CheckpointOptions;\n    guardrails?: readonly Guardrail[];\n    skillsResolver?: SkillsSelection;\n    skillsRead?: 'inline' | 'advertised';\n}",
+            "dist/agent-compiler-<hash>.d.ts#CompiledAgentOptionsDraft": "interface CompiledAgentOptionsDraft extends Partial<Omit<CompiledAgentOptions, 'tools' | 'agents'>> {\n    tools: CompiledAgentOptions['tools'];\n    agents: CompiledAgentOptions['agents'];\n    readonly provenance: ProvenanceEntry[];\n    offTools?: OffTool[];\n}",
+            "dist/agent-compiler-<hash>.d.ts#CompiledSubAgent": "type CompiledSubAgent = AgentDefinition$1;",
+            "dist/agent-compiler-<hash>.d.ts#CompiledTool": "interface CompiledTool {\n    name: string;\n    description: string;\n    inputSchema: unknown;\n    handler: (input: unknown, ctx?: {\n        signal?: AbortSignal;\n        context?: unknown;\n    }) => string | Promise<string>;\n}",
+            "dist/agent-compiler-<hash>.d.ts#Guardrail": "interface Guardrail {\n    readonly name: string;\n    checkInput?(text: string): GuardrailResult | Promise<GuardrailResult>;\n    checkOutput?(text: string): GuardrailResult | Promise<GuardrailResult>;\n}",
+            "dist/agent-compiler-<hash>.d.ts#GuardrailAction": "type GuardrailAction = 'allow' | 'block' | 'redact';",
+            "dist/agent-compiler-<hash>.d.ts#GuardrailResult": "interface GuardrailResult {\n    action: GuardrailAction;\n    reason?: string;\n    text?: string;\n}",
+            "dist/agent-compiler-<hash>.d.ts#OffTool": "interface OffTool {\n    readonly name: string;\n    readonly reason: string;\n}",
+            "dist/agent-compiler-<hash>.d.ts#ProvenanceEntry": "interface ProvenanceEntry {\n    readonly capability: string;\n    readonly contributed: readonly string[];\n}",
+            "dist/agent-compiler-<hash>.d.ts#SkillsRequestContext": "type SkillsRequestContext = Record<string, unknown>;",
+            "dist/agent-compiler-<hash>.d.ts#SkillsSelection": "type SkillsSelection = readonly (string | InlineSkill)[] | SkillsSettings | ((ctx: SkillsRequestContext) => readonly string[] | SkillsSettings | Promise<readonly string[] | SkillsSettings>);",
+            "dist/agent-compiler-<hash>.d.ts#SubagentAgentDefinition": "interface SubagentAgentDefinition {\n    readonly description: string;\n    readonly prompt: string;\n    readonly tools?: readonly string[];\n    readonly model?: ModelSelection | 'inherit';\n    readonly mcpServers?: readonly (string | Record<string, McpServerConfig>)[];\n}",
+            "dist/presets.d.ts#AssistantAgentPresetOptions": "interface AssistantAgentPresetOptions {\n    readonly toolRoot: string;\n    readonly sandboxMode: SandboxMode;\n    readonly sandbox?: SandboxProvider;\n    readonly scope?: ToolScope;\n    readonly hostTools: boolean;\n    readonly webSearch?: CustomTool;\n    readonly interactive?: InteractiveBackend;\n    readonly gitDiff?: 'when-enforced' | 'off';\n    readonly gitRepository?: boolean;\n    readonly sandboxEnforced?: boolean;\n    readonly fetchImpl?: typeof fetch;\n    readonly lookup?: NonNullable<Parameters<typeof createWebFetchTool>[0]>['lookup'];\n    readonly imageResults?: boolean;\n    readonly extra?: readonly CustomTool[];\n    readonly profile?: AssistantAgentProfile;\n}",
+            "dist/presets.d.ts#AssistantAgentProfile": "type AssistantAgentProfile = 'minimal' | 'messaging' | 'coding' | 'full';",
+            "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
+            "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
+            "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource": "type GatedCompatSource = ResolvedCompatSource & {\n    readonly [GATED]: true;\n};",
+            "dist/setting-sources-gate-<hash>.d.ts#GatedSettingSource": "type GatedSettingSource = SettingSource & {\n    readonly [GATED]: true;\n};",
+            "dist/setting-sources-gate-<hash>.d.ts#ResolvedCompatSource": "type ResolvedCompatSource = 'claude-code' | {\n    readonly kind: 'claude-code';\n    readonly import: readonly CompatSurface[];\n};",
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}",
+            "dist/toolset-<hash>.d.ts#CapabilityPreset": "declare class CapabilityPreset implements Capability {\n    #private;\n    readonly name: string;\n    constructor(name: string, members: readonly Capability[]);\n    apply(draft: CompiledAgentOptionsDraft): void;\n}",
+            "dist/types-<hash>.d.ts#CheckpointOptions": "interface CheckpointOptions {\n    resumeSignal?: boolean;\n}",
+            "dist/types-<hash>.d.ts#HumanInTheLoopOptions": "interface HumanInTheLoopOptions {\n    question: string;\n    timeout?: number;\n    onTimeout?: TimeoutAction;\n    showInput?: boolean;\n    payloadSchema?: Record<string, unknown>;\n}",
+            "dist/types-<hash>.d.ts#IndexStrategy": "type IndexStrategy = 'tree-sitter' | 'regex' | 'none';",
+            "dist/types-<hash>.d.ts#McpServersMap": "type McpServersMap = Record<string, McpServerConfig>;",
+            "dist/types-<hash>.d.ts#MemoryOptions": "interface MemoryOptions {\n    provider?: MemoryProvider;\n    embeddings?: boolean;\n    fts?: boolean;\n    scope?: MemoryScope;\n    maxFacts?: number;\n}",
+            "dist/types-<hash>.d.ts#MemoryProvider": "type MemoryProvider = 'built-in' | 'honcho' | 'supermemory' | 'mem0';",
+            "dist/types-<hash>.d.ts#MemoryScope": "type MemoryScope = 'per-user' | 'per-agent' | 'per-tenant' | 'global';",
+            "dist/types-<hash>.d.ts#ProjectContextOptions": "interface ProjectContextOptions {\n    rootMarkers?: string[];\n    indexStrategy?: IndexStrategy;\n    maxFilesInContext?: number;\n    relevanceStrategy?: RelevanceStrategy;\n    ignorePatterns?: string[];\n    includeExtensions?: string[];\n}",
+            "dist/types-<hash>.d.ts#ReasoningEffort": "type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | (string & {});",
+            "dist/types-<hash>.d.ts#RelevanceStrategy": "type RelevanceStrategy = 'git-history' | 'import-graph' | 'semantic' | 'manual';",
+            "dist/types-<hash>.d.ts#TimeoutAction": "type TimeoutAction = 'abort' | 'proceed' | 'retry';"
+          }
+        },
+        "assistantAgentTools": {
+          "tier": "stable",
+          "declaration": "declare function assistantAgentTools(o: AssistantAgentPresetOptions): AssistantAgentTools;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-compiler-<hash>.d.ts#OffTool",
+            "dist/presets.d.ts#AssistantAgentPresetOptions",
+            "dist/presets.d.ts#AssistantAgentProfile",
+            "dist/presets.d.ts#AssistantAgentTools",
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope",
+            "dist/toolset-<hash>.d.ts#NamedTool",
+            "dist/toolset-<hash>.d.ts#Toolset"
+          ],
+          "internals": {
+            "dist/agent-compiler-<hash>.d.ts#OffTool": "interface OffTool {\n    readonly name: string;\n    readonly reason: string;\n}",
+            "dist/presets.d.ts#AssistantAgentPresetOptions": "interface AssistantAgentPresetOptions {\n    readonly toolRoot: string;\n    readonly sandboxMode: SandboxMode;\n    readonly sandbox?: SandboxProvider;\n    readonly scope?: ToolScope;\n    readonly hostTools: boolean;\n    readonly webSearch?: CustomTool;\n    readonly interactive?: InteractiveBackend;\n    readonly gitDiff?: 'when-enforced' | 'off';\n    readonly gitRepository?: boolean;\n    readonly sandboxEnforced?: boolean;\n    readonly fetchImpl?: typeof fetch;\n    readonly lookup?: NonNullable<Parameters<typeof createWebFetchTool>[0]>['lookup'];\n    readonly imageResults?: boolean;\n    readonly extra?: readonly CustomTool[];\n    readonly profile?: AssistantAgentProfile;\n}",
+            "dist/presets.d.ts#AssistantAgentProfile": "type AssistantAgentProfile = 'minimal' | 'messaging' | 'coding' | 'full';",
+            "dist/presets.d.ts#AssistantAgentTools": "interface AssistantAgentTools {\n    readonly tools: CustomTool[];\n    readonly off: OffTool[];\n    readonly toolset: Toolset<CustomTool>;\n}",
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}",
+            "dist/toolset-<hash>.d.ts#NamedTool": "interface NamedTool {\n    readonly name: string;\n}",
+            "dist/toolset-<hash>.d.ts#Toolset": "declare class Toolset<T extends NamedTool> {\n    #private;\n    private constructor();\n    static from<T extends NamedTool>(tools: readonly T[], profiles?: Readonly<Record<string, readonly string[]>>): Toolset<T>;\n    profileNames(): readonly string[];\n    narrow(profile: string): Toolset<T>;\n    get(name: string): T;\n    resolve(names: readonly string[]): readonly T[];\n    names(): readonly string[];\n    all(): readonly T[];\n}"
+          }
+        },
+        "assistantWorkerTools": {
+          "tier": "stable",
+          "declaration": "declare function assistantWorkerTools(o: Pick<AssistantAgentPresetOptions, 'toolRoot' | 'sandboxMode' | 'webSearch'> & Partial<Pick<AssistantAgentPresetOptions, 'sandbox' | 'scope' | 'fetchImpl' | 'lookup'>>): CustomTool[];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/presets.d.ts#AssistantAgentPresetOptions",
+            "dist/presets.d.ts#AssistantAgentProfile",
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope"
+          ],
+          "internals": {
+            "dist/presets.d.ts#AssistantAgentPresetOptions": "interface AssistantAgentPresetOptions {\n    readonly toolRoot: string;\n    readonly sandboxMode: SandboxMode;\n    readonly sandbox?: SandboxProvider;\n    readonly scope?: ToolScope;\n    readonly hostTools: boolean;\n    readonly webSearch?: CustomTool;\n    readonly interactive?: InteractiveBackend;\n    readonly gitDiff?: 'when-enforced' | 'off';\n    readonly gitRepository?: boolean;\n    readonly sandboxEnforced?: boolean;\n    readonly fetchImpl?: typeof fetch;\n    readonly lookup?: NonNullable<Parameters<typeof createWebFetchTool>[0]>['lookup'];\n    readonly imageResults?: boolean;\n    readonly extra?: readonly CustomTool[];\n    readonly profile?: AssistantAgentProfile;\n}",
+            "dist/presets.d.ts#AssistantAgentProfile": "type AssistantAgentProfile = 'minimal' | 'messaging' | 'coding' | 'full';",
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}"
+          }
+        },
         "changedPathsOf": {
           "tier": "stable",
           "declaration": "declare function changedPathsOf(calls: Iterable<{\n    toolName: string;\n    input: unknown;\n}>, options?: ChangedPathsOptions): string[];",
@@ -24241,12 +24437,12 @@
             "dist/agent-compiler-<hash>.d.ts#SubagentAgentDefinition",
             "dist/presets.d.ts#CodingAgentPresetOptions",
             "dist/presets.d.ts#McpServers",
-            "dist/registry-<hash>.d.ts#CapabilityPreset",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface",
             "dist/setting-sources-gate-<hash>.d.ts#GATED",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource",
             "dist/setting-sources-gate-<hash>.d.ts#GatedSettingSource",
             "dist/setting-sources-gate-<hash>.d.ts#ResolvedCompatSource",
+            "dist/toolset-<hash>.d.ts#CapabilityPreset",
             "dist/types-<hash>.d.ts#CheckpointOptions",
             "dist/types-<hash>.d.ts#HumanInTheLoopOptions",
             "dist/types-<hash>.d.ts#IndexStrategy",
@@ -24276,12 +24472,12 @@
             "dist/agent-compiler-<hash>.d.ts#SubagentAgentDefinition": "interface SubagentAgentDefinition {\n    readonly description: string;\n    readonly prompt: string;\n    readonly tools?: readonly string[];\n    readonly model?: ModelSelection | 'inherit';\n    readonly mcpServers?: readonly (string | Record<string, McpServerConfig>)[];\n}",
             "dist/presets.d.ts#CodingAgentPresetOptions": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n    readonly shellInReadOnly?: boolean;\n    readonly bashDescription?: string;\n}",
             "dist/presets.d.ts#McpServers": "type McpServers = NonNullable<CompiledAgentOptionsDraft['mcpServers']>;",
-            "dist/registry-<hash>.d.ts#CapabilityPreset": "declare class CapabilityPreset implements Capability {\n    #private;\n    readonly name: string;\n    constructor(name: string, members: readonly Capability[]);\n    apply(draft: CompiledAgentOptionsDraft): void;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource": "type GatedCompatSource = ResolvedCompatSource & {\n    readonly [GATED]: true;\n};",
             "dist/setting-sources-gate-<hash>.d.ts#GatedSettingSource": "type GatedSettingSource = SettingSource & {\n    readonly [GATED]: true;\n};",
             "dist/setting-sources-gate-<hash>.d.ts#ResolvedCompatSource": "type ResolvedCompatSource = 'claude-code' | {\n    readonly kind: 'claude-code';\n    readonly import: readonly CompatSurface[];\n};",
+            "dist/toolset-<hash>.d.ts#CapabilityPreset": "declare class CapabilityPreset implements Capability {\n    #private;\n    readonly name: string;\n    constructor(name: string, members: readonly Capability[]);\n    apply(draft: CompiledAgentOptionsDraft): void;\n}",
             "dist/types-<hash>.d.ts#CheckpointOptions": "interface CheckpointOptions {\n    resumeSignal?: boolean;\n}",
             "dist/types-<hash>.d.ts#HumanInTheLoopOptions": "interface HumanInTheLoopOptions {\n    question: string;\n    timeout?: number;\n    onTimeout?: TimeoutAction;\n    showInput?: boolean;\n    payloadSchema?: Record<string, unknown>;\n}",
             "dist/types-<hash>.d.ts#IndexStrategy": "type IndexStrategy = 'tree-sitter' | 'regex' | 'none';",
@@ -25998,18 +26194,18 @@
           "runtime": false,
           "deprecatedSince": null,
           "references": [
-            "dist/tool-scope.d.ts#Overrides",
-            "dist/tool-scope.d.ts#SandboxWritePolicy",
-            "dist/tool-scope.d.ts#ScopeFields",
-            "dist/tool-scope.d.ts#ScopedOptions",
-            "dist/tool-scope.d.ts#ToolFactory"
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory"
           ],
           "internals": {
-            "dist/tool-scope.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
-            "dist/tool-scope.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
-            "dist/tool-scope.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
-            "dist/tool-scope.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
-            "dist/tool-scope.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;"
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;"
           }
         },
         "ToolScopeInput": {
@@ -26026,22 +26222,22 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/tool-scope.d.ts#Overrides",
-            "dist/tool-scope.d.ts#SandboxWritePolicy",
-            "dist/tool-scope.d.ts#ScopeFields",
-            "dist/tool-scope.d.ts#ScopedOptions",
-            "dist/tool-scope.d.ts#ToolFactory",
-            "dist/tool-scope.d.ts#ToolScope",
-            "dist/tool-scope.d.ts#ToolScopeInput"
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope",
+            "dist/tool-scope-<hash>.d.ts#ToolScopeInput"
           ],
           "internals": {
-            "dist/tool-scope.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
-            "dist/tool-scope.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
-            "dist/tool-scope.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
-            "dist/tool-scope.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
-            "dist/tool-scope.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
-            "dist/tool-scope.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}",
-            "dist/tool-scope.d.ts#ToolScopeInput": "interface ToolScopeInput {\n    readonly projectRoot: string;\n    readonly writeRoot?: string;\n    readonly sandbox: SandboxProvider;\n    readonly mode?: SandboxMode;\n    readonly protectedPaths?: readonly string[];\n}"
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolScopeInput": "interface ToolScopeInput {\n    readonly projectRoot: string;\n    readonly writeRoot?: string;\n    readonly sandbox: SandboxProvider;\n    readonly mode?: SandboxMode;\n    readonly protectedPaths?: readonly string[];\n}"
           }
         },
         "createPathVetoPlugin": {
@@ -26050,24 +26246,24 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope",
             "dist/tool-scope.d.ts#GeneralPlugin",
-            "dist/tool-scope.d.ts#Overrides",
-            "dist/tool-scope.d.ts#PathVetoOptions",
-            "dist/tool-scope.d.ts#SandboxWritePolicy",
-            "dist/tool-scope.d.ts#ScopeFields",
-            "dist/tool-scope.d.ts#ScopedOptions",
-            "dist/tool-scope.d.ts#ToolFactory",
-            "dist/tool-scope.d.ts#ToolScope"
+            "dist/tool-scope.d.ts#PathVetoOptions"
           ],
           "internals": {
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}",
             "dist/tool-scope.d.ts#GeneralPlugin": "type GeneralPlugin = Extract<Plugin, {\n    kind: 'general';\n}>;",
-            "dist/tool-scope.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
-            "dist/tool-scope.d.ts#PathVetoOptions": "interface PathVetoOptions {\n    readonly pathKeys?: readonly string[];\n    readonly caseFold?: boolean;\n    readonly prefix?: string;\n    readonly enters?: (value: string, protectedPath: string) => string;\n}",
-            "dist/tool-scope.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
-            "dist/tool-scope.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
-            "dist/tool-scope.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
-            "dist/tool-scope.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
-            "dist/tool-scope.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}"
+            "dist/tool-scope.d.ts#PathVetoOptions": "interface PathVetoOptions {\n    readonly pathKeys?: readonly string[];\n    readonly caseFold?: boolean;\n    readonly prefix?: string;\n    readonly enters?: (value: string, protectedPath: string) => string;\n}"
           }
         },
         "isWithin": {
@@ -26091,9 +26287,9 @@
           "declaration": "declare function sandboxWritePolicy(mode: SandboxMode, cwd: string): SandboxWritePolicy;",
           "runtime": true,
           "deprecatedSince": null,
-          "references": ["dist/tool-scope.d.ts#SandboxWritePolicy"],
+          "references": ["dist/tool-scope-<hash>.d.ts#SandboxWritePolicy"],
           "internals": {
-            "dist/tool-scope.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}"
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}"
           }
         },
         "vetoPathCall": {
@@ -26102,22 +26298,22 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/tool-scope.d.ts#Overrides",
-            "dist/tool-scope.d.ts#PathVetoOptions",
-            "dist/tool-scope.d.ts#SandboxWritePolicy",
-            "dist/tool-scope.d.ts#ScopeFields",
-            "dist/tool-scope.d.ts#ScopedOptions",
-            "dist/tool-scope.d.ts#ToolFactory",
-            "dist/tool-scope.d.ts#ToolScope"
+            "dist/tool-scope-<hash>.d.ts#Overrides",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory",
+            "dist/tool-scope-<hash>.d.ts#ToolScope",
+            "dist/tool-scope.d.ts#PathVetoOptions"
           ],
           "internals": {
-            "dist/tool-scope.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
-            "dist/tool-scope.d.ts#PathVetoOptions": "interface PathVetoOptions {\n    readonly pathKeys?: readonly string[];\n    readonly caseFold?: boolean;\n    readonly prefix?: string;\n    readonly enters?: (value: string, protectedPath: string) => string;\n}",
-            "dist/tool-scope.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
-            "dist/tool-scope.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
-            "dist/tool-scope.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
-            "dist/tool-scope.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
-            "dist/tool-scope.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}"
+            "dist/tool-scope-<hash>.d.ts#Overrides": "type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: TOptions['sandbox'];\n};",
+            "dist/tool-scope-<hash>.d.ts#SandboxWritePolicy": "interface SandboxWritePolicy {\n    readonly writes: boolean;\n    readonly allowAbsolute: boolean;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopeFields": "interface ScopeFields {\n    readonly projectRoot: string;\n    readonly writeRoot: string;\n    readonly sandbox: SandboxProvider;\n}",
+            "dist/tool-scope-<hash>.d.ts#ScopedOptions": "interface ScopedOptions {\n    readonly projectRoot?: string;\n    readonly writeRoot?: string;\n    readonly sandbox?: unknown;\n}",
+            "dist/tool-scope-<hash>.d.ts#ToolFactory": "type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool;",
+            "dist/tool-scope-<hash>.d.ts#ToolScope": "interface ToolScope extends ScopeFields {\n    readonly policy: SandboxWritePolicy;\n    readonly protectedPaths: readonly string[];\n    bind<TOptions extends ScopedOptions, TTool>(factory: ToolFactory<TOptions, TTool>): (overrides?: Overrides<TOptions>) => TTool;\n}",
+            "dist/tool-scope.d.ts#PathVetoOptions": "interface PathVetoOptions {\n    readonly pathKeys?: readonly string[];\n    readonly caseFold?: boolean;\n    readonly prefix?: string;\n    readonly enters?: (value: string, protectedPath: string) => string;\n}"
           }
         }
       }
