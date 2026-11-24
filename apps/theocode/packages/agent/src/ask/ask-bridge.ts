@@ -1,4 +1,4 @@
-import { ConcurrentListenerError, createAskBridge, type PendingQuestion } from '@theokit/agents/ask'
+import { createAskBridge } from '@theokit/agents/ask'
 
 /**
  * The ask channel, reduced to the translation that is genuinely this product's.
@@ -20,27 +20,16 @@ import { ConcurrentListenerError, createAskBridge, type PendingQuestion } from '
  *   not carry a question id through ten call sites, and threading one through would be a wide
  *   mechanical change to a path with no snapshot coverage.
  *
- * So this module keeps a thread → id map and nothing else. It is an address translation, not a
- * second rendezvous: no promise is created here, no listener slot is arbitrated, nothing is settled.
+ * So this module resolves a thread to its pending question id through `bridge.pending` and keeps no
+ * state of its own about questions. It is an address translation, not a second rendezvous.
  */
 
 const DEFAULT_THREAD = '__default__'
 
 const bridge = createAskBridge()
 
-/** thread → id of the question pending on it. Half of the entire state this adapter holds. */
-const idByThread = new Map<string, string>()
-/** thread → its text, so `currentQuestion` stays a read instead of becoming a second listener. */
-const textByThread = new Map<string, string>()
 /** Threads already wired to the framework, so a second `ask` does not attach a second listener. */
 const wiredThreads = new Set<string>()
-/** The surface's notification, if one is attached. One slot, exactly as before. */
-let notify: (() => void) | undefined
-
-function forget(threadId: string): void {
-  idByThread.delete(threadId)
-  textByThread.delete(threadId)
-}
 
 /**
  * Wire a thread to the framework the first time it is asked on.
@@ -56,20 +45,9 @@ function forget(threadId: string): void {
 function wire(threadId: string): void {
   if (wiredThreads.has(threadId)) return
   wiredThreads.add(threadId)
-  bridge.setListener(
-    threadId,
-    (pending: PendingQuestion) => {
-      idByThread.set(threadId, pending.id)
-      textByThread.set(threadId, pending.question)
-      notify?.()
-    },
-    {
-      onAbandon: () => {
-        forget(threadId)
-        notify?.()
-      },
-    },
-  )
+  // The framework requires a listener per thread before `ask`; what the surface reads comes from
+  // `pending` and `onChange`, so this one has nothing to record.
+  bridge.setListener(threadId, () => {})
 }
 
 export const ask = (question: string, threadId = DEFAULT_THREAD): Promise<string> => {
@@ -84,38 +62,15 @@ export const abandonQuestion = (threadId = DEFAULT_THREAD): void => {
 }
 
 export const currentQuestion = (threadId = DEFAULT_THREAD): string | undefined =>
-  textByThread.get(threadId)
+  bridge.pending(threadId)?.question
 
 export const answerQuestion = (answer: string, threadId = DEFAULT_THREAD): boolean => {
-  const id = idByThread.get(threadId)
-  if (id === undefined) return false
-  const accepted = bridge.answer(id, answer)
-  // Cleared HERE and in `onAbandon`, never on the promise returned by `ask`.
-  //
-  // The first version cleared in a `.finally` on that promise, and a test caught what that costs: a
-  // SECOND `ask` on a busy thread is refused, its promise rejects, and the `finally` then wiped the
-  // id of the FIRST question — which was still open. The answer that followed found no id, and the
-  // turn hung. A settle handler on a rejected concurrent request is not a settle of the question
-  // that thread is actually waiting on.
-  if (accepted) forget(threadId)
-  return accepted
+  const pending = bridge.pending(threadId)
+  return pending !== undefined && bridge.answer(pending.id, answer)
 }
 
 /**
- * B-035 — one slot, named for it, and a second set over a live one FAILS.
- *
- * Preserved verbatim from the deleted class, including the refusal: only the TUI ever subscribes, so
- * a multicast nobody asked for is the wrong fix; the right one is a name that does not lie and a
- * refusal instead of a silent winner. The disposer frees the slot, which is what lets the TUI
- * unmount and remount without a process restart.
- *
- * The error thrown is now the framework's `ConcurrentListenerError`, so `instanceof` still works for
- * any caller that catches it — and there is exactly one class under that name in the process.
+ * Observe changes to any thread's pending question. Any number of observers may attach; each
+ * disposer removes only its own. The observer is told nothing and reads `currentQuestion`.
  */
-export const setListener = (listener: () => void): (() => void) => {
-  if (notify !== undefined) throw new ConcurrentListenerError(DEFAULT_THREAD)
-  notify = listener
-  return () => {
-    if (notify === listener) notify = undefined
-  }
-}
+export const setListener = (listener: () => void): (() => void) => bridge.onChange(() => listener())
