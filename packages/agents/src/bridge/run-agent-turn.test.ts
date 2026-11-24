@@ -236,7 +236,7 @@ describe('completeFromTurn', () => {
       onCancelled: 'complete',
       onFailure: (r) => reasons.push(r),
     })
-    expect((await complete(request)).text).toBe('so far')
+    expect(await complete(request)).toMatchObject({ text: 'so far' })
     expect(reasons).toEqual([])
   })
 
@@ -251,7 +251,7 @@ describe('completeFromTurn', () => {
     const complete = completeFromTurn(<R>(work: (a: typeof sendOnly) => Promise<R>) =>
       work(sendOnly),
     )
-    expect((await complete(request)).text).toBe('x')
+    expect(await complete(request)).toMatchObject({ text: 'x' })
   })
 })
 

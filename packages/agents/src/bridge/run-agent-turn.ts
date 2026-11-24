@@ -19,7 +19,7 @@ import {
   type OpenAICompatibleRoutesOptions,
   type OpenAICompletion,
 } from './openai-compatible-routes.js'
-import type { SdkAgentHandle, SdkSendOptions } from './sdk-adapter.js'
+import type { SdkSendOptions } from './sdk-adapter.js'
 import { describeError as describe, describeStreamedError } from './stream-errors.js'
 
 /** What one `send` carries: the text alone, or the text with images the model reads on that turn. */
@@ -335,8 +335,8 @@ export interface CompleteFromTurnOptions {
  * is the message, the `text_delta` text joined is the reply. A failed turn throws, which the route
  * answers with 502; so does a cancelled one unless `onCancelled` is `'complete'`.
  */
-export function completeFromTurn<A extends AgentTurnAgent = SdkAgentHandle<SdkMessage>>(
-  withAgent: <R>(work: (agent: A) => Promise<R>) => Promise<R>,
+export function completeFromTurn(
+  withAgent: <R>(work: (agent: AgentTurnAgent) => Promise<R>) => Promise<R>,
   options: CompleteFromTurnOptions = {},
 ): OpenAICompatibleRoutesOptions['complete'] {
   return async (
