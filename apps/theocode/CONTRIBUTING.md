@@ -331,7 +331,7 @@ Measured on 2026-09-06, all three routes:
 The decisive objection is not ergonomics. **Under changesets the version field does not move until
 the release, so a local checkout's `package.json` lies about its own source.** Measured the same
 day: `theokit-sdk` on disk said `5.1.0` while its `HEAD` carried the `effectiveToolNames` fix that
-shipped in `5.2.0`. Every gate that reads a version — `npm run blockers`, `tools/check-sdk-pin.mjs`
+shipped in `5.2.0`. Every gate that reads a version — `tools/check-sdk-pin.mjs`
 — would have reported confidently about the wrong artifact.
 
 That failure has a name in this repository, and § *Ways a careful measurement still lies* is the
@@ -391,18 +391,6 @@ The last rule is the one that carries the value, and it is **independent of the 
 B-152 handover it was the only one that acted — no snapshot existed — and what made the report
 usable was removing the fix, watching the arm fail, and restoring it, rather than accepting a green
 that looked right. The first three regulate a channel; the fourth is why anyone benefits from one.
-
-### Reading an upstream tree without pinning it
-
-`tools/check-upstream-blockers.mjs` takes an optional path, so a sibling checkout can be inspected
-without touching this repository's tree:
-
-```bash
-node tools/check-upstream-blockers.mjs ~/…/theokit-sdk/packages/sdk
-```
-
-Useful for answering *"did the fix land?"* before a snapshot exists. It is not a substitute for
-measuring against the artifact: it reads a tree whose version field, as above, may not describe it.
 
 ## Changelog
 

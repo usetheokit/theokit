@@ -231,7 +231,8 @@ const announcement = announceService({ type: 'myagent', name: 'My agent', port: 
 await announcement.stop()
 ```
 
-- `publisher` is `{ publish({ name, type, port, txt }), unpublishAll(): Promise<void>, destroy(): Promise<void> }`, for example a wrapper over `bonjour-service`. You create it, so a loopback `host` avoids using it but not building it.
+- `publisher` is `{ publish({ name, type, port, txt }), unpublishAll(): Promise<void>, destroy(): Promise<void>, onError?(listener): () => void }`. `@theokit/host/discovery-bonjour` exports `createBonjourPublisher({ onError?, interface?, ip? })`, an adapter over `bonjour-service`, an optional peer dependency pinned to `1.4.4`. It reports socket, answer-path, send and name-conflict errors as `DiscoveryError` instead of letting the library exit the process.
+- `onError` (optional) is called once, after the announcement has stopped, for the first error a publisher with `onError` reports after `publish`. You create it, so a loopback `host` avoids using it but not building it.
 - A loopback `host` (`localhost`, `::1`, `127.0.0.0/8`) announces nothing; the result has `announced: false` and `reason: 'loopback'`.
 - `name` is trimmed to 63 UTF-8 bytes (RFC 6763) on a character boundary; the result's `name` is what was published.
 - `stop()` calls `unpublishAll` then `destroy`, each waited for at most one second, so it resolves within about two seconds even if the publisher never answers. It is idempotent and never rejects.
