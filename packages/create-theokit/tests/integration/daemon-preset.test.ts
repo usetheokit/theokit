@@ -1,6 +1,16 @@
 /* eslint-disable sonarjs/no-os-command-from-path -- the test drives the docker CLI */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, mkdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  mkdirSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -99,8 +109,48 @@ describe('--preset=daemon scaffold', () => {
       const tag = `ctk-daemon-test:${String(process.pid)}`
       const volume = `ctk-daemon-vol-${String(process.pid)}`
       const docker = (...a: string[]): string => execFileSync('docker', a, { encoding: 'utf-8' })
+      // The template names a host version this release publishes; pack the workspace host and
+      // install that tarball in the image instead of asking the registry for it.
+      // Docker is up, so a missing host build is a failure, not a skip: nothing could be packed.
+      expect(hostBuilt, 'packages/host must be built (pnpm build:packages)').toBe(true)
+      const hostPkg = JSON.parse(readFileSync(join(HOST_DIR, 'package.json'), 'utf-8')) as {
+        version: string
+        peerDependencies: Record<string, string>
+      }
+      const packDir = mkdtempSync(join(root, 'pack-'))
+      execFileSync('pnpm', ['pack', '--pack-destination', packDir], { cwd: HOST_DIR })
+      const tgz = readdirSync(packDir).find((f) => f.endsWith('.tgz'))
+      if (tgz === undefined) throw new Error('pnpm pack produced no tarball')
+      renameSync(join(packDir, tgz), join(dir, 'theokit-host.tgz'))
+      const pkgPath = join(dir, 'package.json')
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+        dependencies: Record<string, string>
+      }
+      pkg.dependencies['@theokit/host'] = 'file:./theokit-host.tgz'
+      // The packed host peers on the SDK range the workspace builds against; install that, so the
+      // image runs the host against an SDK it supports rather than hiding the mismatch.
+      pkg.dependencies['@theokit/sdk'] = hostPkg.peerDependencies['@theokit/sdk']!
+      writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+      const dockerfile = join(dir, 'Dockerfile')
+      const original = readFileSync(dockerfile, 'utf-8')
+      const adapted = original.replace(
+        'COPY package.json ./',
+        'COPY package.json theokit-host.tgz ./',
+      )
+      expect(adapted).not.toBe(original)
+      writeFileSync(dockerfile, adapted)
       try {
         docker('build', '-t', tag, dir)
+        expect(
+          docker(
+            'run',
+            '--rm',
+            '--entrypoint',
+            'cat',
+            tag,
+            'node_modules/@theokit/host/package.json',
+          ),
+        ).toContain(`"version": "${hostPkg.version}"`)
         docker('run', '--rm', '-v', `${volume}:/data`, tag, 'onboard', '--yes')
         const id = docker('run', '-d', '-v', `${volume}:/data`, tag).trim()
         try {
