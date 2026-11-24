@@ -272,7 +272,7 @@ describe('loadRules — truncation at the character ceiling', () => {
     expect(text.length).toBeLessThan(64_000)
     expect(text, 'a rule was cut mid-content').toContain(big)
     expect(text, 'the model was not told its instructions are partial').toMatch(/omitted for length/)
-    expect(messages.some((m) => m.includes('truncated to 64000 chars'))).toBe(true)
+    expect(messages.some((m) => m.includes('stopped at 64000 characters'))).toBe(true)
   })
 
   it('test_content_under_the_ceiling_is_returned_whole_and_unannounced', () => {

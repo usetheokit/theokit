@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { approvalGates } from '../../src/chat/chat.js'
+import { codingAgentTools } from '@theokit/agents/presets'
+import {
+  createWebFetchTool,
+  createWebSearchTool,
+  createGenericHttpSearchAdapter,
+} from '@theokit/agents/tools'
 import { onAskForPolicy } from '@theokit/agents'
 import { refusalMessage } from '../../src/composition/agent-spec.js'
 
@@ -17,7 +22,22 @@ import { refusalMessage } from '../../src/composition/agent-spec.js'
  * headless approval posture under `exec`. Tools with no gate keep the refusal, because for them the
  * sentence is still true.
  */
-const gated = new Set(Object.keys(approvalGates({ writes: true, searchConfigured: true })))
+const delegateToTeam = {
+  name: 'delegate_to_team',
+  description: 'x',
+  inputSchema: {},
+  handler: async () => '',
+}
+const gated = new Set(
+  codingAgentTools({
+    cwd: '/tmp/proj',
+    sandboxMode: 'workspace-write',
+    interactive: { start: () => undefined } as never,
+    webFetch: createWebFetchTool(),
+    webSearch: createWebSearchTool({ search: createGenericHttpSearchAdapter() }),
+    delegateToTeam: delegateToTeam as never,
+  }).gates.keys(),
+)
 
 async function verdict(policy: Parameters<typeof onAskForPolicy>[0], tool: string) {
   return onAskForPolicy(policy, gated, { refusal: refusalMessage })(tool, {})
@@ -47,7 +67,7 @@ describe('the ask verdict under approval_policy="never"', () => {
 describe('the gated set is the approval map', () => {
   it('test_every_side_effecting_tool_is_in_it', () => {
     // The names the TUI showed a card for, plus the shell and network tools the map gates. If one
-    // drops out of `approvalGates`, an unmatched call to it is refused again instead of asked.
+    // drops out of the preset's gates, an unmatched call to it is refused again instead of asked.
     for (const tool of [
       'ApplyPatch',
       'Edit',

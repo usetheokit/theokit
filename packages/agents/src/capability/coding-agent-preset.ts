@@ -21,6 +21,7 @@ import {
   createUpdatePlanTool,
   createViewImageTool,
   createWriteStdinTool,
+  withDescription,
   withName,
 } from '@theokit/sdk-tools'
 
@@ -107,6 +108,14 @@ export interface CodingAgentPresetOptions {
   readonly webSearch?: CustomTool
   /** A `delegate_to_team` tool the caller built; registered under approval, and only when the mode allows writes. */
   readonly delegateToTeam?: CustomTool
+  /**
+   * Registers `Bash` (and `interactive_shell` / `write_stdin`, given a backend) in `read-only` mode
+   * too, for a consumer whose sandbox confines the shell itself. Defaults to `false`: the shell is
+   * left off in `read-only`, with the write tools.
+   */
+  readonly shellInReadOnly?: boolean
+  /** Replaces the `Bash` description, for a consumer that names its own sibling tools in it. */
+  readonly bashDescription?: string
 }
 
 const DEFAULT_GATES: Readonly<Record<string, HumanInTheLoopOptions>> = {
@@ -132,9 +141,11 @@ class GatesCapability implements Capability {
   }
 }
 
-function readOnlyOff(mode: SandboxMode, delegates: boolean): OffTool[] {
+function readOnlyOff(mode: SandboxMode, delegates: boolean, shell: boolean): OffTool[] {
   const reason = `the ${mode} sandbox grants no writes`
-  const names = ['ApplyPatch', 'Edit', 'Bash', 'interactive_shell', 'write_stdin']
+  const names = shell
+    ? ['ApplyPatch', 'Edit']
+    : ['ApplyPatch', 'Edit', 'Bash', 'interactive_shell', 'write_stdin']
   if (delegates) names.push('delegate_to_team')
   return names.map((name) => ({ name, reason }))
 }
@@ -199,24 +210,28 @@ function buildCodingTools(options: Omit<CodingAgentPresetOptions, 'posture'>): {
   if (roots === undefined) {
     throw new ConfigurationError(`codingAgentPreset: unknown sandbox mode "${sandboxMode}"`)
   }
-  if (roots !== null && roots.length === 0) {
-    return { tools, off: readOnlyOff(sandboxMode, options.delegateToTeam !== undefined) }
+  const readOnly = roots !== null && roots.length === 0
+  if (readOnly && options.shellInReadOnly !== true) {
+    return { tools, off: readOnlyOff(sandboxMode, options.delegateToTeam !== undefined, false) }
   }
   // The write tools take the write root as THEIR project root; relative paths resolve against `cwd`.
   const writeScope =
     options.writeRoot !== undefined ? { projectRoot: options.writeRoot, baseDir: cwd } : {}
-  tools.push(
-    withName(bound.bind(createApplyPatchTool)(writeScope), 'ApplyPatch'),
-    withName(bound.bind(createEditFileTool)(writeScope), 'Edit'),
-    // `sandbox` comes from the bound scope, so the shell cannot be assembled unconfined.
-    withName(
-      bound.bind(createShellTool)(
-        options.defaultTimeoutMs !== undefined
-          ? { defaultTimeoutMs: options.defaultTimeoutMs }
-          : {},
-      ),
-      'Bash',
+  if (!readOnly) {
+    tools.push(
+      withName(bound.bind(createApplyPatchTool)(writeScope), 'ApplyPatch'),
+      withName(bound.bind(createEditFileTool)(writeScope), 'Edit'),
+    )
+  }
+  // `sandbox` comes from the bound scope, so the shell cannot be assembled unconfined.
+  const bash = withName(
+    bound.bind(createShellTool)(
+      options.defaultTimeoutMs !== undefined ? { defaultTimeoutMs: options.defaultTimeoutMs } : {},
     ),
+    'Bash',
+  )
+  tools.push(
+    options.bashDescription !== undefined ? withDescription(bash, options.bashDescription) : bash,
   )
   if (options.interactive !== undefined) {
     tools.push(
@@ -227,6 +242,10 @@ function buildCodingTools(options: Omit<CodingAgentPresetOptions, 'posture'>): {
     for (const name of ['interactive_shell', 'write_stdin']) {
       off.push({ name, reason: 'no interactive backend was supplied' })
     }
+  }
+  if (readOnly) {
+    off.push(...readOnlyOff(sandboxMode, options.delegateToTeam !== undefined, true))
+    return { tools, off }
   }
   if (options.delegateToTeam !== undefined) tools.push(options.delegateToTeam)
   return { tools, off }

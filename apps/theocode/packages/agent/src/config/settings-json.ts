@@ -70,9 +70,10 @@ import { TheokitAgentError } from '@theokit/agents'
 // Both from `/config`: `PermissionRule` is re-exported there and NOT from the root barrel, which
 // the framework's own `names nothing a consumer cannot import` gate measured on 2026-09-12.
 import {
-  CLAUDE_SETTINGS_KEYS,
-  permissionRulesFromSettings,
+  translateSettingsDocument,
   type PermissionRule,
+  type ReadSettingsFileOptions,
+  type SettingsFileRead,
 } from '@theokit/agents/config'
 
 import { CLAUDE_HOOK_EVENT_ALIASES, parseClaudeHooks } from '@theokit/agents/hooks'
@@ -166,31 +167,6 @@ export interface SettingsRead {
 }
 
 /**
- * The `permissions` value as a block, or `undefined` when it is not one.
- *
- * Narrowed rather than cast. This is a foreign file: the value can be anything its author typed, and
- * a cast would hand a non-object to the translator and turn a typo in somebody else's config into a
- * crash in ours. A shape we cannot read yields `undefined`, which the translator reads as "no block"
- * — and the key still leaves a trace, because an unreadable block produces no rules and the operator
- * sees no permissions take effect.
- */
-function asPermissionsBlock(
-  value: unknown,
-): { allow?: string[]; deny?: string[]; ask?: string[] } | undefined {
-  if (!isRecord(value)) return undefined
-  const strings = (v: unknown): string[] | undefined =>
-    Array.isArray(v) && v.every((e) => typeof e === 'string') ? [...(v as string[])] : undefined
-  const allow = strings(value['allow'])
-  const deny = strings(value['deny'])
-  const ask = strings(value['ask'])
-  return {
-    ...(allow === undefined ? {} : { allow }),
-    ...(deny === undefined ? {} : { deny }),
-    ...(ask === undefined ? {} : { ask }),
-  }
-}
-
-/**
  * Two conventions that are not settings in any dialect, and are present in both files measured
  * here: `$schema`, the editor's JSON Schema pointer, and a leading `_`, the way JSON files carry a
  * comment. Recognising them by shape rather than by name is a heuristic, and its failure mode is
@@ -217,10 +193,6 @@ const SAME_SETTING_DIFFERENT_SPELLING: Readonly<Record<string, string>> = {
   // what makes the key HONOURED instead of merely parsed: it lands in `values` like any of ours, and
   // the effective config carries it to the collector.
   cleanupPeriodDays: 'session_gc_max_age_days',
-}
-
-function isNonSettingConvention(key: string): boolean {
-  return key === '$schema' || key.startsWith('_')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -384,69 +356,55 @@ const SPECIFIER_ARG: Readonly<Record<string, string>> = {
   Grep: 'pattern',
 }
 
-export function translateSettings(raw: unknown, opts: TranslateOptions): SettingsRead {
-  if (!isRecord(raw))
-    return {
-      values: {},
-      ignored: [],
-      unrecognised: [],
-      droppedHooks: [],
-      permissionRules: [],
-      unsupportedPermissions: [],
-    }
-
-  const ours = new Set(opts.ownKeys)
-  const values: Record<string, unknown> = {}
-  const ignored: string[] = []
-  const unrecognised: string[] = []
-  let permissionRules: readonly PermissionRule[] = []
-  let unsupportedPermissions: readonly { entry: string; reason: string }[] = []
-  for (const [rawKey, value] of Object.entries(raw)) {
-    const key = SAME_SETTING_DIFFERENT_SPELLING[rawKey] ?? rawKey
-    if (key === 'permissions') {
-      // #736 — TRANSLATED AND ENFORCED, since the plugin seam landed.
-      //
-      // This block used to end with `ignored.push(key)`, and a comment explaining that the honest
-      // state was to go on reporting the key as not implemented: `@theokit/agents` rendered the
-      // rules and nothing built an engine from them, so an operator was told twice that their
-      // `deny` did not take effect.
-      //
-      // That path now exists — `createPermissionsPlugin` builds the engine and the run carries it
-      // as a `pre_tool_call` plugin — so the same line became false in the other direction, which
-      // is the worse one: the diagnostic told an operator a control was inert while it was
-      // refusing their reads. Verified on the built binary before this line moved.
-      //
-      // `unsupportedPermissions` stays exactly as it was. It is the real information an operator
-      // cannot get any other way: WHICH entries could not be rendered, and are therefore not being
-      // applied even though the block as a whole is.
-      const translated = permissionRulesFromSettings(asPermissionsBlock(value), {
-        specifierArg: SPECIFIER_ARG,
-        ...(opts.baseDir === undefined ? {} : { baseDir: opts.baseDir }),
-      })
-      permissionRules = translated.rules
-      unsupportedPermissions = translated.unsupported.map((u) => ({
-        entry: u.entry,
-        reason: u.reason,
-      }))
-      continue
-    }
-    if (ours.has(key)) {
-      values[key] = value
-    } else if (CLAUDE_SETTINGS_KEYS.has(key) || isNonSettingConvention(key)) {
-      ignored.push(key)
-    } else if (opts.foreignRoot) {
-      // Their file, their vocabulary. Tolerated and named — never silently absorbed.
-      unrecognised.push(key)
-    } else {
-      // Our file: leave it in place so the strict schema rejects it, with its own name in the error.
-      values[key] = value
-    }
-  }
-
+/** The framework's read of one file, in this product's shape: `hooks` back among the values, then delivered. */
+export function settingsReadFrom(
+  read: SettingsFileRead,
+  hooksDelivery: TranslateOptions['hooksDelivery'],
+): SettingsRead {
+  const values: Record<string, unknown> = { ...read.values }
+  if (read.hooks !== undefined) values['hooks'] = read.hooks
   // `hooks` is a name both dialects use for different shapes. Ours is an array; theirs is an object
   // keyed by event. Distinguishing by shape rather than by provenance means a file may legitimately
   // be written either way, which is what "the same filename" has to mean to be worth anything.
-  const droppedHooks = normaliseHooks(values, opts.hooksDelivery)
+  const droppedHooks = normaliseHooks(values, hooksDelivery)
+  return {
+    values,
+    ignored: read.ignored,
+    unrecognised: read.unrecognised,
+    droppedHooks,
+    permissionRules: read.permissionRules,
+    unsupportedPermissions: read.unsupportedPermissions,
+  }
+}
 
-  return { values, ignored, unrecognised, droppedHooks, permissionRules, unsupportedPermissions }
+/** How this product asks the framework to read a settings file. */
+export function settingsReadOptions(
+  ownKeys: readonly string[],
+  baseDir?: string,
+): ReadSettingsFileOptions {
+  return {
+    ownKeys,
+    renames: SAME_SETTING_DIFFERENT_SPELLING,
+    specifierArg: SPECIFIER_ARG,
+    ...(baseDir === undefined ? {} : { baseDir }),
+  }
+}
+
+export function translateSettings(raw: unknown, opts: TranslateOptions): SettingsRead {
+  const empty: SettingsFileRead = {
+    path: '',
+    values: {},
+    ignored: [],
+    unrecognised: [],
+    permissionRules: [],
+    unsupportedPermissions: [],
+  }
+  const read = isRecord(raw)
+    ? translateSettingsDocument(
+        raw,
+        { path: '', foreignRoot: opts.foreignRoot },
+        settingsReadOptions(opts.ownKeys, opts.baseDir),
+      )
+    : empty
+  return settingsReadFrom(read, opts.hooksDelivery)
 }

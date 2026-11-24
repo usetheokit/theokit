@@ -83,6 +83,7 @@ export {
   type LoadInstructionWalkInput,
   type InstructionBlock,
   type InstructionTree,
+  type InstructionTreeBase,
   type InstructionTreeBudget,
   type LoadInstructionTreeInput,
 } from './config/instruction-tree.js'
@@ -278,6 +279,8 @@ export {
   type SettingsCandidate,
   type SettingsCandidates,
   type SettingsFileRead,
+  SettingsFileError,
+  translateSettingsDocument,
 } from './config/settings-roots.js'
 
 export { frontmatterValue, splitFrontmatter, type ParsedFrontmatter } from './config/frontmatter.js'
