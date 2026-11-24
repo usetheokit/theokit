@@ -165,6 +165,9 @@ describe("theoclaw-tui (T4.2)", () => {
     // The first Enter accepts the highlighted completion, the second submits it.
     await tui.type("/new", ENTER, ENTER);
     await tui.until((f) => f.includes("owner-1"), "the new session id");
+    // The remounted screen starts empty: the first reply is gone, and its composer needs a moment to read keys.
+    expect(tui.screen()).not.toContain("first");
+    await composerReady((key) => tui.view.stdin.write(key), tui.screen, "Message TheoClaw");
     await tui.type("second", ENTER);
     await waitFor(() => instance.agents.length === 2, 3000, "a second session agent");
     expect(instance.agents[1]!.sent).toEqual(["second"]);
@@ -211,10 +214,33 @@ describe("theoclaw-tui (T4.2)", () => {
     await waitFor(() => instance.agents[0]?.signals.length === 1, 3000, "the turn to start");
     // The cancelled run is still unwinding, so the TUI still holds the turn when the redirect is typed.
     await tui.type(ESC, "again", ENTER);
-    await tui.until((f) => f.includes("sent when the running turn ends"), "the queued notice");
+    // The session starts the redirect at once, but its chat waits for the interrupted one to unwind.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(instance.agents[0]!.sent).toEqual(["hi"]);
     teardown.resolve();
     await waitFor(() => instance.agents[0]!.sent.length === 2, 3000, "the redirect to reach the instance");
     expect(instance.agents[0]!.sent).toEqual(["hi", `${REDIRECT_NOTE}again`]);
+  });
+
+  it("/new right after Esc holds the new session's first chat until the interrupted one has unwound", async () => {
+    const teardown = deferred<void>();
+    const instance = await startInstance((n) =>
+      n === 0 ? { frames: [assistant("x")], before: new Promise<void>(() => undefined), teardown: teardown.promise } : quick,
+    );
+    const tui = await renderTui(instance);
+    await tui.type("hi", ENTER);
+    await waitFor(() => instance.agents[0]?.signals.length === 1, 3000, "the turn to start");
+    await tui.type(ESC);
+    await tui.type("/new", ENTER, ENTER);
+    await tui.until((f) => f.includes("owner-1"), "the new session id");
+    await composerReady((key) => tui.view.stdin.write(key), tui.screen, "Message TheoClaw");
+    await tui.type("second", ENTER);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(instance.agents).toHaveLength(1);
+    expect(tui.screen()).not.toContain("already running");
+    teardown.resolve();
+    await waitFor(() => instance.agents.length === 2, 3000, "the new session's chat");
+    expect(instance.agents[1]!.sent).toEqual(["second"]);
   });
 
   it("/new during a turn is refused, so Esc still stops that turn", async () => {
@@ -297,8 +323,19 @@ describe("theoclaw-tui (T4.2)", () => {
     await warningSplitsText((tui) => tui.type("/new", ENTER, ENTER), "press Esc first");
   });
 
-  it("text before and after the queued-message warning sits on each side of it", async () => {
-    await warningSplitsText((tui) => tui.type("again", ENTER), "sent when the running turn ends");
+  it("a message typed while a turn runs is counted as queued and sent after the turn, without an interrupt", async () => {
+    const release = deferred<void>();
+    const chats: string[] = [];
+    const tui = await mount(steppedClient(release.promise, chats));
+    await tui.type("hi", ENTER);
+    await tui.until((f) => f.includes("before"), "the first text");
+    await tui.type("again", ENTER);
+    await tui.until((f) => f.includes("1 queued"), "the queued count");
+    expect(chats).toEqual(["hi"]);
+    release.resolve();
+    await waitFor(() => chats.length === 2, 3000, "the queued message to be sent");
+    expect(chats).toEqual(["hi", "again"]);
+    await tui.until((f) => f.includes("after"), "the rest of the first turn");
   });
 
   it("partial assistant text is drawn before the turn ends", async () => {
