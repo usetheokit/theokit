@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1643 export(s) across 30 entry point(s).
+1645 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -1137,9 +1137,11 @@ Measured against `@theokit/sdk@13.0.0`.
 | `secretRefsStep` | value |
 | `SETTINGS_LAYERS` | value |
 | `settingsCandidates` | value |
+| `SettingsFileError` | value |
 | `settingsLayerChain` | value |
 | `splitFrontmatter` | value |
 | `templateHints` | value |
+| `translateSettingsDocument` | value |
 | `TrustStore` | value |
 | `TrustStorePermissionsError` | value |
 | `AgentMemory` | type |

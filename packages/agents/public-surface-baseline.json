@@ -20300,6 +20300,14 @@
             "dist/config.d.ts#SettingsCandidate": "interface SettingsCandidate {\n    readonly path: string;\n    readonly foreignRoot: boolean;\n}"
           }
         },
+        "SettingsFileError": {
+          "tier": "stable",
+          "declaration": "declare class SettingsFileError extends Error {\n    readonly path: string;\n    readonly kind: 'unreadable' | 'malformed';\n    readonly detail: string;\n    readonly name = \"SettingsFileError\";\n    constructor(path: string, kind: 'unreadable' | 'malformed', detail: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "SettingsFileRead": {
           "tier": "stable",
           "declaration": "interface SettingsFileRead {\n    readonly path: string;\n    readonly values: Record<string, unknown>;\n    readonly ignored: readonly string[];\n    readonly unrecognised: readonly string[];\n    readonly permissionRules: readonly PermissionRule[];\n    readonly unsupportedPermissions: readonly {\n        readonly entry: string;\n        readonly reason: string;\n    }[];\n    readonly hooks?: unknown;\n}",
@@ -20958,6 +20966,22 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "translateSettingsDocument": {
+          "tier": "stable",
+          "declaration": "declare function translateSettingsDocument(raw: Record<string, unknown>, candidate: SettingsCandidate, options: ReadSettingsFileOptions): SettingsFileRead;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/config.d.ts#ReadSettingsFileOptions",
+            "dist/config.d.ts#SettingsCandidate",
+            "dist/config.d.ts#SettingsFileRead"
+          ],
+          "internals": {
+            "dist/config.d.ts#ReadSettingsFileOptions": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n    readonly throwOnMalformed?: boolean;\n}",
+            "dist/config.d.ts#SettingsCandidate": "interface SettingsCandidate {\n    readonly path: string;\n    readonly foreignRoot: boolean;\n}",
+            "dist/config.d.ts#SettingsFileRead": "interface SettingsFileRead {\n    readonly path: string;\n    readonly values: Record<string, unknown>;\n    readonly ignored: readonly string[];\n    readonly unrecognised: readonly string[];\n    readonly permissionRules: readonly PermissionRule[];\n    readonly unsupportedPermissions: readonly {\n        readonly entry: string;\n        readonly reason: string;\n    }[];\n    readonly hooks?: unknown;\n}"
+          }
         }
       }
     },
