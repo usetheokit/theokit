@@ -100,24 +100,20 @@ async function listIncludingArchived(
 }
 
 /**
- * `sessions gc` for one project: the framework's planner with TheoCode's protection added — the pointer
- * read fail-closed, and every non-archived registry session. Throws what
+ * `sessions gc` for one project: the framework's planner with TheoCode's protection added: every
+ * non-archived registry session. Throws what
  * the framework throws (`GCFloorError`, `GCProtectionUnavailableError`); the caller prints it.
  */
 export async function planAndRunCurrentProjectGC(
   opts: CurrentProjectGCOptions,
 ): Promise<{ plan: TranscriptGCPlan; result: RunTranscriptGCResult }> {
-  const { readPointerId } = await import('@theocode/agent/session')
   const { cwd } = opts
   const everyone = await (opts.listRegistry ?? listIncludingArchived)(cwd)
   const registeredIds = everyone.filter((a) => a.archived !== true).map((a) => a.agentId)
-  // The framework protects its `last-session` pointer itself but reads an unreadable one as absent.
-  // This provider reads it fail-closed: a throw becomes `GCProtectionUnavailableError` and refuses.
+  // The framework protects its `last-session` pointer itself and refuses on an unreadable one.
   const protectedIds = (): ReadonlyMap<string, string> => {
     const out = new Map<string, string>()
     for (const id of registeredIds) out.set(id, 'registered session')
-    const pointer = readPointerId(cwd, ...(opts.root !== undefined ? ([opts.root] as const) : []))
-    if (pointer !== undefined) out.set(pointer, 'live-session pointer')
     return out
   }
   // A transcript the framework could not read is kept: "I could not read this" is no reason to unlink.
