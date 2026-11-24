@@ -19,7 +19,7 @@ interface MdnsEmitter {
 
 export interface BonjourPublisherOptions {
   /** Called for every error the library raises, in the library's own tick. May be omitted when `announceService`'s `onError` is used. */
-  onError?(error: DiscoveryError): void
+  readonly onError?: (error: DiscoveryError) => void
   /** The interface the multicast socket binds; only the adapter's own tests set it. */
   readonly interface?: string
   /** The address packets are sent to; only the adapter's own tests set it. */
@@ -81,10 +81,10 @@ function observeConflict(
   withdrawing: () => boolean,
   onConflict: () => void,
 ): void {
-  const stop = published.stop?.bind(published)
+  const stop = published.stop.bind(published) as (callback?: CallableFunction) => void
   published.stop = (callback?: CallableFunction) => {
     if (!withdrawing()) onConflict()
-    stop?.(callback)
+    stop(callback)
   }
 }
 
