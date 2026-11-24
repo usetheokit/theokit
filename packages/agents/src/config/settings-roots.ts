@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import type { PermissionRule } from '@theokit/sdk'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { FOREIGN_KEY_DECISIONS } from './settings-file.js'
 import { permissionRulesFromSettings } from './settings-permissions.js'
@@ -220,7 +221,7 @@ export interface ReadSettingsFileOptions {
 }
 
 /** A settings file that exists and cannot be read or parsed; thrown under `throwOnMalformed`. */
-export class SettingsFileError extends Error {
+export class SettingsFileError extends TheokitAgentError {
   override readonly name = 'SettingsFileError'
   constructor(
     readonly path: string,
@@ -232,6 +233,7 @@ export class SettingsFileError extends Error {
       kind === 'malformed'
         ? `malformed JSON at ${path}: ${detail}`
         : `cannot read ${path}: ${detail}`,
+      { code: `settings_file_${kind}`, isRetryable: false },
     )
   }
 }

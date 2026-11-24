@@ -14,6 +14,7 @@ import {
 import { delimiter, join } from 'node:path'
 
 import type { InlineSkill } from '@theokit/sdk'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 import { stringify as stringifyYaml } from 'yaml'
 
 import { loadMcpJson } from '../bridge/mcp-file.js'
@@ -27,10 +28,14 @@ import { readForeignSetup } from './index.js'
 export type ForeignImportErrorReason = 'locked' | 'refused' | 'unreadable'
 
 /** Thrown by `writeForeignImport` and `readForeignImport`; its message names a path or a server, never a value. */
-export class ForeignImportError extends Error {
+export class ForeignImportError extends TheokitAgentError {
   readonly reason: ForeignImportErrorReason
   constructor(message: string, reason: ForeignImportErrorReason) {
-    super(message)
+    super(message, {
+      code: `foreign_import_${reason}`,
+      // a held lock may clear; a refusal or an unreadable path fails the same way next time.
+      isRetryable: reason === 'locked',
+    })
     this.name = 'ForeignImportError'
     this.reason = reason
   }

@@ -102,7 +102,6 @@ function blendedTotal(u: Record<string, number>): number {
 }
 
 import { toolLine } from './tool-line.js'
-import type { ToolChunk } from './tool-line.js'
 
 /**
  * What the framework's turn result hands the processor at the end: the final message, the usage and
@@ -144,7 +143,7 @@ export function createHumanProcessor(
   let errorSeen = false
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
-  const writes: ToolChunk[] = []
+  const writes: { toolName: string; input: unknown }[] = []
   // Per-event handling as a table. An event type without a row carries nothing for this surface.
   const onEvent: Record<string, (event: AgentOutputEvent) => void> = {
     'tool-call': (event) => {

@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- The exec processor's collected write calls are typed `{ toolName; input }`, which is what `changedPathsOf` takes, so the package typechecks again (#3010).
 - `resolveFreshCredential` passes `requestTimeoutMs` and `onTransientFailure: 'use-stored'` to `AuthProvider` instead of wrapping `fetch` and catching transient errors itself; on a transient failure it now returns the credential re-read under the lock (#2924).
 - `composeInstructions` in `context/agents-md.ts` is now `composeTheoCodePrompt`, so it no longer shares a name with the framework's; the docblock lists the three differences (base never cut, one summed `rules` cut, group headers). No behaviour change (#2922).
 - `web_search` is chosen by `resolveWebSearchAdapter` from `@theokit/agents/tools`: `BRAVE_API_KEY`, `TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` now enable it, and `THEOKIT_SEARCH=off` disables it. A generic endpoint now needs `THEOKIT_SEARCH_API_KEY` as well as `THEOKIT_SEARCH_API_URL`, so a key-less endpoint stops working, and an unknown `THEOKIT_SEARCH` value fails agent construction (#2926).
