@@ -42,6 +42,10 @@
       "types": "./dist/discovery/index.d.ts",
       "import": "./dist/discovery/index.js"
     },
+    "./discovery-bonjour": {
+      "types": "./dist/discovery-bonjour/index.d.ts",
+      "import": "./dist/discovery-bonjour/index.js"
+    },
     "./browser": {
       "types": "./dist/browser/index.d.ts",
       "import": "./dist/browser/index.js"
@@ -70,10 +74,17 @@
     "undici": "7.30.1"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=5.32.0 <14"
+    "@theokit/sdk": ">=5.32.0 <14",
+    "bonjour-service": "1.4.4"
+  },
+  "peerDependenciesMeta": {
+    "bonjour-service": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@theokit/sdk": ">=5.32.0 <14",
+    "bonjour-service": "1.4.4",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
