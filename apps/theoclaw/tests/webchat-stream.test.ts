@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs";
+import { sdkMessage } from './fakes.js'
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -76,7 +77,7 @@ function stubRunner(script: StubScript, model?: string) {
           async *stream() {
             for (const [index, message] of messages.entries()) {
               if (index === 0) script.onFirstMessage?.();
-              yield message;
+              yield sdkMessage(message);
               if (index === 0 && script.afterFirst === "silent") await new Promise(() => undefined);
               if (index === 0 && script.afterFirst !== undefined) await script.afterFirst;
             }

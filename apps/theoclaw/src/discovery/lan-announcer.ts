@@ -1,13 +1,10 @@
 import { hostname as osHostname } from 'node:os'
 
+import { announceService, DiscoveryError, trimServiceName } from '@theokit/host/discovery'
+
 import { isLoopback } from '../control-plane/bind.js'
 import type { ControlPlaneHandle } from '../control-plane/listener.js'
 import { type DiscoveryMode, type PublisherFactory, type ServicePublisher, TheoClawDiscoveryError } from './publisher.js'
-
-/** RFC 6763 § 4.1.1: an instance name is at most 63 UTF-8 bytes. */
-const MAX_INSTANCE_NAME_BYTES = 63
-/** How long one withdrawal step may wait for the library before the shutdown goes on without it. */
-const STOP_STEP_BOUND_MS = 1000
 
 export interface LanAnnouncement {
   /** Withdraw the service and release the publisher. Idempotent; never rejects and never hangs. */
@@ -32,28 +29,14 @@ const NOTHING_ANNOUNCED: LanAnnouncement = { stop: () => Promise.resolve() }
 export function serviceName(hostname: string, port: number): string {
   const host = Array.from(hostname.split('.')[0] ?? '')
   const name = (): string => `TheoClaw on ${host.join('')} port ${port}`
-  while (Buffer.byteLength(name()) > MAX_INSTANCE_NAME_BYTES && host.length > 0) host.pop()
+  while (trimServiceName(name()) !== name() && host.length > 0) host.pop()
   return name()
 }
 
 function discoveryErrorOf(error: unknown, route: TheoClawDiscoveryError['route']): TheoClawDiscoveryError {
-  return error instanceof TheoClawDiscoveryError ? error : new TheoClawDiscoveryError(error, route)
-}
-
-/** Run one withdrawal step, resolving once it settles or once the bound passes, whichever is first. */
-async function bounded(step: () => Promise<void>, ms: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined
-  const deadline = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, ms)
-  })
-  const settled = new Promise<void>((resolve, reject) => {
-    step().then(resolve, reject)
-  })
-  try {
-    await Promise.race([settled, deadline])
-  } finally {
-    clearTimeout(timer)
-  }
+  if (error instanceof TheoClawDiscoveryError) return error
+  if (error instanceof DiscoveryError) return new TheoClawDiscoveryError(error.cause, error.route)
+  return new TheoClawDiscoveryError(error, route)
 }
 
 /**
@@ -73,10 +56,8 @@ export function announceOnLan(handle: Pick<ControlPlaneHandle, 'address'>, optio
     return NOTHING_ANNOUNCED
   }
 
-  let publisher: ServicePublisher | undefined
+  let announcement: LanAnnouncement | undefined
   let failed = false
-  let constructing = true
-  let stopping: Promise<void> | undefined
 
   const fail = (error: TheoClawDiscoveryError): void => {
     if (failed) return
@@ -84,41 +65,38 @@ export function announceOnLan(handle: Pick<ControlPlaneHandle, 'address'>, optio
     options.log(
       `TheoClawDiscoveryError: LAN discovery stopped (${error.code}); TheoClaw keeps serving on ${host}:${port}`,
     )
-    if (!constructing) void stop()
+    // Before the announcement exists, the code below stops it once it does.
+    if (announcement !== undefined) void announcement.stop()
   }
 
-  const withdraw = async (target: ServicePublisher): Promise<void> => {
-    try {
-      await bounded(() => target.unpublishAll(), STOP_STEP_BOUND_MS)
-    } catch (error) {
-      fail(discoveryErrorOf(error, 'send-respond'))
-    }
-    try {
-      await bounded(() => target.destroy(), STOP_STEP_BOUND_MS)
-    } catch (error) {
-      fail(discoveryErrorOf(error, 'socket'))
-    }
-  }
-
-  const stop = (): Promise<void> => {
-    stopping ??= publisher === undefined ? Promise.resolve() : withdraw(publisher)
-    return stopping
-  }
+  // Reports a withdrawal failure, then rethrows it: announceService bounds and swallows the step.
+  const guarded = (inner: ServicePublisher): ServicePublisher => ({
+    // A publisher that reported a failure while it was being created is only released, never used.
+    publish: (service) => {
+      if (!failed) inner.publish(service)
+    },
+    unpublishAll: () =>
+      inner.unpublishAll().catch((error: unknown) => {
+        fail(discoveryErrorOf(error, 'send-respond'))
+        throw error
+      }),
+    destroy: () =>
+      inner.destroy().catch((error: unknown) => {
+        fail(discoveryErrorOf(error, 'socket'))
+        throw error
+      }),
+  })
 
   try {
-    publisher = options.createPublisher({ onError: fail })
-    // A publisher that reported a failure while it was being created is only released, never used.
-    if (!failed) {
-      const name = serviceName((options.hostname ?? osHostname)(), port)
-      publisher.publish({ name, type: 'theoclaw', port, txt: { path: '/control' } })
-      options.log(`LAN discovery: publishing "${name}" as _theoclaw._tcp`)
-    }
+    const publisher = guarded(options.createPublisher({ onError: fail }))
+    const name = serviceName((options.hostname ?? osHostname)(), port)
+    announcement = announceService({ type: 'theoclaw', name, port, txt: { path: '/control' }, host, publisher })
+    if (!failed) options.log(`LAN discovery: publishing "${name}" as _theoclaw._tcp`)
   } catch (error) {
     fail(discoveryErrorOf(error, 'publish'))
   }
-  constructing = false
-  if (failed) void stop()
-  return { stop }
+  if (failed) void announcement?.stop()
+  return announcement ?? NOTHING_ANNOUNCED
 }
 
 /** Withdraw the service, then close the listener; the listener closes even if the withdrawal throws. */

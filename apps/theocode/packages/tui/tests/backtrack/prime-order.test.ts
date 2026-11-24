@@ -20,7 +20,6 @@ import { primeBacktrack } from '../../src/backtrack/backtrack.js'
 
 vi.mock('@theocode/agent/session', () => ({
   readUserTurnPreviewsAsync: () => Promise.resolve(['first turn', 'second turn', 'third turn']),
-  legacyRootHint: () => undefined,
   forkSessionBeforeUserTurn: () => undefined,
 }))
 

@@ -42,9 +42,17 @@
       "types": "./dist/discovery/index.d.ts",
       "import": "./dist/discovery/index.js"
     },
+    "./discovery-bonjour": {
+      "types": "./dist/discovery-bonjour/index.d.ts",
+      "import": "./dist/discovery-bonjour/index.js"
+    },
     "./browser": {
       "types": "./dist/browser/index.d.ts",
       "import": "./dist/browser/index.js"
+    },
+    "./channel-assistant": {
+      "types": "./dist/channel-assistant/index.d.ts",
+      "import": "./dist/channel-assistant/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -70,10 +78,27 @@
     "undici": "7.30.1"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=5.32.0 <14"
+    "@theokit/sdk": ">=5.32.0 <14",
+    "bonjour-service": "1.4.4",
+    "@theokit/gateway": ">=0.30.0 <1",
+    "@theokit/gateway-agent": ">=0.5.0 <1"
+  },
+  "peerDependenciesMeta": {
+    "bonjour-service": {
+      "optional": true
+    },
+    "@theokit/gateway": {
+      "optional": true
+    },
+    "@theokit/gateway-agent": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@theokit/gateway": "0.30.0",
+    "@theokit/gateway-agent": "0.5.0",
     "@theokit/sdk": ">=5.32.0 <14",
+    "bonjour-service": "1.4.4",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"

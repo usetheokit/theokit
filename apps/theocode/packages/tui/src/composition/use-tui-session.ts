@@ -16,6 +16,8 @@ import { useCallback, useRef, useState } from 'react'
 import { useTurnElapsed } from '@theokit/tui'
 import { useAgent } from '@theokit/agents/client/react'
 
+import type { TurnBody } from '../agent-session/chat-transport.js'
+import { buildTurnBody, type TurnInput } from '../agent-session/turn-body.js'
 import { getTuiRoot } from '../agent-session/index.js'
 import type { ReasoningEffort } from '@theocode/agent/config'
 
@@ -30,7 +32,16 @@ export function useTuiSession() {
   const forkCurrentSession = ROOT.sessionFork
   const setSessionAndPersist = ROOT.pointToSession
   const currentSessionId = useCallback((): string => SESSION.session(), [SESSION])
-  const agent = useAgent<{ message: string }>(ROOT.transport)
+  const raw = useAgent<TurnBody>(ROOT.transport)
+  // Every send carries the turn's own options as the body, taken when the turn is dispatched: the
+  // persistent session values (effort, pinned model), the pending images (consumed here), and a
+  // model the caller named for this turn only.
+  const withTurn = (input: TurnInput): TurnBody => buildTurnBody(SESSION, input)
+  const agent = {
+    ...raw,
+    send: (input: TurnInput) => raw.send(withTurn(input)),
+    sendAndWait: (input: TurnInput) => raw.sendAndWait(withTurn(input)),
+  }
   const agentRef = useRef(agent)
   agentRef.current = agent
   const streaming = agent.status === 'streaming'

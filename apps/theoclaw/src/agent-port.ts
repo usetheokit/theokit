@@ -5,9 +5,9 @@ import type { InteractionUpdate } from '@theokit/sdk'
  * What TheoClaw needs of an agent, for both the chat replies and the `/control` turns: one
  * container builds the agents of both, so the port is declared once.
  *
- * The stream element is the narrow `{ type }`, not the presenter's or the bridge's `SdkMessage`:
- * those declare an index signature the SDK's message interfaces do not, so the SDK agent would
- * not be assignable to a port typed with them.
+ * The stream element is the bridge's `SdkMessage`, which has no index signature: a real SDK
+ * `Run` is assignable to `TurnRun` as it is, and the translators take its messages without a
+ * conversion.
  *
  * There is no `close` here on purpose. The request boundary (`createContainer().withAgent`) disposes
  * the agent through `Symbol.asyncDispose` when the turn ends. In `@theokit/sdk` 5.11 `close()` only
@@ -58,55 +58,6 @@ export interface GoalRunResult {
   readonly finalResponse?: string | undefined
 }
 
-/**
- * One event of the run's timeline (`run.events()`), narrowed to its kind. Typed narrowly for the
- * same reason as the stream element: the bridge's `SdkTimelineEvent` carries `SdkMessage`, whose
- * index signature the SDK's own event type does not declare.
- */
-export type TurnTimelineEvent =
-  | { readonly kind: 'message'; readonly message: SdkMessageLike; readonly textAlreadyStreamed?: boolean }
-  | { readonly kind: 'delta'; readonly update: InteractionUpdate }
-
-/** What the translators read of an SDK message: its discriminant. The SDK's own messages have it. */
-export interface SdkMessageLike {
-  readonly type: string
-}
-
-const SDK_MESSAGE_TYPES: ReadonlySet<string> = new Set([
-  'request',
-  'status',
-  'tool_call',
-  'thinking',
-  'assistant',
-  'system',
-  'user',
-  'task',
-  'object_delta',
-])
-
-/** Whether `message` is one of the bridge's `SdkMessage` kinds; the translators read the rest untrusted. */
-function isSdkMessage(message: SdkMessageLike): message is SdkMessage {
-  return SDK_MESSAGE_TYPES.has(message.type)
-}
-
-/** The stand-in for a message of a kind the bridge does not know: an empty assistant message, which translates to nothing. */
-const UNKNOWN_MESSAGE: SdkMessage = { type: 'assistant', message: { content: [] } }
-
-/** A stream message as the bridge's `SdkMessage` (no cast); a kind the bridge does not know becomes an empty message. */
-export function toSdkMessage(message: SdkMessageLike): SdkMessage {
-  return isSdkMessage(message) ? message : UNKNOWN_MESSAGE
-}
-
-/** A timeline event as the bridge's `SdkTimelineEvent`, built field by field (no cast). */
-export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
-  if (event.kind === 'delta') return { kind: 'delta', update: event.update }
-  return {
-    kind: 'message',
-    message: toSdkMessage(event.message),
-    ...(event.textAlreadyStreamed === undefined ? {} : { textAlreadyStreamed: event.textAlreadyStreamed }),
-  }
-}
-
 /** The events of `events` that are `AgentStreamEvent`s, typed as such; a malformed one is dropped. */
 export function typedEvents<T extends { readonly type: string }>(events: readonly T[]): AgentStreamEvent[] {
   const typed: AgentStreamEvent[] = []
@@ -115,7 +66,7 @@ export function typedEvents<T extends { readonly type: string }>(events: readonl
 }
 
 export interface TurnRun {
-  stream(): AsyncIterable<SdkMessageLike>
+  stream(): AsyncIterable<SdkMessage>
   /**
    * How the run ended; a failed one may carry the SDK's error code. `result` is the final answer,
    * which a `delegate_all` worker hands back to its parent (B-386). `usage` and `cost` are the SDK
@@ -132,5 +83,5 @@ export interface TurnRun {
   /** Move the run to cancelled and stop its in-flight tool calls; the SDK `Run` always has it (plan D2). */
   cancel(): Promise<void>
   /** Messages and live deltas in the order the loop produced them; what a session turn streams. */
-  events?(): AsyncIterable<TurnTimelineEvent>
+  events?(): AsyncIterable<SdkTimelineEvent>
 }

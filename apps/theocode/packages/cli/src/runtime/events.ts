@@ -5,6 +5,7 @@ import {
   type AgentOutputEvent,
 } from '@theokit/presenter'
 import type { AgentTurnMetadata } from '@theokit/agents/bridge'
+import { changedPathsOf, turnDiff } from '@theokit/agents/presets'
 
 export interface ExecIo {
   out: (line: string) => void
@@ -102,8 +103,6 @@ function blendedTotal(u: Record<string, number>): number {
 
 import { toolLine } from './tool-line.js'
 import type { ToolChunk } from './tool-line.js'
-import { changedPaths } from './changed-paths.js'
-import { turnDiff } from './turn-diff.js'
 
 /**
  * What the framework's turn result hands the processor at the end: the final message, the usage and
@@ -127,6 +126,9 @@ export interface ExecProcessor {
  * buffered when a call starts was a preamble, which the human surface prints before the call.
  * Stdout carries ONLY the final message, so preambles never join it.
  */
+
+/** TheoCode's tool names, in the vocabulary `changedPathsOf` reads. */
+const TOOL_ALIASES = { Edit: 'edit_file', ApplyPatch: 'apply_patch' } as const
 
 export function createHumanProcessor(
   io: ExecIo,
@@ -181,7 +183,10 @@ export function createHumanProcessor(
       // #105 — after the answer, before the accounting line: what the tree now holds, from git.
       // The prose above is the agent's claim; this is the artifact. Silent when nothing changed.
       if (git !== undefined) {
-        const diff = turnDiff(git, changedPaths(writes))
+        const diff = turnDiff(changedPathsOf(writes, { aliases: TOOL_ALIASES }), {
+          cwd: process.cwd(),
+          run: git,
+        })
         if (diff !== undefined) io.err(diff)
       }
       const u = toCodexUsage(extra.usage)

@@ -1,5 +1,4 @@
-import { join } from 'node:path'
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 
 import { dirname } from 'node:path'
 
@@ -56,27 +55,6 @@ export function sessionsFrom(
 
 export async function listSessions(cwd: string = process.cwd()): Promise<SessionInfo[]> {
   return sessionsFrom(await listAgents(cwd))
-}
-
-// Kept local rather than `transcriptRootHint` from `@theokit/agents/session`: the framework's message
-// text differs ("No sessions under …"), and callers and tests show this one.
-export function legacyRootHint(found: number, legacyRoot: string): string | undefined {
-  if (found > 0) return undefined
-  const newRoot = process.env.THEOKIT_HOME?.trim()
-  if (newRoot === undefined || newRoot.length === 0) return undefined
-  if (newRoot === legacyRoot) return undefined
-  let projects: string[]
-  try {
-    projects = readdirSync(join(legacyRoot, 'projects'))
-  } catch {
-    return undefined
-  }
-  if (projects.length === 0) return undefined
-  return (
-    `No sessions in ${newRoot} (THEOKIT_HOME). ` +
-    `There are ${projects.length} project(s) with sessions under the previous root ${legacyRoot} — ` +
-    `unset THEOKIT_HOME to see them again, or move the contents.`
-  )
 }
 
 export function archiveSession(agentId: string): Promise<void> {
