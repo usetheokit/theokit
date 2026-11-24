@@ -57,7 +57,7 @@ export interface ReplyHandlerOptions {
    * composition root's chat `withAgent`.
    */
   readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
-  /** Start the event's session afresh; `SessionAgents.reset`. */
+  /** Start the event's session afresh; `ChatSessionPool.reset`. */
   readonly reset: (event: MessageEvent) => Promise<void>
   /** `/think <level>`: set the session's thinking level; without it, `/think` is an ordinary message. */
   readonly think?: (event: MessageEvent, level: ThinkingLevel) => void
@@ -187,7 +187,7 @@ function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
 /**
  * One agent turn on the event's prompt, and exactly one reply to the origin (FR-004, D8), by the
  * package's `createAgentHandler`. A failed turn still replies, then throws so the runner fires
- * `on_error`. The agent is the session's, owned by `SessionAgents`: the request boundary of
+ * `on_error`. The agent is the session's, owned by the chat session pool: the request boundary of
  * `withAgent` stays open until the handler releases the lease, after the reply. The package's
  * hooks carry the rest: `onTurnStart` (steering, advisor), `decorateReply` (the `/usage` footer)
  * and `onTurnEnd` (advisor history, compaction, a broadcast group's thread and fan-out).
@@ -414,7 +414,7 @@ function channelCommands(options: ReplyHandlerOptions) {
  * message's session. In a broadcast group's member channel the turn carries the group's thread,
  * runs after the group's earlier turns, and its answer also reaches every other member; the
  * exchange joins the thread only once the origin was answered. The agent is never closed or
- * disposed here: it is the session's, owned by `SessionAgents`.
+ * disposed here: it is the session's, owned by the chat session pool.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
   const registry = channelCommands(options)
