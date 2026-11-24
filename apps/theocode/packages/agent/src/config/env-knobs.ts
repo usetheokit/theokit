@@ -129,7 +129,7 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   },
   {
     name: ENV_THEOKIT_HOME,
-    reader: 'packages/agent/src/session/session-ops.ts:legacyRootHint',
+    reader: 'packages/tui/src/backtrack/backtrack.ts, packages/tui/src/commands/session-commands.ts (transcriptRootHint from @theokit/agents/session)',
     default: '~/.theokit',
     effect:
       'Root of the runtime state, including session transcripts. Changing it moves `/sessions`, `/backtrack` and `sessions gc` along with it.',
