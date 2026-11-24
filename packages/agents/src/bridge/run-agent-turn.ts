@@ -320,13 +320,24 @@ async function runTurn(
   return finishedOutcome(result)
 }
 
+export interface CompleteFromTurnOptions {
+  /**
+   * A run the SDK ends as cancelled: `'throw'` (default) fails the request, `'complete'` returns the
+   * text streamed so far.
+   */
+  onCancelled?: 'throw' | 'complete'
+  /** Called with the reason of a failed turn (or `the run ended with status cancelled`), before it throws. */
+  onFailure?: (reason: string) => void
+}
+
 /**
  * The `complete` port of `createOpenAICompatibleRoutes` over one turn per request: the transcript
- * is the message, the `text_delta` text joined is the reply. A failed or cancelled turn throws,
- * which the route answers with 502.
+ * is the message, the `text_delta` text joined is the reply. A failed turn throws, which the route
+ * answers with 502; so does a cancelled one unless `onCancelled` is `'complete'`.
  */
-export function completeFromTurn(
-  withAgent: <R>(work: (agent: SdkAgentHandle<SdkMessage>) => Promise<R>) => Promise<R>,
+export function completeFromTurn<A extends AgentTurnAgent = SdkAgentHandle<SdkMessage>>(
+  withAgent: <R>(work: (agent: A) => Promise<R>) => Promise<R>,
+  options: CompleteFromTurnOptions = {},
 ): OpenAICompatibleRoutesOptions['complete'] {
   return async (
     request: OpenAIChatRequest,
@@ -348,8 +359,15 @@ export function completeFromTurn(
         ...(signal === undefined ? {} : { signal }),
       }),
     )
-    if (!outcome.ok) throw new Error(outcome.reason)
-    if (outcome.cancelled === true) throw new Error('the run ended with status cancelled')
+    if (!outcome.ok) {
+      options.onFailure?.(outcome.reason)
+      throw new Error(outcome.reason)
+    }
+    if (outcome.cancelled === true && options.onCancelled !== 'complete') {
+      const reason = 'the run ended with status cancelled'
+      options.onFailure?.(reason)
+      throw new Error(reason)
+    }
     const usage = outcome.usage
     return {
       text: text.join(''),

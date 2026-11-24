@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The tool route uses the bridge's default `validateAgainstInputSchema`; `validateToolArgs` is gone, and a wrong argument type still answers 400 with `<path>: <message>`. `completeWith` stays, because `runTheoClawTurn` masks the model id and records usage, and an SDK-cancelled run on `/v1/chat/completions` stays a completion (#2951).
 - The computer live test tells the model the code is the six capital characters in the large heading, and renders the typed text small and monospace, so the describer no longer reports the typed word as the code (#2882).
 - The live authorization tests count a finished run once even when both the reply handler and the gateway handler wait on it, and the TUI live test matches the interruption notice regardless of case (#2876).
 - The TUI feeds `useAgentStream` from the framework's `createControlStreamSource`, replacing its own frame conversion.
