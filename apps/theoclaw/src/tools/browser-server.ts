@@ -2,12 +2,11 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
+import { browserMcpServer, type BrowserLauncher } from '@theokit/host/browser'
 import type { McpServerConfig } from '@theokit/sdk'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import type { BrowserLauncher } from './shared-browser.js'
 
 /** What the browser server is started from, resolved once at start. */
 export interface BrowserSettings {
@@ -29,18 +28,6 @@ export interface BrowserDeps {
 type Env = Readonly<Record<string, string | undefined>>
 
 const INSTALL_HINT = 'run `pnpm --filter theoclaw run browser:install`'
-/**
- * The wrapper the server runs under (`tools/browser-proxy.mjs`): it leaves `browser_run_code_unsafe`
- * out of the tool list and owns the server's file root. `src/tools` and `dist/tools` are both two
- * levels under the app, so one relative path serves the tests and the built process.
- */
-const PROXY_PATH = fileURLToPath(new URL('../../tools/browser-proxy.mjs', import.meta.url))
-/**
- * The server's browser config (`tools/browser-config.json`). `--browser chromium` would select the
- * `chrome-for-testing` channel, the full Chromium build, while `browser:install` and the live job
- * install `chromium-headless-shell`; the file names that build's channel instead (issue #1417).
- */
-const CONFIG_PATH = fileURLToPath(new URL('../../tools/browser-config.json', import.meta.url))
 /** The directory names Playwright gives a Chromium build: the full browser or the headless shell. */
 const CHROMIUM_BUILD = /^chromium(_headless_shell)?-\d+$/
 
@@ -126,20 +113,15 @@ export function browserLine(settings: BrowserSettings | undefined): string {
 }
 
 /**
- * The stdio server a `/control` agent spawns: headless Chromium on a fresh profile per session,
- * started through the wrapper, which offers every default tool but `browser_run_code_unsafe` and
- * runs the server in its own temporary directory (review round 1, F-dom-1, F-dom-2). It carries
- * neither `env` nor `envPolicy`, so the SDK's `inherit-scrubbed` default applies (NFR-004).
+ * The stdio server a `/control` agent spawns, built by `browserMcpServer` of `@theokit/host/browser`:
+ * headless Chromium on a fresh profile per session, or the shared browser when an endpoint is known.
+ * The host's proxy leaves `browser_run_code_unsafe` out of the tool list and owns the server's file
+ * root. It carries neither `env` nor `envPolicy`, so the SDK's `inherit-scrubbed` default applies (NFR-004).
  */
 export function browserServer(settings: BrowserSettings): McpServerConfig {
-  return {
-    type: 'stdio',
-    command: process.execPath,
-    args:
-      settings.cdpEndpoint === undefined
-        ? [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH]
-        : [PROXY_PATH, settings.cliPath, '--cdp-endpoint', settings.cdpEndpoint],
-    // One step's calls run in the order listed: a wait or snapshot must not run while a navigate loads.
-    sequential: true,
-  }
+  const deps = { resolveCli: () => settings.cliPath }
+  return browserMcpServer(
+    settings.cdpEndpoint === undefined ? { mode: 'isolated' } : { mode: 'shared', cdpEndpoint: settings.cdpEndpoint },
+    deps,
+  )
 }

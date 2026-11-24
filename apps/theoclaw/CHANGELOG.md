@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The browser server and the shared browser come from `@theokit/host/browser` (`browserMcpServer`, `createSharedBrowser`); `src/tools/shared-browser.ts`, `tools/browser-proxy.mjs` and `tools/browser-config.json` are gone. The proxy's temporary directories are named `theokit-browser-*` (the host proxy now also serializes calls and reports an unreadable snapshot, as the app's did), and its error messages no longer start with `theoclaw:`. `build:sea` is unchanged: the executable runs `process.execPath` with a script path for the browser server, which a SEA binary cannot do, before and after this change (#2910).
 - `daemon install|uninstall|status|restart` run on `daemonCommands` from `@theokit/host/service`; the app's own linger check (`loginctl`) is gone, and the output and exit codes are the same (#2914).
 - The stored import (`writeImport`, `readImport`, `import-store.ts`) lives in `@theokit/agents/foreign-setup` as `writeForeignImport` and `readForeignImport`; the on-disk layout is unchanged, and `ForeignImportError` maps to `TheoClawConfigError` in `import-start.ts` (#2928).
 - `startComposed` registers its subsystems (browser, app, ACP sessions, schedule store, scheduler, MCP events, MCP relay) as `createAppHost` services where they start: the nine-step `teardown` and the two hand-written rollback blocks are gone, and a failed start, a signal and `close()` share one reverse-order, once-only stop (#2911).
