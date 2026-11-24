@@ -138,6 +138,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
     const env: Record<string, string> = {}
     for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
     env[SESSION_ENV] = input.sessionId
+    env.CLAUDE_PROJECT_DIR = input.cwd
     let runnerWarning: string | undefined
     try {
       const [outcome] = await runHostHooks('on_session_start', [framework], {

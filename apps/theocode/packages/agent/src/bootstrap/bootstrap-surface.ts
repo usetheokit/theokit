@@ -7,7 +7,6 @@ import {
 
 import { installAuthHome } from '../auth/index.js'
 import { installConfiguredHome, resolveEffectiveConfig } from '../config/index.js'
-import { installClaudeProjectDir } from '../hooks/index.js'
 
 export interface BootstrapSurfaceOptions {
   readonly env: Record<string, string | undefined>
@@ -38,7 +37,9 @@ export const THEOCODE_PROTECTED_ENV_KEYS: readonly string[] = [
  * and refused (key names only), the basis for labelling where a credential came from. Await it: each call builds its own
  * framework bootstrap, so one call per entry runs every step exactly once.
  */
-export async function bootstrapSurface(opts: BootstrapSurfaceOptions): Promise<ProjectEnvRecord | undefined> {
+export async function bootstrapSurface(
+  opts: BootstrapSurfaceOptions,
+): Promise<ProjectEnvRecord | undefined> {
   const { env, cwd, home } = opts
   const onWarn = opts.onWarn ?? ((m: string) => process.stderr.write(`${m}\n`))
   const ctx: BootstrapContext = { env, cwd, home }
@@ -53,8 +54,6 @@ export async function bootstrapSurface(opts: BootstrapSurfaceOptions): Promise<P
     },
     // `installAuthHome` (not `ensureAuthHome`): this must WRITE the variable (B-034).
     { name: 'auth-home', run: () => installAuthHome(env, home) },
-    // Hooks need CLAUDE_PROJECT_DIR — see `claude-project-dir.ts`.
-    { name: 'claude-project-dir', run: () => installClaudeProjectDir(env, cwd) },
   ]).run(ctx)
   return ctx.projectEnv
 }
