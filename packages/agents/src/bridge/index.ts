@@ -98,6 +98,7 @@ export { withTypedStream } from './handle-wrappers.js'
 export {
   applyPosture,
   approvalPostureFor,
+  onAskForPolicy,
   type ApprovalPolicy,
   type ApprovalPosture,
 } from './approval-posture.js'
