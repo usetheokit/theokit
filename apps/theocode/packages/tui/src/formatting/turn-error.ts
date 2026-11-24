@@ -23,21 +23,6 @@ function textWithCauses(err: Error): string {
   return parts.join(' | ')
 }
 
-const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 529])
-
-// The framework reads `metadata.statusCode`; plain `status` / `statusCode` fields stay a TheoCode fallback.
-function hasTransientStatus(err: Error): boolean {
-  let current: unknown = err
-  for (let i = 0; i < 8 && current instanceof Error; i += 1) {
-    const e = current as { status?: unknown; statusCode?: unknown; cause?: unknown }
-    for (const v of [e.status, e.statusCode]) {
-      if (typeof v === 'number' && TRANSIENT_STATUSES.has(v)) return true
-    }
-    current = e.cause
-  }
-  return false
-}
-
 const RETRY_HINT = '/retry resends the last message'
 
 function classifyTurnError(err: Error): TurnErrorView {
@@ -47,7 +32,7 @@ function classifyTurnError(err: Error): TurnErrorView {
   // The framework classifier ignores message text by design; TheoCode keeps this fallback for
   // untyped errors from providers that only put the status or socket code in the message.
   const text = textWithCauses(err)
-  if (NETWORK_SHAPE.test(text) || STATUS_SHAPE.test(text) || hasTransientStatus(err))
+  if (NETWORK_SHAPE.test(text) || STATUS_SHAPE.test(text))
     return { kind: 'transient', message, hint: RETRY_HINT }
   return { kind: 'fatal', message }
 }
