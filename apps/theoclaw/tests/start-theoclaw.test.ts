@@ -183,7 +183,7 @@ describe('startTheoClaw', () => {
     expect(order).toEqual(['scheduler', 'fake', 'acp sessions', 'app'])
   })
 
-  it('a signal while the schedule database opens stops the runners and rejects the start cleanly', async () => {
+  it('a signal while the schedule database opens waits for the start, then stops the runners', async () => {
     const release = deferred<void>()
     const { adapters, builders } = fakeBuilders()
     const signals = new EventEmitter()
@@ -197,7 +197,9 @@ describe('startTheoClaw', () => {
     signals.emit('SIGTERM')
     release.resolve()
 
-    await expect(outcome).resolves.toMatchObject({ message: 'theoclaw: shut down while starting' })
+    const app = await starting
+    expect(app.close).toBeTypeOf('function')
+    expect(await outcome).toBeUndefined()
     await waitFor(() => exit.mock.calls.length === 1, 1000, 'exit after the shutdown')
     expect(exit).toHaveBeenCalledWith(0)
     expect([...adapters.values()].map((adapter) => adapter.disconnects)).toEqual([1, 1])
