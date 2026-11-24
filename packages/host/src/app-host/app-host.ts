@@ -12,7 +12,14 @@ export interface AppHostOptions {
   readonly signals?: SignalSource
   /** Called after a signal-driven close. Omitted: nothing is called. */
   readonly exit?: (code: number) => void
-  readonly onError?: (step: string, error: unknown) => void
+  /** Attach the signal listeners at creation instead of at start(). Default false. */
+  readonly attachSignalsEarly?: boolean
+  /** `detail.signal` names the signal for a repeated-signal report (step `signal`). */
+  readonly onError?: (
+    step: string,
+    error: unknown,
+    detail?: { signal?: 'SIGINT' | 'SIGTERM' },
+  ) => void
   /** Whole-teardown watchdog in milliseconds, default 10_000. */
   readonly stopTimeoutMs?: number
 }
@@ -36,6 +43,8 @@ export interface AppHost {
   start(): Promise<void>
   /** Stops started services in reverse order, once; later calls return the same promise. */
   close(): Promise<AppHostCloseResult>
+  /** Remove the signal listeners without stopping anything, for good. Idempotent. */
+  detachSignals(): void
 }
 
 interface Entry {
@@ -69,27 +78,59 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   let teardownPromise: Promise<AppHostCloseResult> | undefined
   let closePromise: Promise<AppHostCloseResult> | undefined
   let signalled = false
+  let startBegun = false
+  let attached = false
+  let detached = false
 
-  const report = (step: string, error: unknown): void => {
+  const report = (
+    step: string,
+    error: unknown,
+    detail?: { signal?: 'SIGINT' | 'SIGTERM' },
+  ): void => {
     try {
-      options.onError?.(step, error)
+      if (detail === undefined) options.onError?.(step, error)
+      else options.onError?.(step, error, detail)
     } catch {
       // A throwing reporter must not interrupt teardown.
     }
   }
 
-  const onSignal = (): void => {
+  const onSignal = (signal: 'SIGINT' | 'SIGTERM'): void => {
     if (signalled) {
-      report('signal', new Error('Shutdown already in progress, signal ignored'))
+      report('signal', new Error('Shutdown already in progress, signal ignored'), { signal })
       return
     }
     signalled = true
-    void close().then((result) => exit?.(result.ok ? 0 : 1))
+    // A start requested but not yet begun runs first, so its services are started and then stopped.
+    const ready =
+      startPromise !== undefined && !startBegun
+        ? startPromise.then(
+            () => undefined,
+            () => undefined,
+          )
+        : Promise.resolve()
+    void ready.then(close).then((result) => exit?.(result.ok ? 0 : 1))
+  }
+
+  const listeners = {
+    SIGINT: () => {
+      onSignal('SIGINT')
+    },
+    SIGTERM: () => {
+      onSignal('SIGTERM')
+    },
+  }
+
+  const attachListeners = (): void => {
+    if (signals === undefined || attached || detached) return
+    attached = true
+    for (const name of SIGNALS) signals.on(name, listeners[name])
   }
 
   const removeListeners = (): void => {
-    if (signals === undefined) return
-    for (const name of SIGNALS) signals.off(name, onSignal)
+    if (signals === undefined || !attached) return
+    attached = false
+    for (const name of SIGNALS) signals.off(name, listeners[name])
   }
 
   /** Stops the started entries in reverse order under one watchdog. */
@@ -140,7 +181,8 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const teardown = (): Promise<AppHostCloseResult> => (teardownPromise ??= runTeardown())
 
   const runStart = async (): Promise<void> => {
-    if (signals !== undefined) for (const name of SIGNALS) signals.on(name, onSignal)
+    startBegun = true
+    attachListeners()
     for (const entry of entries) {
       if (closePromise !== undefined) return
       try {
@@ -167,7 +209,13 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     return closePromise
   }
 
+  if (options.attachSignalsEarly === true) attachListeners()
+
   return {
+    detachSignals(): void {
+      detached = true
+      removeListeners()
+    },
     service<T>(
       name: string,
       start: () => Promise<T> | T,
