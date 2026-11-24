@@ -1,4 +1,8 @@
-import { readFileSync, statSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { runCli } from '../src/cli.js'
 import { GrantStore, grantsPath } from '../src/mcp-relay/grants.js'
@@ -56,4 +60,26 @@ describe('mcp-relay', () => {
     expect(await runCli(['mcp-relay', 'smoke'], v.io)).toBe(0)
     expect(v.stdout()).toContain('mcp-relay smoke: ok')
   })
+
+  it('keeps every grant when two processes write the same file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'theoclaw-grants-'))
+    try {
+      const path = join(dir, 'state', 'grants.json')
+      const writer = fileURLToPath(new URL('./support/grants-writer.ts', import.meta.url))
+      const run = (prefix: string): Promise<number | null> =>
+        new Promise((done, fail) => {
+          const child = spawn(process.execPath, ['--import', 'tsx', writer, path, prefix, '50'], {
+            cwd: fileURLToPath(new URL('..', import.meta.url)),
+            stdio: 'inherit',
+          })
+          child.on('error', fail)
+          child.on('exit', done)
+        })
+      expect(await Promise.all([run('a'), run('b')])).toEqual([0, 0])
+      const names = new GrantStore(path).load().list().map((g) => g.name)
+      expect(new Set(names).size).toBe(100)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 120_000)
 })

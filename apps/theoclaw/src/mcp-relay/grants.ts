@@ -1,10 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
-import { replaceFileAtomic } from '@theokit/sdk/persistence'
+import { replaceFileAtomic, withFileLock } from '@theokit/sdk/persistence'
 
-import { serializedPerFile } from '../serial-queue.js'
 import { BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from '../tools/tool-names.js'
 
 /** The tools a grant gets when none are named: read-only ones only. */
@@ -79,7 +78,8 @@ export class GrantStore {
     }
     // Load, change and write as one step per file, so another store on the same file in this
     // process (each CLI command makes its own) never writes back an older snapshot.
-    await serializedPerFile(this.path, async () => {
+    mkdirSync(dirname(this.path), { recursive: true })
+    await withFileLock(resolve(this.path), async () => {
       this.load()
       if (this.grants.some((g) => g.name === name && g.revokedAt === undefined)) {
         throw new GrantError(`an active grant named "${name}" exists`)
@@ -92,7 +92,8 @@ export class GrantStore {
 
   /** Revokes the active grant with this name or id. */
   async revoke(nameOrId: string): Promise<Grant> {
-    return serializedPerFile(this.path, async () => {
+    mkdirSync(dirname(this.path), { recursive: true })
+    return withFileLock(resolve(this.path), async () => {
       this.load()
       const index = this.grants.findIndex(
         (g) => g.revokedAt === undefined && (g.name === nameOrId || g.id === nameOrId),
