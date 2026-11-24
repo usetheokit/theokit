@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { approvalGates } from '../../src/chat/chat.js'
-import { askGateFor } from '../../src/composition/agent-spec.js'
+import { onAskForPolicy } from '@theokit/agents'
+import { refusalMessage } from '../../src/composition/agent-spec.js'
 
 /**
  * #945 — a tool no `permissions` rule matches is handed to the approval card it already has.
@@ -18,8 +19,8 @@ import { askGateFor } from '../../src/composition/agent-spec.js'
  */
 const gated = new Set(Object.keys(approvalGates({ writes: true, searchConfigured: true })))
 
-async function verdict(policy: Parameters<typeof askGateFor>[0], tool: string) {
-  return askGateFor(policy, gated)(tool, {})
+async function verdict(policy: Parameters<typeof onAskForPolicy>[0], tool: string) {
+  return onAskForPolicy(policy, gated, { refusal: refusalMessage })(tool, {})
 }
 
 describe('the ask verdict under an approval policy that asks', () => {

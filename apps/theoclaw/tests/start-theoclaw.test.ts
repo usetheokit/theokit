@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 
+import { createAppHost } from '@theokit/host/app-host'
+import { StorageManager, type PoolLike } from 'theokit/server/storage'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 import { startTheoClaw } from '../src/composition.js'
@@ -133,6 +135,74 @@ describe('startTheoClaw', () => {
     )
     expect(signals.listenerCount('SIGTERM')).toBe(0)
     await occupied.close()
+  })
+
+  it('a listen that fails stops each runner once, and closing again stops nothing more', async () => {
+    const { adapters, builders } = fakeBuilders()
+    const signals = new EventEmitter()
+    const listen: typeof listenControlPlane = () => Promise.reject(new TheoClawBindError('refused to bind'))
+
+    await expect(startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit: vi.fn(), listen, streams: [capturingStream()] })).rejects.toThrow(TheoClawBindError)
+
+    await waitFor(() => adapters.size === 2 && [...adapters.values()].every((adapter) => adapter.disconnects === 1), 1000, 'each runner to be stopped')
+    await new Promise((resolve) => setImmediate(resolve))
+    expect([...adapters.values()].map((adapter) => adapter.disconnects)).toEqual([1, 1])
+    expect(signals.listenerCount('SIGTERM')).toBe(0)
+    expect(signals.listenerCount('exit')).toBe(0)
+  })
+
+  it('a listen that fails stops the services once each, the last started first', async () => {
+    const order: string[] = []
+    const { adapters, builders } = fakeBuilders()
+    const disconnect = vi.spyOn(FakeAdapter.prototype, 'disconnect').mockImplementation(async () => void order.push('channel loop'))
+    const pool: PoolLike = { query: () => Promise.resolve({ rows: [] }), end: () => Promise.resolve().then(() => void order.push('schedule store')) }
+    const listen: typeof listenControlPlane = () => Promise.reject(new TheoClawBindError('refused to bind'))
+    try {
+      const env = { ...TELEGRAM_AND_LINE, THEOCLAW_DATABASE: 'postgres://claw:pw@db.example:5432/claw' } // trufflehog:ignore -- fake DSN
+      await expect(
+        startTheoClaw({ cwd: TOOL_CWD, env, agentFactory: noAgent, builders, signals: new EventEmitter(), exit: vi.fn(), listen, streams: [capturingStream()], database: { makePool: () => pool, manager: new StorageManager() } }),
+      ).rejects.toThrow(TheoClawBindError)
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(adapters.size).toBe(2)
+      // Registered app, then store: the store is stopped first, and each runner once.
+      expect(order[0]).toBe('schedule store')
+      expect(order.filter((step) => step === 'schedule store')).toHaveLength(1)
+      expect(order.length).toBeGreaterThan(1)
+      expect(order.slice(1).every((step) => step === 'channel loop')).toBe(true)
+    } finally {
+      disconnect.mockRestore()
+    }
+  })
+
+  it('a service registered between two others is stopped between them, with no stop list to edit', async () => {
+    const order: string[] = []
+    const inserted = createAppHost()
+    for (const name of ['app', 'acp sessions', 'fake', 'scheduler']) inserted.service(name, () => undefined, () => void order.push(name))
+    await inserted.start()
+    await inserted.close()
+    expect(order).toEqual(['scheduler', 'fake', 'acp sessions', 'app'])
+  })
+
+  it('a signal while the schedule database opens waits for the start, then stops the runners', async () => {
+    const release = deferred<void>()
+    const { adapters, builders } = fakeBuilders()
+    const signals = new EventEmitter()
+    const exit = vi.fn()
+    const pool: PoolLike = { query: async () => (await release.promise, { rows: [] }) }
+    const env = { ...TELEGRAM_AND_LINE, THEOCLAW_DATABASE: 'postgres://claw:pw@db.example:5432/claw' } // trufflehog:ignore -- fake DSN
+    const starting = startTheoClaw({ cwd: TOOL_CWD, env, agentFactory: noAgent, builders, signals, exit, streams: [capturingStream()], database: { makePool: () => pool, manager: new StorageManager() } })
+    const outcome = starting.then(() => undefined, (error: unknown) => error)
+    await waitFor(() => adapters.size === 2 && [...adapters.values()].every((a) => a.connects === 1), 1000, 'both runners to connect')
+
+    signals.emit('SIGTERM')
+    release.resolve()
+
+    const app = await starting
+    expect(app.close).toBeTypeOf('function')
+    expect(await outcome).toBeUndefined()
+    await waitFor(() => exit.mock.calls.length === 1, 1000, 'exit after the shutdown')
+    expect(exit).toHaveBeenCalledWith(0)
+    expect([...adapters.values()].map((adapter) => adapter.disconnects)).toEqual([1, 1])
   })
 
   it('masks the THEOKIT_API_KEY model key', async () => {
