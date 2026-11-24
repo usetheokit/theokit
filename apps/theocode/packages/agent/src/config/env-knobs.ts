@@ -183,12 +183,14 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   },
   {
     name: ENV_SEARCH_API_URL,
-    reader: 'packages/agent/src/chat/chat.ts:webSearchConfigured',
+    reader: 'packages/agent/src/chat/chat.ts:buildChatAgent',
     default: '—',
     effect:
-      'The web-search provider endpoint. Absent or misspelt, `web_search` is not declared to the ' +
-      'model at all and its approval entry is omitted — the capability disappears silently, which ' +
-      'looks identical to a model that chose not to search.',
+      'The generic web-search provider endpoint; it needs `THEOKIT_SEARCH_API_KEY` too. `BRAVE_API_KEY`, ' +
+      '`TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` also enable search, and `THEOKIT_SEARCH=off` ' +
+      'disables it. With no provider, `web_search` is not declared to the model at all and its ' +
+      'approval entry is omitted — the capability disappears silently, which looks identical to a ' +
+      'model that chose not to search.',
   },
   {
     name: ENV_OPENROUTER_API_KEY,

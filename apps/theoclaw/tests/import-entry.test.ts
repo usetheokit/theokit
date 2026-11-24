@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { readImport } from '../src/migration/import-store.js'
+import { readForeignImport as readImport } from '@theokit/agents/foreign-setup'
 import { copyFixture, FIXTURE_SECRETS } from './migration-fixtures.js'
 
 /** The built import entry; `pnpm --filter theoclaw run build` writes it. */
