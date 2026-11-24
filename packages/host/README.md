@@ -202,6 +202,28 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `createChannelAssistant` (`@theokit/host/channel-assistant`)
+
+Turns channels, an agent factory and an access policy into a running chat assistant. Needs the optional peers `@theokit/gateway` and `@theokit/gateway-agent`.
+
+```ts
+const assistant = createChannelAssistant({
+  channels: [{ platform: 'telegram', build: () => adapter, descriptor }],
+  agent: ({ key, agentId, context }) => buildAgent(key), // feeds Agent.sessionPool
+  access: { owners, dm: 'pairing', pairing, isAuthenticated },
+  hooks: [appHook], // after the access policy, before `help`
+  help: helpHook,
+  reply: { decorateReply, onTurnEnd },
+  events: { agent: () => toolLessAgent() }, // assistant.withEventAgent(work)
+  secrets: [token], // masked in every reply and written line
+})
+await assistant.start() // `background: true` returns before the platforms connect
+assistant.router // webhook routes
+await assistant.close() // channels stop, then session agents are disposed; once
+```
+
+Hook order is `preHooks`, access policy, `hooks`, `help`.
+
 ## `applyOutboundProxy` and `validateProxy`
 
 ```ts

@@ -9,7 +9,7 @@ import type { BuiltChannel, ChannelDescriptor, PairingStore, PlatformName } from
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
-import { createContainer } from './agent-container.js'
+import { type AgentComposition, createContainer } from './agent-container.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
 import {
   type AuthorizationPolicy,
@@ -167,6 +167,8 @@ export interface TheoClawOptions {
 export interface ComposedTheoClaw {
   readonly loop: ChannelLoop
   readonly router: (request: Request) => Promise<Response>
+  /** The one request boundary of every event run: a fresh tool-less agent per run. */
+  readonly withEventAgent: EventWithAgent
   /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
   readonly sessions: SessionAgents
   /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
@@ -177,18 +179,25 @@ export interface ComposedTheoClaw {
   readonly memory?: MemoryWiring | undefined
 }
 
+type EventWithAgent = AgentComposition<TurnAgent>['withAgent']
+
+/** The one boundary every event run (trigger route, e-mail trigger, MCP event) opens: a fresh tool-less agent per run. */
+function eventAgentBoundary(options: Pick<TheoClawOptions, 'env' | 'triggerAgentFactory'>): EventWithAgent {
+  const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
+  return createContainer<TurnAgent>({ factory }).withAgent
+}
+
 /** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter, its reply masked (B-398 FR-006). */
 function composedTriggers(
-  options: TheoClawOptions,
+  withAgent: EventWithAgent,
   events: EventSettings,
   loop: ChannelLoop,
   write: (line: string) => void,
   secrets: readonly string[],
 ): ReadonlyMap<string, WebhookRoute> {
-  const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
   return triggerRoutes(events.triggers, {
     adapterFor: (platform) => loop.started.get(platform)?.adapter,
-    withAgent: createContainer<TurnAgent>({ factory }).withAgent,
+    withAgent,
     write,
     secrets,
   })
@@ -279,12 +288,13 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       await adapter.sendMessage({ channel: event.channel, text })
     },
   })
+  const withEventAgent = eventAgentBoundary(options)
   const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   reportUnservedPlatforms(skipped, configured.filter((entry) => entry.platform !== 'email' || events.emailTrigger === undefined), policy, options.write)
   const emailTrigger = events.emailTrigger === undefined ? undefined : createEmailTrigger({
     settings: events.emailTrigger,
     adapterFor: (platform) => loop.started.get(platform)?.adapter,
-    withAgent: createContainer<TurnAgent>({ factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env) }).withAgent,
+    withAgent: withEventAgent,
     write: maskedWrite,
     secrets,
   })
@@ -346,9 +356,9 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     channels,
     ...(voiceCall === undefined ? {} : { named: new Map([['voice', { methods: ['POST'], handle: createVoiceCallRoute({ settings: voiceCall, withChatAgent: chat.withAgent, write: maskedWrite, secrets }) }]]) }),
     write: maskedWrite,
-    triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
+    triggers: composedTriggers(withEventAgent, events, loop, maskedWrite, secrets),
   })
-  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent, think: chat.think, memory: chat.memory }
+  return { loop, router, withEventAgent, sessions: chat.sessions, withChatAgent: chat.withAgent, think: chat.think, memory: chat.memory }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -719,7 +729,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     mcpEvents = await startMcpEvents({
       settings: mcpEventsSettings,
       adapterFor: (platform) => composed.loop.started.get(platform)?.adapter,
-      withAgent: createContainer<TurnAgent>({ factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env) }).withAgent,
+      withAgent: composed.withEventAgent,
       write: stderr,
       secrets: secretValues,
     })
