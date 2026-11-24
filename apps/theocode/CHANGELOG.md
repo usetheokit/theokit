@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `chat.ts` composes `codingAgentPreset` for its tools, approval gates, setting sources, hook approval and withheld builtin `shell`; `GATE_QUESTIONS`, `approvalGates` and `ALL_GATED` are removed, and the permissions plugin's gated names come from `codingAgentTools(...).gates` (#2954). Operator skills (`~/.theokit/skills/`) stay wired by TheoCode whatever the trust state, as before; project skills, MCP servers and named subagents stay separate links because they are gated one by one, which the preset's single posture cannot express.
 - Rules are cut at `MAX_CHARS` by `loadInstructionTree` and its `omissionNotice`; `assemble` and the unbounded `maxChars` are gone (#2904).
 - `resolveFreshCredential` passes `requestTimeoutMs` and `onTransientFailure: 'use-stored'` to `AuthProvider` instead of wrapping `fetch` and catching transient errors itself; on a transient failure it now returns the credential re-read under the lock (#2924).
 - `composeInstructions` in `context/agents-md.ts` is now `composeTheoCodePrompt`, so it no longer shares a name with the framework's; the docblock lists the three differences (base never cut, one summed `rules` cut, group headers). No behaviour change (#2922).

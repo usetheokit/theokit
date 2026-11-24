@@ -32,7 +32,11 @@ export class ForeignImportError extends TheokitAgentError {
   override readonly name = 'ForeignImportError'
   readonly reason: ForeignImportErrorReason
   constructor(message: string, reason: ForeignImportErrorReason) {
-    super(message, { code: `FOREIGN_IMPORT_${reason.toUpperCase()}`, isRetryable: false })
+    // 'locked' clears when the other import finishes; the other two do not change on a retry.
+    super(message, {
+      code: `FOREIGN_IMPORT_${reason.toUpperCase()}`,
+      isRetryable: reason === 'locked',
+    })
     this.reason = reason
   }
 }

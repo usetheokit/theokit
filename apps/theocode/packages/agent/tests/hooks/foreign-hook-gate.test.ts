@@ -74,6 +74,6 @@ describe('the wiring', () => {
       fileURLToPath(new URL('../../src/chat/chat.ts', import.meta.url)),
       'utf8',
     )
-    expect(chat).toContain('.hookApproval({ approve: refuseForeignHook })')
+    expect(chat).toContain('hookApproval: { approve: refuseForeignHook }')
   })
 })
