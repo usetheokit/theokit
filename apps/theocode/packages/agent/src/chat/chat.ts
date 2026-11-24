@@ -9,10 +9,11 @@ import { memoryEnabledForSession } from '../memory/memory-switch.js'
 import { sandboxModeForSession } from '../sandbox-switch.js'
 import { withSandboxMode } from '../config/effective-config.js'
 import {
-  createGenericHttpSearchAdapter,
   createQuestionTool,
   createWebFetchTool,
+  createGenericHttpSearchAdapter,
   createWebSearchTool,
+  resolveWebSearchAdapter,
 } from '@theokit/agents/tools'
 import { codingAgentPreset, codingAgentTools } from '@theokit/agents/presets'
 import type { CustomTool } from '@theokit/agents'
@@ -23,7 +24,7 @@ import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { z } from 'zod'
 
 import type { ProjectDocParts } from '../context/agents-md.js'
-import { MAX_AGGREGATE, agentsMdChain, composeInstructions, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
+import { MAX_AGGREGATE, agentsMdChain, composeTheoCodePrompt, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
 import type { InlineSkill } from '@theokit/sdk'
 import {
@@ -113,6 +114,8 @@ export async function buildChatAgent(overrides: {
   model?: string
   interactiveBackend?: InteractiveBackend
   sessionPty?: SessionPtyOwner
+  /** The environment the web-search provider is resolved from. Defaults to `process.env`. */
+  env?: NodeJS.ProcessEnv
 }) {
   const { posture, cfg, writePolicy, registry, modelId, cwd } = chatContext(overrides)
   // B-167 — resolved ONCE here, for the same reason `searchConfigured` is decided once below: the
@@ -146,11 +149,12 @@ export async function buildChatAgent(overrides: {
   // Decided ONCE, here, for the same reason `mcpServers` is: the tool and its approval entry are
   // written by two different functions, and the framework refuses a map naming a tool it was not
   // given — so two reads that disagreed would crash the user's terminal at construction.
-  const searchConfigured = webSearchConfigured()
+  const webSearch = resolveWebSearchAdapter(overrides.env ?? process.env)
+  const searchConfigured = webSearch.adapter !== undefined
   const rules = bothRuleRoots(cwd, operatorHome)
   const projectDoc = await projectDocument(posture, cwd, rules, operatorHome)
   const reasoning_effort = overrides?.reasoning_effort
-  const coding = codingPreset({ cfg, modelId, posture, cwd, interactiveBackend, lifecycleHooks, writePolicy, searchConfigured, reasoning_effort })
+  const coding = codingPreset({ cfg, modelId, posture, cwd, interactiveBackend, lifecycleHooks, writePolicy, searchAdapter: webSearch.adapter, reasoning_effort })
   const baseCtx = { cfg, modelId, posture, providerPlugins, coding, overrides, cwd, rules, operatorHome, projectDoc, instructionFiles: await agentsMdChain(cwd) }
   const { agent: base, cuts: aggregateCuts } = baseAgent(baseCtx)
 
@@ -377,12 +381,14 @@ function codingPreset(ctx: {
   interactiveBackend: InteractiveBackend
   lifecycleHooks: ReturnType<typeof chatHookChain>
   writePolicy: ReturnType<typeof sandboxWritePolicy>
-  searchConfigured: boolean
+  /** The adapter `resolveWebSearchAdapter` chose; `web_search` is declared only when it is set. */
+  searchAdapter: ReturnType<typeof resolveWebSearchAdapter>['adapter']
   reasoning_effort?: ReasoningEffort
 }) {
-  const { cfg, cwd, writePolicy, searchConfigured } = ctx
+  const { cfg, cwd, writePolicy, searchAdapter } = ctx
   const scope = resolveToolScope(cfg, cwd)
-  const webSearch = createWebSearchTool({ search: createGenericHttpSearchAdapter() })
+  // A placeholder adapter is enough for the gate names; the real one is attached below when configured.
+  const webSearch = createWebSearchTool({ search: searchAdapter ?? createGenericHttpSearchAdapter() })
   // M36 — a SEQUENTIAL team (explorer → worker) from `Squad.create`, write-gated: the worker needs
   // write authority, so no team in `read-only`. M70 — it receives what the ROOT resolved (including
   // the runtime `--model` and `/effort`); B-032 — and is confined to the same tree.
@@ -419,7 +425,7 @@ function codingPreset(ctx: {
     ...shared,
     posture: projectSettingsPosture(ctx.posture),
     // `web_search` is declared ONLY when a provider is configured — see `webSearchConfigured`.
-    ...(searchConfigured && { webSearch }),
+    ...(searchAdapter !== undefined && { webSearch }),
     ...(writePolicy.writes && { delegateToTeam }),
     // #130 — the framework's compatibility loader spawns hooks it finds without passing through
     // `buildHookHandlers`; `refuseForeignHook` is the decision point it consults before every spawn.
@@ -537,7 +543,7 @@ function baseAgent(ctx: {
   // reported by `bothRuleRoots` upstream, this one acts on the rendered persona and used to be
   // announced in a `warn` string nothing could read, so `/status` reported the rules as fully
   // loaded over a corpus this call had already trimmed.
-  const composed = composeInstructions(
+  const composed = composeTheoCodePrompt(
     // M?? — an output style REPLACES the built-in instructions unless its frontmatter says
     // `keep-coding-instructions: true`. `overrides.baseInstructions` still wins over both: it
     // is a caller passing an explicit persona, which is a stronger statement than a file.
@@ -652,29 +658,4 @@ function profileTools(
       })
     }
   }
-}
-
-/**
- * Whether a web-search PROVIDER is actually reachable — and therefore whether `web_search` is
- * declared to the model at all.
- *
- * `createGenericHttpSearchAdapter` documents that it "degrades gracefully: when unconfigured OR on
- * any network/parse failure it returns `[]` and never throws". Graceful for the RUN, and wrong for
- * the PROMPT. With no provider configured — the default for anyone who has not set
- * `THEOKIT_SEARCH_API_URL` — the tool was still declared on every round, measured at 761 characters
- * of schema against a total tool surface of 12 857, was approval-gated, and could return only `[]`.
- * So the model paid for a capability it did not have, could spend a whole round discovering the
- * emptiness, and the user was shown an approval card for a search that had nothing to search.
- *
- * That is the same defect shape as the runtime builtin `shell` (`hooks/veto-builtin-shell.ts`):
- * advertise a tool that cannot work, then deal with the consequences at call time. The difference
- * is that this one is OURS to withhold — the SDK injects `shell` with no opt-out — so it is
- * withheld at composition time instead of explained away afterwards.
- *
- * Only the URL is checked, deliberately. The adapter treats the key as optional, because an
- * endpoint that needs no auth is legitimate; demanding a key here would withhold a tool that would
- * have worked. The endpoint is the one value without which the adapter cannot even try.
- */
-function webSearchConfigured(): boolean {
-  return (process.env['THEOKIT_SEARCH_API_URL'] ?? '').trim() !== ''
 }

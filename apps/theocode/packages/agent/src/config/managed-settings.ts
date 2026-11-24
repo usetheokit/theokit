@@ -1,12 +1,15 @@
-import { MANAGED_SETTINGS_PATHS } from '@theokit/agents/config'
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { readManagedSettings } from '@theokit/agents/config'
 
 import { CONFIG_SCHEMA_KEYS } from './config-contract.js'
-import { translateSettings, type SettingsRead } from './settings-json.js'
+import {
+  settingsReadFrom,
+  settingsReadOptions,
+  translateSettings,
+  type SettingsRead,
+} from './settings-json.js'
 
 /**
- * Where an administrator deploys `managed-settings.json`, per platform.
+ * Where an administrator deploys `managed-settings.json` is the framework's `MANAGED_SETTINGS_PATHS`.
  *
  * #737 — the reference defines this as enterprise settings a user CANNOT override. The paths are its
  * paths, deliberately: an organisation that already deploys the file for the tool it was written for
@@ -18,8 +21,6 @@ import { translateSettings, type SettingsRead } from './settings-json.js'
  * path and can also see the Windows one through `/mnt/c`, and a machine with neither loses nothing by
  * the extra `existsSync`.
  */
-const MANAGED_PATHS = MANAGED_SETTINGS_PATHS
-
 /** The managed file as Claude Code's dialect: translated like a foreign-root settings file (#1908). */
 export interface ManagedSettingsRead extends SettingsRead {
   readonly path: string
@@ -47,26 +48,11 @@ export function readManagedSettingsTranslated(
     readonly onWarn?: (message: string) => void
   } = {},
 ): ManagedSettingsRead | null {
-  const found = readManagedFile(opts)
-  if (found === null) return null
-  return { path: found.path, ...translateManaged(found.raw, dirname(found.path)) }
-}
-
-function readManagedFile(opts: {
-  readonly paths?: readonly string[]
-  readonly onWarn?: (message: string) => void
-}): { path: string; raw: unknown } | null {
-  for (const path of opts.paths ?? MANAGED_PATHS) {
-    if (!existsSync(path)) continue
-    try {
-      return { path, raw: JSON.parse(readFileSync(path, 'utf8')) as unknown }
-    } catch (err) {
-      opts.onWarn?.(
-        `managed-settings.json at ${path} could not be read, so the organisation policy in it is ` +
-          `NOT being applied: ${err instanceof Error ? err.message : String(err)}`,
-      )
-      return null
-    }
-  }
-  return null
+  const found = readManagedSettings({
+    ...settingsReadOptions(CONFIG_SCHEMA_KEYS),
+    ...(opts.paths === undefined ? {} : { paths: opts.paths }),
+    ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
+  })
+  if (found === undefined) return null
+  return { path: found.path, ...settingsReadFrom(found, 'inert') }
 }

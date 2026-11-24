@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { agentOptionsFor, createAgentFactory, type CreateAgent } from '../src/control-plane/agent-factory.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
-import type { ImportedSetup } from '../src/migration/import-store.js'
+import type { StoredForeignImport } from '@theokit/agents/foreign-setup'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -72,7 +72,7 @@ describe('workspace skills (OC-70)', () => {
         { name: 'dup', description: 'd', instructions: 'imported body' },
         { name: 'only-imported', description: 'd', instructions: 'imported only' },
       ],
-    } as unknown as ImportedSetup
+    } as unknown as StoredForeignImport
     const options = theoClawAgentOptions({ model: 'm', apiKey: 'k', skillsDir: workspace, imported: { setup, mcp: false } })
     expect((await options.skillsRefresh?.())?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'only-imported', 'summarize-text'])
     expect(await readBody(options as never, 'dup')).toContain('workspace body')

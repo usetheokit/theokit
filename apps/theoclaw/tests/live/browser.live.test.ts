@@ -85,9 +85,9 @@ async function waitForGone(path: string, pids: ReadonlySet<number>): Promise<voi
   }
 }
 
-/** The wrapper's working directories (browser-proxy.mjs) present under the system temp directory now. */
+/** The proxy's working directories (@theokit/host/browser) present under the system temp directory now. */
 function wrapperDirs(): Set<string> {
-  return new Set(readdirSync(tmpdir()).filter((name) => name.startsWith('theoclaw-browser-') && !name.startsWith('theoclaw-browser-live-')))
+  return new Set(readdirSync(tmpdir()).filter((name) => name.startsWith('theokit-browser-')))
 }
 
 /** Wait until none of `dirs` exists under the temp directory, or fail naming the ones left. */

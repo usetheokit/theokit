@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
@@ -12,7 +13,7 @@ import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 import type { BrowserDeps } from '../src/tools/browser-server.js'
-import type { ImportedSetup } from '../src/migration/import-store.js'
+import type { StoredForeignImport } from '@theokit/agents/foreign-setup'
 import type { TurnAgent } from '../src/agent-port.js'
 import { agentToolOptions, controlAgentToolOptions } from '../src/tools/tool-registry.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
@@ -21,10 +22,12 @@ import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './too
 import type { ToolStart } from './tool-start-fixtures.js'
 
 const CLI = '/opt/fake/@playwright/mcp/cli.js'
-/** The wrapper the server is started through: it filters the tool list and owns the file root. */
-const PROXY = join(import.meta.dirname, '..', 'tools', 'browser-proxy.mjs')
-/** The browser config the server is started with: it names the headless shell `browser:install` installs. */
-const CONFIG = join(import.meta.dirname, '..', 'tools', 'browser-config.json')
+/** The proxy the host package ships: it filters the tool list and owns the file root. */
+const PROXY = fileURLToPath(import.meta.resolve('@theokit/host/browser')).replace(/index\.js$/, 'proxy-entry.js')
+/** The inline browser config of the host's isolated mode: it names the headless shell `browser:install` installs. */
+const ISOLATED_CONFIG = JSON.stringify({
+  browser: { browserName: 'chromium', launchOptions: { channel: 'chromium-headless-shell', chromiumSandbox: false } },
+})
 const ON_LINE = 'tools: browser is on (headless chromium, isolated profile)'
 const SHARED_LINE =
   'tools: browser is on (headless chromium, persistent profile shared by sessions, started on first use)'
@@ -109,7 +112,7 @@ describe('THEOCLAW_BROWSER', () => {
     expect(servers?.browser).toEqual({
       type: 'stdio',
       command: process.execPath,
-      args: [PROXY, CLI, '--headless', '--isolated', '--config', CONFIG],
+      args: [PROXY, '--playwright-config', ISOLATED_CONFIG, '--', CLI, '--headless', '--isolated'],
       sequential: true,
     })
     expect(settings.offLines).toContain(ON_LINE)
@@ -123,7 +126,7 @@ describe('THEOCLAW_BROWSER', () => {
     expect(servers?.browser).toEqual({
       type: 'stdio',
       command: process.execPath,
-      args: [PROXY, CLI, '--cdp-endpoint', 'http://127.0.0.1:4321'],
+      args: [PROXY, '--', CLI, '--cdp-endpoint', 'http://127.0.0.1:4321'],
       sequential: true,
     })
   })
@@ -329,7 +332,7 @@ describe('THEOCLAW_BROWSER', () => {
   })
 
   it('keeps the browser server beside the servers of an import whose MCP is on', () => {
-    const imported: ImportedSetup = {
+    const imported: StoredForeignImport = {
       kind: 'claude-code',
       instructions: '',
       memory: '',

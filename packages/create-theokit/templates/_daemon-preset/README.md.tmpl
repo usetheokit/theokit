@@ -7,7 +7,9 @@ npm install
 node main.mjs onboard --yes   # writes the config file (omit --yes to be asked)
 node main.mjs                 # runs; SIGINT or SIGTERM stops it cleanly
 node main.mjs daemon install  # login service (systemd --user, launchd, Task Scheduler)
-node main.mjs daemon status
+node main.mjs daemon status   # exit 0 running, 3 otherwise
+node main.mjs daemon restart
+node main.mjs daemon logs --lines 100
 node main.mjs daemon uninstall
 ```
 
