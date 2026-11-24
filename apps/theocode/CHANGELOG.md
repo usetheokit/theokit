@@ -16,6 +16,11 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- The `THEOKIT_HOME` entry in `ENV_KNOBS` cites one resolvable reader (`backtrack.ts:transcriptRootHint`) instead of a comma-joined list the path-existence invariant could not resolve (#2982).
+- Headless approval is decided by `approvalPostureFor` from `@theokit/agents`; `resolveHeadlessApproval` and `headlessApprovalPosture` keep only the remediation and `danger-full-access` wording, and take a full `SandboxPosture` (#2903).
+- The `openai-chatgpt/` route picks its credential in `resolveAgentCredential` (the stored OpenAI login, never an environment key); `storeLocationOnly` is gone (#2902).
+- `/image`, `/model` and custom-command model overrides travel with the message as the send body that `InProcessTransport` now forwards; the take-on-next-turn closures in the chat transport and `takeModel`/`setModel` are gone (#2900).
+- `/goal` waits for each turn through `useAgent`'s `sendAndWait` and `asGoalLoopAgent` instead of polling the store every 120 ms; `goal-store-agent.ts` is gone. A turn Esc aborts now ends the goal with `GoalTurnFailedError` (status `aborted`) rather than the store's status (#2917).
 - A malformed project `.mcp.json` no longer makes personal MCP servers appear as "also declared by the project" or as servers withheld by trust; the framework now warns once and keeps the personal scope, and the retry is gone (#2895).
 - Removed `classifyEntry` (no caller) and `legacyRootHint`; the TUI uses the framework's `transcriptRootHint`, so the empty-session hint now reads "No sessions under …" (#2937).
 - Removed `tools/check-theokit-updates.mjs`, `tools/report-theokit-staleness.mjs` and the `deps:theokit`, `deps:theokit:json` and `deps:theokit:report` scripts; run `pnpm check:app-deps apps/theocode` from the repository root instead (#2938).

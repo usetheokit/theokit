@@ -202,12 +202,10 @@ const HANDLERS: CommandHandlers = {
   },
   custom: (action, text, cap: TurnCapabilities) => {
     handleCustomCommand(action.name, action.arg, text, cap.customCommands.get(action.name), {
-      send: (message) => cap.agent.send({ message }),
+      send: (message, model) =>
+        cap.agent.send(model === undefined ? { message } : { message, model }),
       setLastSent: (message) => {
         cap.lastSentMessage.current = message
-      },
-      setPendingModel: (model) => {
-        cap.SESSION.setModel(model)
       },
       setToast: cap.setToast,
     })

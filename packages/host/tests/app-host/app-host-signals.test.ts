@@ -85,4 +85,69 @@ describe('app host signal during failed start', () => {
     await host.close()
     expect(stop).toHaveBeenCalledOnce()
   })
+
+  it('with attachSignalsEarly a SIGTERM before start() has run still tears down', async () => {
+    const signals = new EventEmitter()
+    const exit = vi.fn()
+    const stop = vi.fn()
+    const host = createAppHost({ signals, exit, attachSignalsEarly: true })
+    host.service('A', () => 1, stop)
+    expect(signals.listenerCount('SIGTERM')).toBe(1)
+    const started = host.start()
+    signals.emit('SIGTERM')
+    await started
+    await tick()
+    expect(stop).toHaveBeenCalledOnce()
+    expect(exit).toHaveBeenCalledExactlyOnceWith(0)
+    expect(signals.listenerCount('SIGTERM')).toBe(0)
+  })
+
+  it('does not attach before start() by default', () => {
+    const signals = new EventEmitter()
+    createAppHost({ signals })
+    expect(signals.listenerCount('SIGINT')).toBe(0)
+  })
+
+  it('detachSignals stops reacting without stopping anything, and is idempotent', async () => {
+    const signals = new EventEmitter()
+    const exit = vi.fn()
+    const stop = vi.fn()
+    const host = createAppHost({ signals, exit, attachSignalsEarly: true })
+    host.service('A', () => 1, stop)
+    await host.start()
+    host.detachSignals()
+    host.detachSignals()
+    signals.emit('SIGINT')
+    await tick()
+    expect(stop).not.toHaveBeenCalled()
+    expect(exit).not.toHaveBeenCalled()
+    expect(signals.listenerCount('SIGINT')).toBe(0)
+  })
+
+  it('detachSignals before a scheduled start keeps the listeners off', async () => {
+    const signals = new EventEmitter()
+    const host = createAppHost({ signals })
+    const started = host.start()
+    host.detachSignals()
+    await started
+    expect(signals.listenerCount('SIGTERM')).toBe(0)
+  })
+
+  it('names the signal of a repeated one', async () => {
+    const signals = new EventEmitter()
+    const onError = vi.fn()
+    const host = createAppHost({ signals, onError })
+    host.service(
+      'A',
+      () => 1,
+      () => new Promise<void>(() => undefined),
+    )
+    await host.start()
+    signals.emit('SIGTERM')
+    await tick()
+    signals.emit('SIGINT')
+    expect(onError).toHaveBeenCalledExactlyOnceWith('signal', expect.any(Error), {
+      signal: 'SIGINT',
+    })
+  })
 })

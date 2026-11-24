@@ -76,7 +76,6 @@ async function statusThemeRow(): Promise<string | undefined> {
     cfg: () => ({ modelLabel: 'm', sandboxLabel: 's', sandboxDetail: 'read-only', memory: false }),
     sessionModel: () => undefined,
     setSessionModel: vi.fn(),
-    setModel: vi.fn(),
     session: () => 'tui-1',
   } satisfies SessionTheInterpreterUses
   const ptys = {
