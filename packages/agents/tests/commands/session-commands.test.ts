@@ -51,7 +51,11 @@ describe('sessionCommands with a context', () => {
   it('passes the caller context to the handler', async () => {
     const calls: string[] = []
     const registry = createCommandRegistry(
-      sessionCommands<{ id: string }>({ reset: (ctx) => void calls.push(ctx.id) }),
+      sessionCommands<{ id: string }>({
+        reset: (ctx) => {
+          calls.push(ctx.id)
+        },
+      }),
     )
     await registry.dispatch('/new', { id: 'a' })
     expect(calls).toEqual(['a'])
@@ -86,8 +90,12 @@ describe('sessionCommands with a context', () => {
     const seen: unknown[] = []
     const registry = createCommandRegistry(
       sessionCommands<number>({
-        resume: (id, ctx) => void seen.push([id, ctx]),
-        quit: (ctx) => void seen.push(['quit', ctx]),
+        resume: (id, ctx) => {
+          seen.push([id, ctx])
+        },
+        quit: (ctx) => {
+          seen.push(['quit', ctx])
+        },
       }),
     )
     await registry.dispatch('/resume abc', 7)
