@@ -155,7 +155,6 @@
     },
     "patchedDependencies": {
       "@theokit/sdk@13.0.0": "patches/@theokit__sdk@13.0.0.patch",
-      "@theokit/tui@0.83.4": "patches/@theokit__tui@0.83.4.patch",
       "@vitest/utils@4.1.12": "patches/@vitest__utils@4.1.12.patch"
     }
   },

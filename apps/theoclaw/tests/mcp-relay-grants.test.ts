@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { createGrantStore } from '@theokit/http/guards'
 import { runCli } from '../src/cli.js'
-import { GrantStore, grantsPath } from '../src/mcp-relay/grants.js'
+import { grantsPath } from '../src/mcp-relay/command.js'
 import { harness } from './support/cli-harness.js'
 
 describe('mcp-relay', () => {
@@ -16,21 +17,44 @@ describe('mcp-relay', () => {
     const path = grantsPath(v.io.env, v.io.homeDir)
     const raw = readFileSync(path, 'utf8')
     expect(raw).not.toContain(token)
-    expect(raw).toContain('tokenHash')
+    expect(raw).toContain('hash')
     expect(statSync(path).mode & 0o777).toBe(0o600)
-    const store = new GrantStore(path).load()
-    expect(store.authenticate(token)?.tools).toEqual(['list_dir', 'read_file'])
-    expect(store.authenticate('wrong')).toBeUndefined()
+    const store = createGrantStore(path)
+    expect((await store.authenticate(token))?.scopes).toEqual(['list_dir', 'read_file'])
+    expect(await store.authenticate('wrong')).toBeUndefined()
 
     const l = harness()
     const out = { ...v.io, stdout: l.io.stdout }
     expect(await runCli(['mcp-relay', 'list'], out)).toBe(0)
     expect(l.stdout()).toContain('chatgpt')
     expect(l.stdout()).not.toContain(token)
-    expect(l.stdout()).not.toContain(store.list()[0]!.tokenHash)
+    expect(l.stdout()).not.toContain(raw.match(/"hash":"([0-9a-f]+)"/)![1]!)
 
     expect(await runCli(['mcp-relay', 'revoke', 'chatgpt'], v.io)).toBe(0)
-    expect(new GrantStore(path).load().authenticate(token)).toBeUndefined()
+    expect(await createGrantStore(path).authenticate(token)).toBeUndefined()
+  })
+
+  it('revokes by id as well as by name', async () => {
+    const v = harness()
+    expect(await runCli(['mcp-relay', 'grant', 'byid'], v.io)).toBe(0)
+    const id = /\((g_[0-9a-f]+)\)/.exec(v.stdout())![1]!
+    expect(await runCli(['mcp-relay', 'revoke', id], v.io)).toBe(0)
+    expect(await runCli(['mcp-relay', 'revoke', id], v.io)).toBe(2)
+  })
+
+  it('refuses a grant file in the old format and says to re-grant', async () => {
+    const v = harness()
+    const path = grantsPath(v.io.env, v.io.homeDir)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(
+      path,
+      JSON.stringify({
+        grants: [{ id: 'g_1', name: 'old', tokenHash: 'ab', tools: ['list_dir'], createdAt: 'x' }],
+      }),
+    )
+    expect(await runCli(['mcp-relay', 'list'], v.io)).toBe(2)
+    expect(v.stderr()).toContain('old grant format')
+    expect(v.stderr()).toContain('grant <name>')
   })
 
   it('keeps every change when separate CLI commands mutate at once', async () => {
@@ -40,7 +64,7 @@ describe('mcp-relay', () => {
     const run = (...args: string[]) => runCli(['mcp-relay', ...args], { ...v.io, stdout: harness().io.stdout })
     const codes = await Promise.all([run('revoke', 'first'), run('grant', 'second'), run('grant', 'third')])
     expect(codes).toEqual([0, 0, 0])
-    const byName = new Map(new GrantStore(path).load().list().map((g) => [g.name, g]))
+    const byName = new Map((await createGrantStore(path).list()).map((g) => [g.name, g]))
     expect(byName.get('first')?.revokedAt).toBeDefined()
     expect(byName.get('second')?.revokedAt).toBeUndefined()
     expect(byName.get('third')?.revokedAt).toBeUndefined()
@@ -76,7 +100,7 @@ describe('mcp-relay', () => {
           child.on('exit', done)
         })
       expect(await Promise.all([run('a'), run('b')])).toEqual([0, 0])
-      const names = new GrantStore(path).load().list().map((g) => g.name)
+      const names = (await createGrantStore(path).list()).map((g) => g.name)
       expect(new Set(names).size).toBe(100)
     } finally {
       rmSync(dir, { recursive: true, force: true })

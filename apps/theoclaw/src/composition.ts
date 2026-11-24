@@ -54,7 +54,8 @@ import { peerTools } from './a2a/peer-tools.js'
 import { RelayClient, RelayTurnGate, relayTools } from './relay/relay-client.js'
 import { relayRoute } from './relay/relay-server.js'
 import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
-import { mcpRelaySecrets, readMcpRelaySettings, startMcpRelayConnector, type McpRelayConnector } from './mcp-relay/connector.js'
+import { startMcpRelayConnector, type McpRelayConnector } from '@theokit/agents/mcp-relay'
+import { mcpRelayDispatch, mcpRelaySecrets, readMcpRelaySettings } from './mcp-relay/command.js'
 import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
@@ -735,7 +736,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     stderr,
   })
   if (mcpRelay !== undefined) {
-    mcpConnector = startMcpRelayConnector({ settings: mcpRelay, controlTools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools, toolSettings: tools, log: stderr })
+    mcpConnector = startMcpRelayConnector({ url: mcpRelay.url, token: mcpRelay.token, tools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools, dispatch: mcpRelayDispatch(tools), log: stderr })
   }
   const listen = options.listen ?? listenControlPlane
   const geoDb = options.env?.THEOCLAW_GEOIP_DB?.trim() || undefined
