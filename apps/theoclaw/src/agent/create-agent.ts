@@ -5,7 +5,7 @@ import { binaryOnPath, resolveSkillRoots, type Skill } from '@theokit/sdk/skills
 import { custodianSkills } from '../skills/custodian.js'
 import { discoverWinners, legacyRequiresSkills } from '../skills/legacy-compat.js'
 import { bundledSkills } from '../skills/registry.js'
-import type { ImportedSetup } from '../migration/import-store.js'
+import type { StoredForeignImport } from '@theokit/agents/foreign-setup'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import { createHookApprovalGate } from './hook-approval.js'
@@ -100,7 +100,7 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
 
 /** An import handed to a `/control` agent, and whether its MCP servers are on (`THEOCLAW_IMPORTED_MCP`). */
 export interface AgentImport {
-  readonly setup: ImportedSetup
+  readonly setup: StoredForeignImport
   readonly mcp: boolean
 }
 
@@ -226,7 +226,7 @@ function withToolOptions<Model extends string | ModelSelection>(
 }
 
 /** The import's instructions, then its memory under a read-only heading. */
-function importedPrompt(setup: ImportedSetup): string {
+function importedPrompt(setup: StoredForeignImport): string {
   const memory = setup.memory === '' ? '' : `## Imported memory (read-only)\n\n${setup.memory}`
   return [setup.instructions, memory].filter((part) => part !== '').join('\n\n')
 }

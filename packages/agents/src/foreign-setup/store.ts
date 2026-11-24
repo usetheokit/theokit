@@ -1,44 +1,99 @@
-import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { delimiter, join } from 'node:path'
 
-import { loadMcpJson } from '@theokit/agents/bridge'
-import { type ForeignSetup, type UntranslatedEntry, readForeignSetup } from '@theokit/agents/foreign-setup'
-import { type InlineSkill, type McpServerConfig, Skill } from '@theokit/sdk'
+import type { InlineSkill } from '@theokit/sdk'
 import { stringify as stringifyYaml } from 'yaml'
 
-import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
-import { binaryOnPath } from '@theokit/sdk/skills'
+import { loadMcpJson } from '../bridge/mcp-file.js'
+import type { McpServersMap } from '../types.js'
+import { readForeignSetup } from './index.js'
+import type { ForeignSetup, UntranslatedEntry } from './types.js'
 
-/** The MCP servers of an import, as `loadMcpJson` returns them (the shape of `@theokit/agents`'s `McpServersMap`). */
-export type ImportedMcpServers = Record<string, McpServerConfig>
+/** Why a stored import was not written or read: another import holds the lock, the import was refused, or the directory is unreadable. */
+export type ForeignImportErrorReason = 'locked' | 'refused' | 'unreadable'
 
-export interface ImportCounts {
+/** Thrown by `writeForeignImport` and `readForeignImport`; its message names a path or a server, never a value. */
+export class ForeignImportError extends Error {
+  readonly reason: ForeignImportErrorReason
+  constructor(message: string, reason: ForeignImportErrorReason) {
+    super(message)
+    this.name = 'ForeignImportError'
+    this.reason = reason
+  }
+}
+
+function byName(a: string, b: string): number {
+  return a.localeCompare(b)
+}
+
+function noWarn(): void {
+  // warnings are discarded without an onWarn
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** The MCP servers of an import, as `loadMcpJson` returns them. */
+export type ForeignImportMcpServers = McpServersMap
+
+/** How many entries of each kind the import held when it was written. */
+export interface ForeignImportCounts {
   readonly instructions: number
   readonly memories: number
   readonly skills: number
   readonly mcpServers: number
 }
 
-/** What an agent takes from an import (FR-005). */
-export interface ImportedSetup {
+/** What an agent takes from a stored import. */
+export interface StoredForeignImport {
   readonly kind: ForeignSetup['kind']
   readonly instructions: string
   readonly memory: string
-  readonly mcpServers: ImportedMcpServers
+  readonly mcpServers: ForeignImportMcpServers
   readonly skills: InlineSkill[]
-  readonly counts: ImportCounts
+  readonly counts: ForeignImportCounts
 }
 
 interface Manifest {
   readonly kind: ForeignSetup['kind']
   readonly source: string
   readonly importedAt: string
-  readonly counts: ImportCounts
+  readonly counts: ForeignImportCounts
   readonly dropped: UntranslatedEntry[]
   readonly skills: string[]
 }
 
 /** A skill name staged as a directory name: no separator, no dot-led name. */
+/** Whether `bin` is an executable file in a `PATH` directory. */
+function binaryOnPath(bin: string, env: NodeJS.ProcessEnv): boolean {
+  const exts = process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat'] : ['']
+  for (const dir of (env.PATH ?? '').split(delimiter)) {
+    if (dir === '') continue
+    for (const ext of exts) {
+      try {
+        accessSync(join(dir, bin + ext), constants.X_OK)
+        return true
+      } catch {
+        // not here; keep looking
+      }
+    }
+  }
+  return false
+}
+
 const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 /** The skills staged under `dir/skills`, read as the shared reader reads a Hermes root. */
@@ -47,15 +102,26 @@ function readStagedSkills(dir: string): ForeignSetup['skills'] {
 }
 
 const IMPORT = 'import'
-const KINDS: ReadonlyArray<ForeignSetup['kind']> = ['claude-code', 'hermes']
+const KINDS: readonly ForeignSetup['kind'][] = ['claude-code', 'hermes']
 const STAGING_PREFIX = 'import.staging-'
 const PREVIOUS_PREFIX = 'import.previous-'
 const LOCK = 'import.lock'
-const FILES = { manifest: 'manifest.json', instructions: 'instructions.md', memories: 'memories.md', mcp: '.mcp.json' } as const
+const FILES = {
+  manifest: 'manifest.json',
+  instructions: 'instructions.md',
+  memories: 'memories.md',
+  mcp: '.mcp.json',
+} as const
 
-/** The files `writeImport` would create under `<stateDir>/import` (dry run), relative to it. */
-export function plannedImportFiles(setup: ForeignSetup): string[] {
-  return [FILES.instructions, FILES.memories, FILES.mcp, ...setup.skills.map((skill) => `skills/${skill.name}/SKILL.md`), FILES.manifest]
+/** The files `writeForeignImport` would create under `<dir>/import` (dry run), relative to it. */
+export function plannedForeignImportFiles(setup: ForeignSetup): string[] {
+  return [
+    FILES.instructions,
+    FILES.memories,
+    FILES.mcp,
+    ...setup.skills.map((skill) => `skills/${skill.name}/SKILL.md`),
+    FILES.manifest,
+  ]
 }
 
 function writePrivate(path: string, text: string): void {
@@ -78,7 +144,7 @@ function ensureStateDir(stateDir: string): void {
   try {
     mkdirSync(stateDir, { recursive: true, mode: 0o700 })
   } catch (error) {
-    throw new TheoClawConfigError(`THEOCLAW_STATE_DIR: cannot create ${stateDir}: ${code(error)}`, { variable: 'THEOCLAW_STATE_DIR' })
+    throw new ForeignImportError(`cannot create ${stateDir}: ${code(error)}`, 'unreadable')
   }
 }
 
@@ -91,9 +157,12 @@ function recover(stateDir: string, removeStale: boolean): void {
   const names = existsSync(stateDir) ? readdirSync(stateDir) : []
   const previous = names.filter((name) => name.startsWith(PREVIOUS_PREFIX))
   const hasImport = names.includes(IMPORT)
-  if (!hasImport && previous.length === 1) renameSync(join(stateDir, previous[0]), join(stateDir, IMPORT))
+  if (!hasImport && previous.length === 1)
+    renameSync(join(stateDir, previous[0]), join(stateDir, IMPORT))
   if (!removeStale) return
-  const stale = names.filter((name) => name.startsWith(STAGING_PREFIX) || (hasImport && name.startsWith(PREVIOUS_PREFIX)))
+  const stale = names.filter(
+    (name) => name.startsWith(STAGING_PREFIX) || (hasImport && name.startsWith(PREVIOUS_PREFIX)),
+  )
   for (const name of stale) rmSync(join(stateDir, name), { recursive: true, force: true })
 }
 
@@ -134,7 +203,9 @@ function tryLock(stateDir: string): (() => void) | undefined {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         linkSync(claim, lock)
-        return () => rmSync(lock, { force: true })
+        return () => {
+          rmSync(lock, { force: true })
+        }
       } catch (error) {
         if (code(error) !== 'EEXIST' || lockHeld(lock)) break
         rmSync(lock, { force: true })
@@ -149,7 +220,11 @@ function tryLock(stateDir: string): (() => void) | undefined {
 /** A start's `recover`, under the lock: while an import holds it, a lone previous copy is its swap in flight. */
 function recoverForRead(stateDir: string, onWarn: (warning: string) => void): void {
   const names = existsSync(stateDir) ? readdirSync(stateDir) : []
-  if (names.includes(IMPORT) || names.filter((name) => name.startsWith(PREVIOUS_PREFIX)).length !== 1) return
+  if (
+    names.includes(IMPORT) ||
+    names.filter((name) => name.startsWith(PREVIOUS_PREFIX)).length !== 1
+  )
+    return
   const unlock = tryLock(stateDir)
   if (unlock === undefined) {
     onWarn(`an import is being written in ${stateDir}; its previous copy is left as found`)
@@ -169,10 +244,16 @@ function skillFile(skill: ForeignSetup['skills'][number]): string {
 
 function stage(dir: string, setup: ForeignSetup, now: Date): void {
   mkdirPrivate(dir)
-  writePrivate(join(dir, FILES.instructions), setup.instructions.map((file) => file.text).join('\n\n'))
+  writePrivate(
+    join(dir, FILES.instructions),
+    setup.instructions.map((file) => file.text).join('\n\n'),
+  )
   writePrivate(join(dir, FILES.memories), setup.memories.map((file) => file.text).join('\n\n'))
   // Always written, so an import with no server reads back as an empty map (EC-6).
-  writePrivate(join(dir, FILES.mcp), `${JSON.stringify({ mcpServers: setup.mcpServers }, null, 2)}\n`)
+  writePrivate(
+    join(dir, FILES.mcp),
+    `${JSON.stringify({ mcpServers: setup.mcpServers }, null, 2)}\n`,
+  )
   mkdirPrivate(join(dir, 'skills'))
   for (const skill of setup.skills) {
     mkdirPrivate(join(dir, 'skills', skill.name))
@@ -189,7 +270,7 @@ function stage(dir: string, setup: ForeignSetup, now: Date): void {
   writePrivate(join(dir, FILES.manifest), `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
-function countsOf(setup: ForeignSetup): ImportCounts {
+function countsOf(setup: ForeignSetup): ForeignImportCounts {
   return {
     instructions: setup.instructions.length,
     memories: setup.memories.length,
@@ -221,39 +302,57 @@ function serverOf(warning: string, file: string): string | undefined {
 function validate(staging: string, staged: number): Validation {
   const file = join(staging, FILES.mcp)
   const warnings: string[] = []
-  let servers: ImportedMcpServers
+  let servers: ForeignImportMcpServers
   try {
-    servers = loadMcpJson(staging, { onWarn: (warning) => warnings.push(warning), env: process.env })
+    servers = loadMcpJson(staging, {
+      onWarn: (warning) => warnings.push(warning),
+      env: process.env,
+    })
   } catch (error) {
-    return { refusal: `the staged .mcp.json does not read back: ${describeError(error)}`, notes: [] }
+    return {
+      refusal: `the staged .mcp.json does not read back: ${describeError(error)}`,
+      notes: [],
+    }
   }
   const refused = new Set<string>()
   const notAdmitted = new Set<string>()
   const notes: string[] = []
   for (const warning of warnings) {
     const server = serverOf(warning, file)
-    if (server !== undefined && (warning.includes('" ignored — ') || warning.includes('which this runtime does not carry'))) refused.add(server)
+    if (
+      server !== undefined &&
+      (warning.includes('" ignored — ') || warning.includes('which this runtime does not carry'))
+    )
+      refused.add(server)
     else {
-      if (server !== undefined && warning.includes('an operator policy does not admit it')) notAdmitted.add(server)
+      if (server !== undefined && warning.includes('an operator policy does not admit it'))
+        notAdmitted.add(server)
       notes.push(warning)
     }
   }
   if (refused.size > 0) {
     const names = [...refused].map((name) => `"${name}"`).join(', ')
-    return { refusal: `MCP servers refused: ${names} (each is ignored or carries a field the runtime does not)`, notes }
+    return {
+      refusal: `MCP servers refused: ${names} (each is ignored or carries a field the runtime does not)`,
+      notes,
+    }
   }
   if (Object.keys(servers).length !== staged - notAdmitted.size) {
-    return { refusal: 'the staged MCP server count does not match what loadMcpJson read back', notes }
+    return {
+      refusal: 'the staged MCP server count does not match what loadMcpJson read back',
+      notes,
+    }
   }
   return { notes }
 }
 
-/** Why a staged skill would not read back as `readImport` reads it, or `undefined` when all do. */
+/** Why a staged skill would not read back as `readForeignImport` reads it, or `undefined` when all do. */
 function unreadSkills(staging: string, setup: ForeignSetup): string | undefined {
   const read = new Set(readStagedSkills(staging).map((skill) => skill.name))
   const lost = setup.skills.map((skill) => skill.name).filter((name) => !read.has(name))
   if (lost.length === 0) return undefined
-  return `skills refused: ${lost.map((name) => `"${name}"`).join(', ')} (each would not read back once staged)`
+  const names = lost.map((name) => `"${name}"`).join(', ')
+  return `skills refused: ${names} (each would not read back once staged)`
 }
 
 /** `staging` becomes `<stateDir>/import`; a previous import is kept until the rename succeeded. */
@@ -276,20 +375,35 @@ function swap(stateDir: string, staging: string): void {
  * import only when it holds (FR-004). A refusal removes the staging directory and leaves a previous
  * import byte-identical (NFR-002); the error names each refused server, never a value.
  */
-export function writeImport(stateDir: string, setup: ForeignSetup, opts: { readonly now: Date }): { readonly notes: string[] } {
+export function writeForeignImport(
+  stateDir: string,
+  setup: ForeignSetup,
+  opts: { readonly now?: Date } = {},
+): { readonly notes: string[] } {
+  const now = opts.now ?? new Date()
   ensureStateDir(stateDir)
   const unlock = tryLock(stateDir)
   if (unlock === undefined) {
     const lock = join(stateDir, LOCK)
-    throw new TheoClawConfigError(`THEOCLAW_STATE_DIR: another import holds ${lock}; run the import again once it ended`, { variable: 'THEOCLAW_STATE_DIR' })
+    throw new ForeignImportError(
+      `another import holds ${lock}; run the import again once it ended`,
+      'locked',
+    )
   }
-  const staging = join(stateDir, `${STAGING_PREFIX}${process.pid}-${opts.now.getTime()}`)
+  const staging = join(stateDir, `${STAGING_PREFIX}${process.pid}-${now.getTime()}`)
   try {
     // Under the lock, every staging directory and stale previous copy is one an ended import left.
     recover(stateDir, true)
-    stage(staging, setup, opts.now)
-    const { refusal = unreadSkills(staging, setup), notes } = validate(staging, Object.keys(setup.mcpServers).length)
-    if (refusal !== undefined) throw new TheoClawConfigError(`the import was refused, nothing was replaced: ${refusal}`)
+    stage(staging, setup, now)
+    const { refusal = unreadSkills(staging, setup), notes } = validate(
+      staging,
+      Object.keys(setup.mcpServers).length,
+    )
+    if (refusal !== undefined)
+      throw new ForeignImportError(
+        `the import was refused, nothing was replaced: ${refusal}`,
+        'refused',
+      )
     swap(stateDir, staging)
     return { notes }
   } finally {
@@ -298,8 +412,8 @@ export function writeImport(stateDir: string, setup: ForeignSetup, opts: { reado
   }
 }
 
-function unreadable(path: string, why: string): TheoClawConfigError {
-  return new TheoClawConfigError(`THEOCLAW_STATE_DIR: the import at ${path} ${why}; run the import again`, { variable: 'THEOCLAW_STATE_DIR' })
+function unreadable(path: string, why: string): ForeignImportError {
+  return new ForeignImportError(`the import at ${path} ${why}; run the import again`, 'unreadable')
 }
 
 function readManifest(path: string): Manifest {
@@ -309,8 +423,16 @@ function readManifest(path: string): Manifest {
   } catch {
     throw unreadable(path, 'is not valid JSON')
   }
-  const shape = manifest as Partial<Manifest> | null
-  if (typeof shape !== 'object' || shape === null || !KINDS.includes(shape.kind as ForeignSetup['kind']) || !Array.isArray(shape.skills) || !shape.skills.every(isSafeSkillName) || typeof shape.counts !== 'object' || shape.counts === null) {
+  if (typeof manifest !== 'object' || manifest === null)
+    throw unreadable(path, 'is not an import manifest')
+  const shape = manifest as Partial<Record<keyof Manifest, unknown>>
+  if (
+    !KINDS.some((kind) => kind === shape.kind) ||
+    !Array.isArray(shape.skills) ||
+    !shape.skills.every(isSafeSkillName) ||
+    typeof shape.counts !== 'object' ||
+    shape.counts === null
+  ) {
     throw unreadable(path, 'is not an import manifest')
   }
   return manifest as Manifest
@@ -333,11 +455,11 @@ function readStaged(path: string): string {
  * none. The servers are read back through `loadMcpJson`, so the start sees the same warnings the
  * import noted, through `onWarn`; without one they are discarded (the import already printed them).
  */
-export function readImport(
+export function readForeignImport(
   stateDir: string,
   opts: { readonly onWarn?: (warning: string) => void; readonly env?: NodeJS.ProcessEnv } = {},
-): ImportedSetup | undefined {
-  recoverForRead(stateDir, opts.onWarn ?? (() => {}))
+): StoredForeignImport | undefined {
+  recoverForRead(stateDir, opts.onWarn ?? noWarn)
   const dir = join(stateDir, IMPORT)
   const manifestPath = join(dir, FILES.manifest)
   if (!existsSync(manifestPath)) return undefined
@@ -346,19 +468,38 @@ export function readImport(
   const memory = readStaged(join(dir, FILES.memories))
   const mcpPath = join(dir, FILES.mcp)
   readStaged(mcpPath)
-  let mcpServers: ImportedMcpServers
+  let mcpServers: ForeignImportMcpServers
   try {
-    mcpServers = loadMcpJson(dir, { onWarn: opts.onWarn ?? (() => {}), env: opts.env ?? process.env })
+    mcpServers = loadMcpJson(dir, {
+      onWarn: opts.onWarn ?? noWarn,
+      env: opts.env ?? process.env,
+    })
   } catch {
     // The cause is not quoted: a JSON.parse message can carry a slice of an env or header value (NFR-003).
     throw unreadable(mcpPath, 'is not a valid MCP file')
   }
   for (const name of manifest.skills) readStaged(join(dir, 'skills', name, 'SKILL.md'))
   const staged = readStagedSkills(dir)
-  if (staged.map((skill) => skill.name).sort().join('\n') !== [...manifest.skills].sort().join('\n')) {
+  if (
+    staged
+      .map((skill) => skill.name)
+      .sort(byName)
+      .join('\n') !== [...manifest.skills].sort(byName).join('\n')
+  ) {
     throw unreadable(manifestPath, 'names other skills than the ones staged')
   }
   // A skill whose required binary is not on PATH is not offered; reading again after installing it offers it.
-  const skills = staged.filter((skill) => skill.requiresBins.every((bin) => binaryOnPath(bin))).map((skill) => Skill.create({ name: skill.name, description: skill.description, instructions: skill.body }))
+  const skills = staged
+    .filter((skill) =>
+      skill.requiresBins.every((bin) => binaryOnPath(bin, opts.env ?? process.env)),
+    )
+    .map(
+      (skill): InlineSkill => ({
+        name: skill.name,
+        description: skill.description,
+        source: `inline://${skill.name}`,
+        instructions: skill.body,
+      }),
+    )
   return { kind: manifest.kind, instructions, memory, mcpServers, skills, counts: manifest.counts }
 }
