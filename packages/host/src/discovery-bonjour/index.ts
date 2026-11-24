@@ -127,12 +127,14 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
     ...(iface === undefined ? {} : { interface: iface }),
     ...(ip === undefined ? {} : { ip }),
   }
-  const bonjour = new Bonjour(config as Partial<ServiceConfig>, (error: unknown) =>
-    report(error, 'answer'),
-  )
+  const bonjour = new Bonjour(config as Partial<ServiceConfig>, (error: unknown) => {
+    report(error, 'answer')
+  })
   try {
     const emitter = emitterOf(bonjour)
-    emitter.on('error', (error) => report(error, 'socket'))
+    emitter.on('error', (error) => {
+      report(error, 'socket')
+    })
     observeSends(emitter, report)
   } catch (error) {
     // Without its listeners the instance must not keep a socket open: release it, then refuse.
@@ -165,7 +167,9 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
       observeConflict(
         published,
         () => entry.withdrawn,
-        () => report(nameInUse(service.name), 'publish'),
+        () => {
+          report(nameInUse(service.name), 'publish')
+        },
       )
     },
     unpublishAll: () =>
@@ -180,7 +184,9 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
       new Promise<void>((resolve, reject) => {
         withdrawAll()
         try {
-          bonjour.destroy(() => resolve())
+          bonjour.destroy(() => {
+            resolve()
+          })
         } catch (error) {
           reject(new DiscoveryError(error, 'socket'))
         }

@@ -33,7 +33,7 @@ export type DiscoveryErrorRoute = 'socket' | 'answer' | 'send-respond' | 'send-q
 
 function codeOf(cause: unknown): string {
   if (typeof cause === 'object' && cause !== null && 'code' in cause) {
-    const { code } = cause as { code: unknown }
+    const { code } = cause
     if (typeof code === 'string' && code !== '') return code
   }
   return 'UNKNOWN'
