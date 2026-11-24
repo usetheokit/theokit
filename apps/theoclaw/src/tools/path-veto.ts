@@ -30,9 +30,9 @@ export function toolScopeOf(settings: ToolSettings): ToolScope {
 
 /**
  * The veto for one tool call made outside the SDK's dispatch: the refusal message, or `undefined`
- * when the call may run. A script's `api` call and an MCP call run the tool's handler directly and
- * skip the `pre_tool_call` plugins, so `run_code`'s permission gate and the MCP server ask this
- * instead (plan D3); the plugin below asks the same framework check, so both give one verdict.
+ * when the call may run. A script's `api` call runs the tool's handler directly and skips the
+ * `pre_tool_call` plugins, so `run_code`'s permission gate asks this instead (plan D3); the plugin
+ * below asks the same framework check, so both give one verdict. The MCP server runs the plugin.
  */
 export function vetoToolCall(name: string, args: unknown, settings: ToolSettings): string | undefined {
   return vetoPathCall(toolScopeOf(settings), name, args, WORDING)

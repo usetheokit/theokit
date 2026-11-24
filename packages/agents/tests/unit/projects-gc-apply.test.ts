@@ -91,6 +91,20 @@ describe('runProjectsGC', () => {
     expect(existsSync(a)).toBe(true)
   })
 
+  it('refuses a transcript when the pointer becomes unreadable after the plan', async () => {
+    const a = file('a.jsonl')
+    // A directory where the pointer belongs: reading it fails with EISDIR, not ENOENT.
+    mkdirSync(sessionPointerPath(CWD, home), { recursive: true })
+    const result = await runProjectsGC(planOf([{ kind: 'transcript', target: a }]), {
+      apply: true,
+      owner: OWNER,
+      fs: { ...noWriter, readFile: (p) => readFileSync(p, 'utf8') },
+    })
+    expect(result.removed).toEqual([])
+    expect(result.refused[0]?.reason).toMatch(/protection cannot be established/)
+    expect(existsSync(a)).toBe(true)
+  })
+
   it('a registered transcript is removed through removeFromRegistry', async () => {
     const a = file('a.jsonl')
     const remove = vi.fn()

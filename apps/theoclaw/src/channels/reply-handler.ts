@@ -1,5 +1,5 @@
 import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
-import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
+import { createCommandRegistry, sessionCommands } from '@theokit/agents/commands'
 import type { ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
@@ -57,7 +57,7 @@ export interface ReplyHandlerOptions {
    * composition root's chat `withAgent`.
    */
   readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
-  /** Start the event's session afresh; `SessionAgents.reset`. */
+  /** Start the event's session afresh; `ChatSessionPool.reset`. */
   readonly reset: (event: MessageEvent) => Promise<void>
   /** `/think <level>`: set the session's thinking level; without it, `/think` is an ordinary message. */
   readonly think?: (event: MessageEvent, level: ThinkingLevel) => void
@@ -187,7 +187,7 @@ function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
 /**
  * One agent turn on the event's prompt, and exactly one reply to the origin (FR-004, D8), by the
  * package's `createAgentHandler`. A failed turn still replies, then throws so the runner fires
- * `on_error`. The agent is the session's, owned by `SessionAgents`: the request boundary of
+ * `on_error`. The agent is the session's, owned by the chat session pool: the request boundary of
  * `withAgent` stays open until the handler releases the lease, after the reply. The package's
  * hooks carry the rest: `onTurnStart` (steering, advisor), `decorateReply` (the `/usage` footer)
  * and `onTurnEnd` (advisor history, compaction, a broadcast group's thread and fan-out).
@@ -333,13 +333,6 @@ interface ChannelCommandContext {
   readonly ctx: GatewayContext
 }
 
-/** `/think` and `/steer` have always been matched without regard to case; the router's match is exact. */
-function normalised(text: string): string {
-  return text
-    .replace(/^\/(steer|think)(?=\s|$)/i, (_all, name: string) => `/${name.toLowerCase()}`)
-    .replace(/^(\/\w+)\s/, '$1 ')
-}
-
 /**
  * The commands this handler answers itself, in one registry. `/new` and `/reset` are `exact`, so
  * `/new chat` is no command and goes to the model (FR-008); `/think`, `/compact` and `/goal` exist
@@ -349,72 +342,49 @@ function channelCommands(options: ReplyHandlerOptions) {
   const say = async ({ ctx }: ChannelCommandContext, text: string): Promise<void> =>
     send(ctx, { text, format: 'plain' }, { failed: false, answer: text })
   const { think, compact, goal } = options
-  return createCommandRegistry<ChannelCommandContext>([
-    defineCommand<ChannelCommandContext>({
-      name: 'new',
-      aliases: ['reset'],
-      description: 'start a new conversation',
-      exact: true,
-      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
-      // A reset that could not be saved moved nothing; the person is told, and the runner too.
-      run: async (_arg, c) => {
-        try {
-          await options.reset(c.event)
-        } catch (error) {
-          await send(c.ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
-          throw error
-        }
-        await say(c, NEW_CONVERSATION_REPLY)
-      },
-    }),
-    defineCommand<ChannelCommandContext>({
-      name: 'steer',
-      description: 'redirect the turn that is running',
-      run: async (arg, c) =>
-        say(c, arg === '' ? STEER_USAGE_REPLY : await answerSteer(options, c.event, arg)),
-    }),
-    ...(think === undefined
-      ? []
-      : [
-          defineCommand<ChannelCommandContext>({
-            name: 'think',
-            description: 'the thinking level',
-            run: (arg, c) => say(c, answerThink(think, c.event, arg)),
-          }),
-        ]),
+  const shared = sessionCommands<ChannelCommandContext>({
+    // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
+    // A reset that could not be saved moved nothing; the person is told, and the runner too.
+    reset: async (c) => {
+      try {
+        await options.reset(c.event)
+      } catch (error) {
+        await send(c.ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
+        throw error
+      }
+      await say(c, NEW_CONVERSATION_REPLY)
+    },
+    steer: async (arg, c) =>
+      say(c, arg === '' ? STEER_USAGE_REPLY : await answerSteer(options, c.event, arg)),
+    ...(think === undefined ? {} : { setEffort: (arg: string, c: ChannelCommandContext) => say(c, answerThink(think, c.event, arg)) }),
     ...(compact === undefined
-      ? []
-      : [
-          defineCommand<ChannelCommandContext>({
-            name: 'compact',
-            description: 'summarize the conversation so far',
-            run: async (_arg, c) =>
-              say(
-                c,
-                await options.withAgent(c.event, (lease) =>
-                  runCompact(compact, lease.agentId).finally(() => lease.release()),
-                ),
+      ? {}
+      : {
+          compact: async (c: ChannelCommandContext) =>
+            say(
+              c,
+              await options.withAgent(c.event, (lease) =>
+                runCompact(compact, lease.agentId).finally(() => lease.release()),
               ),
-          }),
-        ]),
-    ...(goal === undefined
-      ? []
-      : [
-          defineCommand<ChannelCommandContext>({
-            name: 'goal',
-            description: 'work on a goal',
-            run: (arg, c) => answerGoal(goal, options, c.event, c.ctx, arg),
-          }),
-        ]),
-  ])
+            ),
+        }),
+    ...(goal === undefined ? {} : { goal: (arg: string, c: ChannelCommandContext) => answerGoal(goal, options, c.event, c.ctx, arg) }),
+  })
+  // `/new` and `/reset` stay `exact`; every other verb takes its argument (or none) as typed and
+  // answers an empty one with its own usage reply, so the shared "required"/"exact" shapes are relaxed.
+  const definitions = shared.map((def) => (def.name === 'new' ? def : { ...def, arg: 'optional' as const, exact: false }))
+  return createCommandRegistry<ChannelCommandContext>(definitions, CHANNEL_ROUTING)
 }
+
+/** Channel text is matched without regard to case, and a Telegram `/cmd@bot` suffix and a newline after the name are accepted. */
+const CHANNEL_ROUTING = { caseInsensitive: true, stripBotSuffix: true, anyWhitespace: true } as const
 
 /**
  * The handler every runner uses: one agent turn per message with text, on the agent of the
  * message's session. In a broadcast group's member channel the turn carries the group's thread,
  * runs after the group's earlier turns, and its answer also reaches every other member; the
  * exchange joins the thread only once the origin was answered. The agent is never closed or
- * disposed here: it is the session's, owned by `SessionAgents`.
+ * disposed here: it is the session's, owned by the chat session pool.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
   const registry = channelCommands(options)
@@ -422,7 +392,7 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
   return async (event, ctx) => {
     const text = event.text.trim()
     if (text === '') return
-    const routed = await registry.dispatch(normalised(text), { event, ctx })
+    const routed = await registry.dispatch(text, { event, ctx })
     if (routed.kind === 'command') return
     await answerTurn(options, broadcast, event, ctx)
   }

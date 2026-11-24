@@ -1,9 +1,11 @@
-import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
+import { logPath } from '../src/daemon-common.js'
+import { resolveInstance } from '../src/instance.js'
 import { teeOutput } from '@theokit/host'
 import { spawn } from 'node:child_process'
 
@@ -236,6 +238,31 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     expect(h.stdout()).toContain('started')
     expect(h.stdout()).toContain('[redacted]')
     expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('logs_on_windows_prints_the_last_lines_of_the_tee_file_masked', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const log = join(h.io.homeDir, 'win.log')
+    writeFileSync(log, `old\nkey ${KEY} leaked\nlast\n`)
+    Object.assign(h.io, { platform: 'win32' })
+    h.useRunner(() => Promise.reject(new Error('no service command may run')))
+    expect(await runCli(['logs', '--lines', '2', '--file', log], h.io)).toBe(0)
+    expect(h.stdout()).toContain('[redacted]')
+    expect(h.stdout()).toContain('last')
+    expect(h.stdout()).not.toContain('old')
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('logs_on_windows_without_a_file_prints_the_last_lines_of_the_default_tee_file_masked', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const label = resolveInstance(h.io.env, { homeDir: h.io.homeDir }).label
+    const log = logPath(label, h.io.homeDir)
+    mkdirSync(dirname(log), { recursive: true })
+    writeFileSync(log, `old\nkey ${KEY} leaked\nlast\n`)
+    Object.assign(h.io, { platform: 'win32' })
+    h.useRunner(() => Promise.reject(new Error('no service command may run')))
+    expect(await runCli(['logs', '--lines', '2'], h.io)).toBe(0)
+    expect(h.stdout()).toBe('key [redacted] leaked\nlast\n')
   })
 
   it('logs falls back to the journal and reports its failure', async () => {

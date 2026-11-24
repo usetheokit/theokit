@@ -153,7 +153,8 @@ describe('the standalone lockfile is one pnpm would accept frozen', () => {
 
   it('records every patch pnpm-workspace.yaml declares', () => {
     const declared = [...workspace.matchAll(/^ {2}'([^']+)': (patches\/\S+)$/gm)]
-    expect(declared.length).toBeGreaterThan(0)
+    // With no patch declared, the lockfile must not carry a patchedDependencies section either.
+    if (declared.length === 0) expect(lock).not.toContain('\npatchedDependencies:\n')
     for (const [, name, path] of declared) {
       expect(lock, `${name} is patched in pnpm-workspace.yaml`).toContain(
         `\npatchedDependencies:\n`,
@@ -180,5 +181,15 @@ describe('the standalone lockfile is one pnpm would accept frozen', () => {
       })
       .map(([block]) => block.split('\n')[0])
     expect(stale).toEqual([])
+  })
+
+  it('declares no script that runs a tools/ file which does not exist', () => {
+    for (const file of ['package.json', 'standalone/package.json']) {
+      for (const [name, cmd] of Object.entries(read(file).scripts)) {
+        for (const [, tool] of cmd.matchAll(/\bnode (tools\/[\w.-]+\.mjs)/g)) {
+          expect(existsSync(join(app, tool)), `${file} script ${name} runs ${tool}`).toBe(true)
+        }
+      }
+    }
   })
 })

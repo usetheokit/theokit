@@ -9,7 +9,7 @@ import { createInterface } from 'node:readline'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { browserServer, readBrowser } from '../src/tools/browser-server.js'
-import { createSharedBrowser } from '../src/tools/shared-browser.js'
+import { createSharedBrowser } from '@theokit/host/browser'
 
 /**
  * Issue #1152: the instance's shared browser, through the real wrapper and `@playwright/mcp` on the

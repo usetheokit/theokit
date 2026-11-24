@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@theokit/agents/config`: `loadInstructionTree` returns `found` and `chars`, and `budget.omissionNotice` appends a notice block when `maxChars` cuts; `render`, `separator` and `also` measure the ceiling on the rendered text across several bases (#2904).
+- `@theokit/host/discovery-bonjour`: `createBonjourPublisher`, an optional `bonjour-service` adapter that reports socket, send and name-conflict errors. `announceService` takes `onError`, and `ServicePublisher` an optional `onError` subscription (#2948).
+
 ## [@theokit/agents 17.5.0, create-theokit 3.3.2, @theokit/host 0.3.2, @theokit/presenter 0.18.2, theokit 0.87.0] - 2026-11-23
 
 ### Added

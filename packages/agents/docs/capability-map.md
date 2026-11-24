@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1626 export(s) across 30 entry point(s).
+1657 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -180,6 +180,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `noopReflectionStrategy` | value |
 | `NoResultSubmittedError` | value |
 | `OffToolsCapability` | value |
+| `onAskForPolicy` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -345,6 +346,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `CompiledContextWindow` | type |
 | `CompiledTool` | type |
 | `CompiledWiring` | type |
+| `CompleteFromTurnOptions` | type |
 | `CompressibleMessage` | type |
 | `ContentChunk` | type |
 | `ContextWindowOptions` | type |
@@ -611,6 +613,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
 | `NoResultSubmittedError` | value |
+| `onAskForPolicy` | value |
 | `prepareWorkspace` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
@@ -680,6 +683,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `CompiledContextWindow` | type |
 | `CompiledTool` | type |
 | `CompiledWiring` | type |
+| `CompleteFromTurnOptions` | type |
 | `DefineAgentConfig` | type |
 | `DefinitionOrThunk` | type |
 | `DelegateFn` | type |
@@ -1133,9 +1137,11 @@ Measured against `@theokit/sdk@13.0.0`.
 | `secretRefsStep` | value |
 | `SETTINGS_LAYERS` | value |
 | `settingsCandidates` | value |
+| `SettingsFileError` | value |
 | `settingsLayerChain` | value |
 | `splitFrontmatter` | value |
 | `templateHints` | value |
+| `translateSettingsDocument` | value |
 | `TrustStore` | value |
 | `TrustStorePermissionsError` | value |
 | `AgentMemory` | type |
@@ -1161,6 +1167,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `InstructionCut` | type |
 | `InstructionSource` | type |
 | `InstructionTree` | type |
+| `InstructionTreeBase` | type |
 | `InstructionTreeBudget` | type |
 | `InstructionTrim` | type |
 | `LayeredConfigInput` | type |
@@ -1479,6 +1486,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `scheduleSessionSweep` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
+| `SessionPointerUnreadableError` | value |
 | `SessionRegistryRemoverError` | value |
 | `startInProcessSweeper` | value |
 | `streamTurnForkingIfBusy` | value |
@@ -1636,10 +1644,22 @@ Measured against `@theokit/sdk@13.0.0`.
 
 | Symbol | Kind |
 |---|---|
+| `assistantAgentPreset` | value |
+| `assistantAgentTools` | value |
+| `assistantWorkerTools` | value |
+| `changedPathsOf` | value |
 | `codingAgentPreset` | value |
 | `codingAgentTools` | value |
+| `turnDiff` | value |
+| `AssistantAgentPresetOptions` | type |
+| `AssistantAgentProfile` | type |
+| `AssistantAgentTools` | type |
+| `ChangedPathsOptions` | type |
+| `ChangedPathsTool` | type |
 | `CodingAgentPresetOptions` | type |
 | `CodingAgentTools` | type |
+| `GitRun` | type |
+| `TurnDiffOptions` | type |
 
 ## `@theokit/agents/evals`
 
@@ -1695,6 +1715,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `defineCommand` | value |
 | `EmptyPromptError` | value |
 | `exitAfterDrain` | value |
+| `exitAfterFlush` | value |
 | `formatGcJson` | value |
 | `formatGcPlan` | value |
 | `parseSessionsGcArgs` | value |
@@ -1709,12 +1730,14 @@ Measured against `@theokit/sdk@13.0.0`.
 | `CommandDefinition` | type |
 | `CommandRegistry` | type |
 | `ExitAfterDrainDeps` | type |
+| `ExitAfterFlushDeps` | type |
 | `HeadlessIo` | type |
 | `HeadlessOutcome` | type |
 | `HeadlessTurnOptions` | type |
 | `HeadlessTurnResult` | type |
 | `RoutedInput` | type |
 | `RouteFailure` | type |
+| `RouteOptions` | type |
 | `SessionCommandHandlers` | type |
 | `SessionsGcArgs` | type |
 | `SessionsGcOptions` | type |
@@ -1781,12 +1804,20 @@ Measured against `@theokit/sdk@13.0.0`.
 
 | Symbol | Kind |
 |---|---|
+| `ForeignImportError` | value |
+| `plannedForeignImportFiles` | value |
+| `readForeignImport` | value |
 | `readForeignSetup` | value |
+| `writeForeignImport` | value |
 | `ForeignHook` | type |
+| `ForeignImportCounts` | type |
+| `ForeignImportErrorReason` | type |
+| `ForeignImportMcpServers` | type |
 | `ForeignMcpServer` | type |
 | `ForeignSetup` | type |
 | `ForeignSetupKind` | type |
 | `ForeignSkill` | type |
 | `ForeignTextFile` | type |
 | `ReadForeignSetupOptions` | type |
+| `StoredForeignImport` | type |
 | `UntranslatedEntry` | type |

@@ -23,7 +23,7 @@ vi.mock('bonjour-service', () => ({
   },
 }))
 
-const { createBonjourPublisher } = await import('../src/discovery/bonjour-publisher.js')
+const { createBonjourPublisher } = await import('../src/discovery/lan-publisher.js')
 
 const svc = (name: string): PublishedService => ({ name, type: 'theoclaw', port: 40000, txt: { path: '/control' } })
 

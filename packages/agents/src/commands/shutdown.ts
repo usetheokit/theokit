@@ -83,6 +83,47 @@ export function exitAfterDrain(code: number, deps: ExitAfterDrainDeps = {}): voi
   timer.unref()
 }
 
+export interface ExitAfterFlushDeps {
+  /** Streams to flush, in order. Default `process.stdout` then `process.stderr`. */
+  readonly streams?: readonly { write(chunk: string, done: () => void): boolean }[]
+  /** Ends the process. Default `process.exit`. */
+  readonly exit?: (code: number) => void
+  /** Longest the flush may take before the exit is forced. Default `DEFAULT_WATCHDOG_MS`. */
+  readonly capMs?: number
+}
+
+/**
+ * Wait until stdout and stderr have handed every earlier write to the system, then exit.
+ *
+ * Unlike `exitAfterDrain` this does not wait for the event loop, so a process with a live server,
+ * watcher or socket still keeps its piped output. An empty write's callback runs after every earlier
+ * write was flushed. `capMs` bounds the wait for a stream whose callback never runs (a closed pipe);
+ * writes still pending when it expires can be lost. `exit` is called once.
+ */
+export async function exitAfterFlush(code: number, deps: ExitAfterFlushDeps = {}): Promise<void> {
+  const streams = deps.streams ?? [process.stdout, process.stderr]
+  const exit = deps.exit ?? ((c: number): void => process.exit(c))
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const cap = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, deps.capMs ?? DEFAULT_WATCHDOG_MS)
+  })
+  const flush = (async () => {
+    for (const stream of streams) {
+      await new Promise<void>((resolve) =>
+        stream.write('', () => {
+          resolve()
+        }),
+      )
+    }
+  })()
+  try {
+    await Promise.race([flush, cap])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+  exit(code)
+}
+
 export interface Shutdown {
   /**
    * Register a cleanup. Runs in registration order. Returns a disposer: calling it before `run()`

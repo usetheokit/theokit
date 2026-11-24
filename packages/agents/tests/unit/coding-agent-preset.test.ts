@@ -6,7 +6,7 @@ import { resolveTrustPosture } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { declareAgentShape, applyCapabilities } from '../../src/capability/index.js'
-import { codingAgentPreset } from '../../src/presets-entry.js'
+import { codingAgentPreset, codingAgentTools } from '../../src/presets-entry.js'
 import { ConfigurationError } from '../../src/errors.js'
 
 const posture = (trusted: boolean) =>
@@ -218,5 +218,42 @@ describe('codingAgentPreset', () => {
       await run(d, 'Bash', { command: 'true', timeout_ms: 99 })
       expect(seen).toEqual([1234, 99])
     })
+  })
+
+  it('codingAgentTools exposes the effective gates, overrides included', () => {
+    const { gates } = codingAgentTools({
+      cwd: '/tmp/proj',
+      sandboxMode: 'workspace-write',
+      approvals: { Bash: { question: 'Run it?' } },
+    })
+    expect([...gates.keys()].sort((a, b) => a.localeCompare(b))).toEqual([
+      'ApplyPatch',
+      'Bash',
+      'Edit',
+    ])
+    expect(gates.get('Bash')?.question).toBe('Run it?')
+    expect(codingAgentTools({ cwd: '/tmp/proj', sandboxMode: 'read-only' }).gates.size).toBe(0)
+  })
+
+  it('shellInReadOnly keeps Bash and the interactive tools gated in read-only, without write tools', () => {
+    const d = applyCapabilities([
+      codingAgentPreset({ ...base, sandboxMode: 'read-only', interactive, shellInReadOnly: true }),
+    ])
+    expect(names(d)).toEqual(expect.arrayContaining(['Bash', 'interactive_shell', 'write_stdin']))
+    for (const n of ['ApplyPatch', 'Edit']) expect(names(d)).not.toContain(n)
+    expect([...(d.hitl?.keys() ?? [])].sort((a, b) => a.localeCompare(b))).toEqual([
+      'Bash',
+      'interactive_shell',
+      'write_stdin',
+    ])
+    expect(d.offTools?.map((o) => o.name)).toEqual(['ApplyPatch', 'Edit'])
+  })
+
+  it('bashDescription replaces only the Bash description', () => {
+    const d = applyCapabilities([
+      codingAgentPreset({ ...base, sandboxMode: 'workspace-write', bashDescription: 'Custom.' }),
+    ])
+    expect(d.tools.find((t) => t.name === 'Bash')?.description).toBe('Custom.')
+    expect(d.tools.find((t) => t.name === 'Edit')?.description).not.toBe('Custom.')
   })
 })

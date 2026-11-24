@@ -11,31 +11,39 @@ const DEFAULT_MAX_JOBS = 50
 
 export interface CreateScheduleToolsOptions {
   scheduler: Scheduler
-  /** The platforms a job may target: the ones the host has configured. */
-  platforms: readonly string[]
+  /**
+   * The targets a job may use: the ones the host has configured. A bare name is a chat platform; an
+   * object describes a target that is not one (`description`, shown to the model) and may replace the
+   * default `channelId` text for it (`channelIdHint`).
+   */
+  platforms: readonly (string | { name: string; description: string; channelIdHint?: string })[]
   maxJobs?: number
 }
 
-const scheduleInput = z.object({
-  cron: z
-    .string()
-    .min(1)
-    .describe(
-      'A 5-field cron expression (minute hour day month weekday) or @hourly, @daily, @weekly, @monthly, @yearly.',
-    ),
-  prompt: z
-    .string()
-    .min(1)
-    .describe('What the scheduled run should do, stated so it can be done with nobody present.'),
-  platform: z.string().min(1).describe('The chat platform the answer is sent to.'),
-  channelId: z.string().min(1).describe('The channel, chat or conversation id on that platform.'),
-  name: z.string().min(1).optional().describe('A short name for the job.'),
-  timezone: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('An IANA timezone such as Europe/Lisbon. Defaults to UTC.'),
-})
+const DEFAULT_CHANNEL_TEXT = 'The channel, chat or conversation id on that platform.'
+
+function buildScheduleInput(channelText: string) {
+  return z.object({
+    cron: z
+      .string()
+      .min(1)
+      .describe(
+        'A 5-field cron expression (minute hour day month weekday) or @hourly, @daily, @weekly, @monthly, @yearly.',
+      ),
+    prompt: z
+      .string()
+      .min(1)
+      .describe('What the scheduled run should do, stated so it can be done with nobody present.'),
+    platform: z.string().min(1).describe('The chat platform the answer is sent to.'),
+    channelId: z.string().min(1).describe(channelText),
+    name: z.string().min(1).optional().describe('A short name for the job.'),
+    timezone: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('An IANA timezone such as Europe/Lisbon. Defaults to UTC.'),
+  })
+}
 
 const cancelInput = z.object({ id: z.string().min(1).describe('The id schedule_job returned.') })
 
@@ -48,7 +56,21 @@ const cancelInput = z.object({ id: z.string().min(1).describe('The id schedule_j
 export function createScheduleTools(options: CreateScheduleToolsOptions): CustomTool[] {
   const { scheduler, platforms } = options
   const maxJobs = options.maxJobs ?? DEFAULT_MAX_JOBS
-  const listed = platforms.join(', ')
+  const entries = platforms.map((entry) => (typeof entry === 'string' ? { name: entry } : entry))
+  const names = entries.map((entry) => entry.name)
+  const listed = names.join(', ')
+  const described = entries.filter(
+    (entry): entry is { name: string; description: string; channelIdHint?: string } =>
+      'description' in entry,
+  )
+  const hints = described.filter((entry) => entry.channelIdHint !== undefined)
+  const scheduleInput = buildScheduleInput(
+    hints.length === 0
+      ? DEFAULT_CHANNEL_TEXT
+      : `${DEFAULT_CHANNEL_TEXT} ${hints
+          .map((entry) => `For "${entry.name}": ${String(entry.channelIdHint)}.`)
+          .join(' ')}`,
+  )
   // Jobs whose `add` is still awaited: two calls in one turn would both pass a check of the stored
   // jobs alone, so a slot is reserved before the await (review finding F-wire-6).
   let pending = 0
@@ -58,12 +80,13 @@ export function createScheduleTools(options: CreateScheduleToolsOptions): Custom
     description:
       'Schedule a prompt to run unattended on a cron schedule and send its answer to a chat. ' +
       `The platform is one of: ${listed}. ` +
+      described.map((entry) => `"${entry.name}" is ${entry.description}. `).join('') +
       'Returns JSON: { ok: true, id, nextRunAt } or { ok: false, error }.',
     inputSchema: scheduleInput,
     handler: async (raw: unknown): Promise<string> => {
       // A missing or malformed field is refused by the SDK's own schema check before this runs.
       const input = scheduleInput.parse(raw)
-      if (!platforms.includes(input.platform)) {
+      if (!names.includes(input.platform)) {
         return refuse(
           `platform ${JSON.stringify(input.platform)} is not configured; use one of: ${listed}`,
         )

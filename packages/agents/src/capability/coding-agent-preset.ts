@@ -21,10 +21,12 @@ import {
   createUpdatePlanTool,
   createViewImageTool,
   createWriteStdinTool,
+  withDescription,
   withName,
 } from '@theokit/sdk-tools'
 
 import type { SubagentAgentDefinition } from '../bridge/define-agent.js'
+import type { CompatSurface } from '../bridge/setting-sources-gate.js'
 import { ConfigurationError } from '../errors.js'
 import { bindToolScope } from '../tools/tool-scope.js'
 import type { HumanInTheLoopOptions } from '../types.js'
@@ -82,6 +84,11 @@ export interface CodingAgentPresetOptions {
   /** Project subagents. Dropped unless the posture grants `projectSettings`. */
   readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>
   /**
+   * Import surfaces of the Claude Code dialect (`<cwd>/.claude/`). Granted under the same
+   * `projectSettings` posture as the rest; with a denying posture it is dropped, not thrown on.
+   */
+  readonly claudeCode?: { readonly import: readonly CompatSurface[] }
+  /**
    * Pre-spawn approval for hooks that setting sources load. Defaults to refusing every one: a hook is
    * arbitrary shell, and trusting the directory is not approving each command.
    */
@@ -101,6 +108,14 @@ export interface CodingAgentPresetOptions {
   readonly webSearch?: CustomTool
   /** A `delegate_to_team` tool the caller built; registered under approval, and only when the mode allows writes. */
   readonly delegateToTeam?: CustomTool
+  /**
+   * Registers `Bash` (and `interactive_shell` / `write_stdin`, given a backend) in `read-only` mode
+   * too, for a consumer whose sandbox confines the shell itself. Defaults to `false`: the shell is
+   * left off in `read-only`, with the write tools.
+   */
+  readonly shellInReadOnly?: boolean
+  /** Replaces the `Bash` description, for a consumer that names its own sibling tools in it. */
+  readonly bashDescription?: string
 }
 
 const DEFAULT_GATES: Readonly<Record<string, HumanInTheLoopOptions>> = {
@@ -126,9 +141,11 @@ class GatesCapability implements Capability {
   }
 }
 
-function readOnlyOff(mode: SandboxMode, delegates: boolean): OffTool[] {
+function readOnlyOff(mode: SandboxMode, delegates: boolean, shell: boolean): OffTool[] {
   const reason = `the ${mode} sandbox grants no writes`
-  const names = ['ApplyPatch', 'Edit', 'Bash', 'interactive_shell', 'write_stdin']
+  const names = shell
+    ? ['ApplyPatch', 'Edit']
+    : ['ApplyPatch', 'Edit', 'Bash', 'interactive_shell', 'write_stdin']
   if (delegates) names.push('delegate_to_team')
   return names.map((name) => ({ name, reason }))
 }
@@ -137,12 +154,35 @@ function readOnlyOff(mode: SandboxMode, delegates: boolean): OffTool[] {
 export interface CodingAgentTools {
   readonly tools: CustomTool[]
   readonly off: OffTool[]
+  /** The approval gate of each side-effecting tool registered: the defaults with `approvals` applied. */
+  readonly gates: ReadonlyMap<string, HumanInTheLoopOptions>
 }
 
 /** The tool half of {@link codingAgentPreset}, for a consumer that composes its own agent around the tools. */
 export function codingAgentTools(
   options: Omit<CodingAgentPresetOptions, 'posture'>,
 ): CodingAgentTools {
+  const built = buildCodingTools(options)
+  const names = new Set(built.tools.map((tool) => tool.name))
+  const gates = new Map<string, HumanInTheLoopOptions>()
+  for (const [tool, gate] of Object.entries(DEFAULT_GATES))
+    if (names.has(tool)) gates.set(tool, gate)
+  for (const [tool, gate] of Object.entries(options.approvals ?? {})) {
+    if (!names.has(tool)) {
+      throw new ConfigurationError(
+        `codingAgentPreset: approval for "${tool}", which this preset did not register in ` +
+          `${options.sandboxMode} mode (registered: ${[...names].join(', ')})`,
+      )
+    }
+    gates.set(tool, gate)
+  }
+  return { ...built, gates }
+}
+
+function buildCodingTools(options: Omit<CodingAgentPresetOptions, 'posture'>): {
+  tools: CustomTool[]
+  off: OffTool[]
+} {
   const { cwd, sandboxMode } = options
   const sandbox = options.sandbox ?? createSandboxBackend({ mode: sandboxMode, workDir: cwd })
   const bound = bindToolScope({
@@ -170,24 +210,28 @@ export function codingAgentTools(
   if (roots === undefined) {
     throw new ConfigurationError(`codingAgentPreset: unknown sandbox mode "${sandboxMode}"`)
   }
-  if (roots !== null && roots.length === 0) {
-    return { tools, off: readOnlyOff(sandboxMode, options.delegateToTeam !== undefined) }
+  const readOnly = roots !== null && roots.length === 0
+  if (readOnly && options.shellInReadOnly !== true) {
+    return { tools, off: readOnlyOff(sandboxMode, options.delegateToTeam !== undefined, false) }
   }
   // The write tools take the write root as THEIR project root; relative paths resolve against `cwd`.
   const writeScope =
     options.writeRoot !== undefined ? { projectRoot: options.writeRoot, baseDir: cwd } : {}
-  tools.push(
-    withName(bound.bind(createApplyPatchTool)(writeScope), 'ApplyPatch'),
-    withName(bound.bind(createEditFileTool)(writeScope), 'Edit'),
-    // `sandbox` comes from the bound scope, so the shell cannot be assembled unconfined.
-    withName(
-      bound.bind(createShellTool)(
-        options.defaultTimeoutMs !== undefined
-          ? { defaultTimeoutMs: options.defaultTimeoutMs }
-          : {},
-      ),
-      'Bash',
+  if (!readOnly) {
+    tools.push(
+      withName(bound.bind(createApplyPatchTool)(writeScope), 'ApplyPatch'),
+      withName(bound.bind(createEditFileTool)(writeScope), 'Edit'),
+    )
+  }
+  // `sandbox` comes from the bound scope, so the shell cannot be assembled unconfined.
+  const bash = withName(
+    bound.bind(createShellTool)(
+      options.defaultTimeoutMs !== undefined ? { defaultTimeoutMs: options.defaultTimeoutMs } : {},
     ),
+    'Bash',
+  )
+  tools.push(
+    options.bashDescription !== undefined ? withDescription(bash, options.bashDescription) : bash,
   )
   if (options.interactive !== undefined) {
     tools.push(
@@ -198,6 +242,10 @@ export function codingAgentTools(
     for (const name of ['interactive_shell', 'write_stdin']) {
       off.push({ name, reason: 'no interactive backend was supplied' })
     }
+  }
+  if (readOnly) {
+    off.push(...readOnlyOff(sandboxMode, options.delegateToTeam !== undefined, true))
+    return { tools, off }
   }
   if (options.delegateToTeam !== undefined) tools.push(options.delegateToTeam)
   return { tools, off }
@@ -217,21 +265,7 @@ export function codingAgentTools(
  * ```
  */
 export function codingAgentPreset(options: CodingAgentPresetOptions): CapabilityPreset {
-  const { tools, off } = codingAgentTools(options)
-  const names = new Set(tools.map((tool) => tool.name))
-
-  const gates = new Map<string, HumanInTheLoopOptions>()
-  for (const [tool, gate] of Object.entries(DEFAULT_GATES))
-    if (names.has(tool)) gates.set(tool, gate)
-  for (const [tool, gate] of Object.entries(options.approvals ?? {})) {
-    if (!names.has(tool)) {
-      throw new ConfigurationError(
-        `codingAgentPreset: approval for "${tool}", which this preset did not register in ` +
-          `${options.sandboxMode} mode (registered: ${[...names].join(', ')})`,
-      )
-    }
-    gates.set(tool, gate)
-  }
+  const { tools, off, gates } = codingAgentTools(options)
 
   const trusted = options.posture.allows.projectSettings
   const members: Capability[] = [
@@ -242,7 +276,15 @@ export function codingAgentPreset(options: CodingAgentPresetOptions): Capability
     // `project` is OMITTED rather than passed with a denying posture: the gate throws on a requested
     // but ungranted root, and an untrusted directory should degrade to user-only, not fail.
     new SettingSourcesCapability(
-      trusted ? { user: true, project: { trustedBy: options.posture } } : { user: true },
+      trusted
+        ? {
+            user: true,
+            project: { trustedBy: options.posture },
+            ...(options.claudeCode !== undefined && {
+              claudeCode: { trustedBy: options.posture, import: options.claudeCode.import },
+            }),
+          }
+        : { user: true },
     ),
     new HookApprovalCapability(options.hookApproval ?? { approve: () => false }),
   ]

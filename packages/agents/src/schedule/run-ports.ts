@@ -1,10 +1,29 @@
 // The stock `RunPort` and the file-backed transient job every scheduler host otherwise rewrites.
 import { readFile } from 'node:fs/promises'
 
-import type { SdkAgentHandle, SdkSendOptions } from '../bridge/sdk-adapter.js'
+import type { SdkSendOptions } from '../bridge/sdk-adapter.js'
 
 import type { ScheduledJob, ScheduleTarget } from './job-store.js'
 import type { RunPort, TransientJobOptions } from './scheduler.js'
+
+/**
+ * The slice of an agent `agentRunPort` uses: `send`, and a turn that can be waited for and, when it
+ * streams, drained. A full `SdkAgentHandle` and an app's own narrow agent both fit; neither needs an
+ * id or a `dispose`, since `withAgent` owns the lifetime.
+ */
+export interface ScheduledRunAgent {
+  send(
+    message: string,
+    options?: SdkSendOptions,
+  ): Promise<{
+    stream?: () => AsyncIterable<unknown>
+    wait: () => Promise<{
+      status?: string
+      result?: string
+      error?: { message?: string; code?: string }
+    }>
+  }>
+}
 
 /**
  * A `RunPort` that runs each prompt on the agent `withAgent` supplies: send with the scheduler's
@@ -13,7 +32,7 @@ import type { RunPort, TransientJobOptions } from './scheduler.js'
  * when the run throws.
  */
 export function agentRunPort(
-  withAgent: <R>(work: (agent: SdkAgentHandle) => Promise<R>) => Promise<R>,
+  withAgent: <R>(work: (agent: ScheduledRunAgent) => Promise<R>) => Promise<R>,
   options: { sendOptions?: SdkSendOptions } = {},
 ): RunPort {
   return (prompt, signal) =>

@@ -19,10 +19,10 @@ import {
   backup as hostBackup,
   BackupError,
   downloadDirectory,
+  rehomeTranscripts,
   restore as hostRestore,
   uploadDirectory,
 } from '@theokit/host/backup'
-import { encodeProjectDir } from '@theokit/sdk/persistence'
 
 import { assertSupportedRuntime } from '../runtime.js'
 
@@ -219,17 +219,6 @@ interface Restorable {
 }
 
 /**
- * The session transcripts the SDK keeps under `<workspace>/.theoclaw/projects/<encoded cwd>/`: the
- * directory name encodes the workspace's path, so a backup restored into another workspace moves
- * them under that workspace's own name, or no session would find its history.
- */
-function rehomed(path: string, from: string | undefined, to: string): string {
-  if (from === undefined) return path
-  const prefix = `.theoclaw/projects/${encodeProjectDir(from)}/`
-  return path.startsWith(prefix) ? `.theoclaw/projects/${encodeProjectDir(to)}/${path.slice(prefix.length)}` : path
-}
-
-/**
  * Every entry's place, and its bytes checked against the manifest, before anything is written. A
  * file reached through a symbolic link anywhere on its path, inside the backup or as the backup's
  * own `state` or `workspace`, is refused.
@@ -292,7 +281,13 @@ export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, optio
   const targets = resolveTargets(env, options.homeDir)
   const source = resolve(dir)
   const manifest = readManifest(source)
+  // Kept before the lock: a bad backup is refused without touching the lock, and a legacy source is
+  // verified before `packageSource` copies it.
   verifyBackup(source, manifest)
+  const rehome =
+    manifest.workspace === undefined
+      ? undefined
+      : rehomeTranscripts({ root: 'workspace', projectsDir: '.theoclaw/projects', from: manifest.workspace, to: targets.workspace })
   const lock = await takeInstanceLock(targets.state)
   let adapted: ReturnType<typeof packageSource> | undefined
   try {
@@ -306,7 +301,7 @@ export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, optio
         roots: { state: targets.state, workspace: targets.workspace },
         transform: (path, root) => {
           options.onFileCopied?.(join(targets[root as Root], path))
-          return root === 'workspace' ? rehomed(path, manifest.workspace, targets.workspace) : path
+          return rehome === undefined ? path : rehome(path, root)
         },
       }),
     )

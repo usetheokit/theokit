@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { sdkMessage } from './fakes.js'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -71,8 +72,8 @@ function fakeWorker(answer: string | 'fail' | 'streamed-error'): { agent: TurnAg
   const agent = {
     send: async () => ({
       stream: async function* () {
-        if (answer === 'streamed-error') yield { type: 'error', code: 'provider_overloaded' }
-        yield { type: 'assistant' }
+        if (answer === 'streamed-error') yield sdkMessage({ type: 'error', code: 'provider_overloaded' })
+        yield sdkMessage({ type: 'assistant' })
       },
       wait: async () => (answer === 'fail' ? { status: 'error' } : { status: 'finished', result: answer }),
       cancel: async () => {},
@@ -388,7 +389,7 @@ describe('run_code and delegate_all on a /control agent', () => {
     const tool = controlTool(settings, 'delegate_all', async () => ({
       send: async () => ({
         stream: async function* () {
-          yield { type: 'assistant' }
+          yield sdkMessage({ type: 'assistant' })
         },
         wait: async () => ({ status: 'cancelled' }),
         cancel: async () => undefined,

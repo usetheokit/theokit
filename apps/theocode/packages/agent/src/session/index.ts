@@ -2,10 +2,8 @@ export {
   archiveSession,
   deleteSession,
   compactSession,
-  legacyRootHint,
   forkSession,
   listSessions,
-  readPointerId,
   renameSession,
 } from './session-ops.js'
 

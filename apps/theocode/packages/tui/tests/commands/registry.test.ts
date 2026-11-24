@@ -108,3 +108,23 @@ describe('commandPalette', () => {
     })
   })
 })
+
+describe('verbs shared with the framework session vocabulary', () => {
+  it('routes the shared `reset` alias to /new, unless a custom command owns it', () => {
+    expect(routeCommand('/reset')).toEqual({ kind: 'new' })
+    expect(routeCommand('/reset', new Set(['reset']))).toEqual({
+      kind: 'custom',
+      name: 'reset',
+      arg: '',
+    })
+    expect(commandPalette(new Map()).map((c) => c.name)).not.toContain('reset')
+  })
+
+  it('keeps arguments optional and the /exit builtin its own palette entry', () => {
+    expect(commandPalette(new Map()).map((c) => c.name)).toContain('exit')
+    expect(routeCommand('/exit')).toEqual({ kind: 'quit' })
+    expect(routeCommand('/clear')).toEqual({ kind: 'clear' })
+    expect(routeCommand('/model')).toMatchObject({ kind: 'model' })
+    expect(routeCommand('/new chat').kind).not.toBe('commandError')
+  })
+})
