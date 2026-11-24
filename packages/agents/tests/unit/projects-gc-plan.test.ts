@@ -508,3 +508,24 @@ function defaultFs(): ProjectsGCFs {
     hasLiveWriter: () => false,
   }
 }
+
+describe('planProjectsGC — an unreadable last-session pointer (#2896)', () => {
+  it('keeps the project whole and says why, though the collector seam read the pointer', async () => {
+    const older = transcript('older', 100)
+    transcript('newer', 1)
+    transcript('oldest', 200)
+    // The pointer is a directory: a real read failure that is not ENOENT. The seam answers anyway, so
+    // only the framework's own protection read can notice it.
+    mkdirSync(sessionPointerPath(CWD, root), { recursive: true })
+    const real = defaultFs()
+    const pointer = sessionPointerPath(CWD, root)
+    const result = await plan({
+      fs: { ...real, readFile: (p) => (p === pointer ? 'older' : real.readFile(p)) },
+    })
+    expect(result.candidates.map((c) => c.target)).not.toContain(older)
+    expect(result.candidates).toEqual([])
+    const reason = result.kept.find((k) => k.project === NAME)?.reason
+    expect(reason).toMatch(/protection unavailable/)
+    expect(reason).toMatch(/last-session pointer/)
+  })
+})

@@ -196,14 +196,42 @@ export function transcriptOf(id: string, cwd: string, root: string = transcriptR
   return transcriptPath(root, cwd, id)
 }
 
-/** The pointer's target id, or `undefined`. Local because only protection reads it. */
-function readPointer(cwd: string, root: string): string | undefined {
-  try {
-    const id = readFileSync(sessionPointerPath(cwd, root), 'utf8').trim()
-    return id.length > 0 ? id : undefined
-  } catch {
-    return undefined
+/**
+ * The `last-session` pointer exists but cannot be read, so which session it protects is unknown.
+ * Raised by the protection set (and so by `deleteSession`, `forkSession` and the collectors) instead
+ * of treating the pointer as absent.
+ */
+export class SessionPointerUnreadableError extends TheokitAgentError {
+  override readonly name = 'SessionPointerUnreadableError'
+
+  constructor(
+    readonly path: string,
+    cause: unknown,
+  ) {
+    super(
+      `cannot read the last-session pointer at ${path} — refusing, because the session it names ` +
+        `must not be deleted: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause, code: 'session_pointer_unreadable', isRetryable: false },
+    )
   }
+}
+
+/**
+ * The pointer's target id, or `undefined` when there is no pointer (`ENOENT`, or an empty file).
+ * Any other read failure throws {@link SessionPointerUnreadableError}: the pointer decides what is
+ * protected, so "could not read it" must refuse rather than read as "no pointer".
+ */
+function readPointer(cwd: string, root: string): string | undefined {
+  const file = sessionPointerPath(cwd, root)
+  let raw: string
+  try {
+    raw = readFileSync(file, 'utf8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new SessionPointerUnreadableError(file, err)
+  }
+  const id = raw.trim()
+  return id.length > 0 ? id : undefined
 }
 
 /** What `deleteSession` did, per store. */

@@ -23,7 +23,7 @@ function options(
     now: () => NOW,
     keepLast: 0,
     maxAgeDays: 30,
-    projectsRoot: '/root',
+    projectsRoot: '/theokit-test-root',
     listProjects: () => ['proj'],
     listProject: () =>
       entries.map((e) => ({
