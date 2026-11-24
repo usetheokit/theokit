@@ -54,6 +54,14 @@ describe('--preset=daemon scaffold', () => {
     expect(readFileSync(join(dir, 'main.mjs'), 'utf-8')).toContain('createAppHost')
   })
 
+  it('delegates the daemon verbs to the shared commands and accepts task entry arguments', () => {
+    const main = readFileSync(join(dir, 'main.mjs'), 'utf-8')
+    expect(main).toContain('daemonCommands')
+    expect(main).toContain('entryArgs')
+    expect(main).toContain('applyEntryArgs')
+    expect(main).not.toContain('backend.install')
+  })
+
   it.skipIf(!hostBuilt)(
     'onboard --yes writes the config; the entry stops cleanly on SIGTERM',
     async () => {
