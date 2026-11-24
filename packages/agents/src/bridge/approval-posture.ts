@@ -28,8 +28,8 @@ import type { HumanInTheLoopOptions } from '../types.js'
 
 import type { ApprovalRequiredEvent } from './agent-stream-events.js'
 import { shouldAutoApprove } from './approval-decision.js'
-import type { PermissionsPluginOptions } from './permissions-plugin.js'
 import { createHitlPlugin, type HitlDecision } from './hitl-plugin.js'
+import type { PermissionsPluginOptions } from './permissions-plugin.js'
 import { recordRefusal } from './refusal-ledger.js'
 import { createToolHooksPlugin } from './tool-hooks-plugin.js'
 
