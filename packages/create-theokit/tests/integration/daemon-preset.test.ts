@@ -103,7 +103,7 @@ describe('--preset=daemon scaffold', () => {
     ).toThrow(/standalone/)
   })
 
-  it.skipIf(!dockerUp || !hostBuilt)(
+  it.skipIf(!dockerUp)(
     'the image keeps config and state on the /data volume',
     () => {
       const tag = `ctk-daemon-test:${String(process.pid)}`
@@ -111,21 +111,32 @@ describe('--preset=daemon scaffold', () => {
       const docker = (...a: string[]): string => execFileSync('docker', a, { encoding: 'utf-8' })
       // The template names a host version this release publishes; pack the workspace host and
       // install that tarball in the image instead of asking the registry for it.
+      // Docker is up, so a missing host build is a failure, not a skip: nothing could be packed.
+      expect(hostBuilt, 'packages/host must be built (pnpm build:packages)').toBe(true)
+      const hostPkg = JSON.parse(readFileSync(join(HOST_DIR, 'package.json'), 'utf-8')) as {
+        version: string
+        peerDependencies: Record<string, string>
+      }
       const packDir = mkdtempSync(join(root, 'pack-'))
       execFileSync('pnpm', ['pack', '--pack-destination', packDir], { cwd: HOST_DIR })
-      const tgz = readdirSync(packDir).find((f) => f.endsWith('.tgz'))!
+      const tgz = readdirSync(packDir).find((f) => f.endsWith('.tgz'))
+      if (tgz === undefined) throw new Error('pnpm pack produced no tarball')
       renameSync(join(packDir, tgz), join(dir, 'theokit-host.tgz'))
       const pkgPath = join(dir, 'package.json')
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
         dependencies: Record<string, string>
       }
       pkg.dependencies['@theokit/host'] = 'file:./theokit-host.tgz'
+      // The packed host peers on the SDK range the workspace builds against; install that, so the
+      // image runs the host against an SDK it supports rather than hiding the mismatch.
+      pkg.dependencies['@theokit/sdk'] = hostPkg.peerDependencies['@theokit/sdk']!
       writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
       const dockerfile = join(dir, 'Dockerfile')
       const original = readFileSync(dockerfile, 'utf-8')
-      const adapted = original
-        .replace('COPY package.json ./', 'COPY package.json theokit-host.tgz ./')
-        .replace('RUN npm install', 'RUN npm install --legacy-peer-deps')
+      const adapted = original.replace(
+        'COPY package.json ./',
+        'COPY package.json theokit-host.tgz ./',
+      )
       expect(adapted).not.toBe(original)
       writeFileSync(dockerfile, adapted)
       try {
@@ -139,9 +150,7 @@ describe('--preset=daemon scaffold', () => {
             tag,
             'node_modules/@theokit/host/package.json',
           ),
-        ).toContain(
-          `"version": "${(JSON.parse(readFileSync(join(HOST_DIR, 'package.json'), 'utf-8')) as { version: string }).version}"`,
-        )
+        ).toContain(`"version": "${hostPkg.version}"`)
         docker('run', '--rm', '-v', `${volume}:/data`, tag, 'onboard', '--yes')
         const id = docker('run', '-d', '-v', `${volume}:/data`, tag).trim()
         try {
