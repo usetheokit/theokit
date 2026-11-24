@@ -14,13 +14,43 @@ export interface PublishedService {
 }
 
 /**
- * The DNS-SD backend, supplied by the caller (for example a wrapper over `bonjour-service`).
- * `@theokit/host` ships none, so it takes no multicast dependency.
+ * The DNS-SD backend, supplied by the caller. `@theokit/host` takes no multicast dependency;
+ * `@theokit/host/discovery-bonjour` is an optional adapter over `bonjour-service`.
  */
 export interface ServicePublisher {
   publish(service: PublishedService): void
   unpublishAll(): Promise<void>
   destroy(): Promise<void>
+  /**
+   * Optional. Subscribe to errors the backend raises after `publish` returned. Returns an
+   * unsubscribe function. `announceService` subscribes before publishing when this exists.
+   */
+  onError?(listener: (error: unknown) => void): () => void
+}
+
+/** Which path delivered a library error. */
+export type DiscoveryErrorRoute = 'socket' | 'answer' | 'send-respond' | 'send-query' | 'publish'
+
+function codeOf(cause: unknown): string {
+  if (typeof cause === 'object' && cause !== null && 'code' in cause) {
+    const { code } = cause as { code: unknown }
+    if (typeof code === 'string' && code !== '') return code
+  }
+  return 'UNKNOWN'
+}
+
+/** A DNS-SD failure; `code` is the cause's string `code` or `UNKNOWN`. */
+export class DiscoveryError extends Error {
+  readonly code: string
+  readonly route: DiscoveryErrorRoute
+
+  constructor(cause: unknown, route: DiscoveryErrorRoute) {
+    const code = codeOf(cause)
+    super(`LAN discovery failed: ${code} (${route})`, { cause })
+    this.name = 'DiscoveryError'
+    this.code = code
+    this.route = route
+  }
 }
 
 export interface AnnounceServiceOptions {
@@ -32,6 +62,11 @@ export interface AnnounceServiceOptions {
   /** The address the service is bound to. A loopback host announces nothing. */
   readonly host: string
   readonly publisher: ServicePublisher
+  /**
+   * Called once, for the first failure the publisher reports after `publish` (needs a publisher
+   * with `onError`). The announcement is stopped first. Never throws out of the callback's caller.
+   */
+  readonly onError?: (error: unknown) => void
 }
 
 export interface ServiceAnnouncement {
@@ -85,17 +120,36 @@ export function announceService(options: AnnounceServiceOptions): ServiceAnnounc
   }
   const name = trimServiceName(options.name)
   let stopping: Promise<void> | undefined
+  let unsubscribe: (() => void) | undefined
   const stop = (): Promise<void> => {
+    unsubscribe?.()
     stopping ??= (async () => {
       await bounded(() => publisher.unpublishAll(), STOP_STEP_BOUND_MS)
       await bounded(() => publisher.destroy(), STOP_STEP_BOUND_MS)
     })()
     return stopping
   }
+  let failed = false
+  const fail = (error: unknown): void => {
+    if (failed) return
+    failed = true
+    unsubscribe?.()
+    void stop().then(() => {
+      try {
+        options.onError?.(error)
+      } catch (thrown) {
+        process.emitWarning(
+          `announceService onError threw: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
+        )
+      }
+    })
+  }
   try {
+    unsubscribe = publisher.onError?.(fail)
     publisher.publish({ name, type: options.type, port: options.port, txt: { ...options.txt } })
   } catch (error) {
     // Release the publisher before reporting the failure.
+    unsubscribe?.()
     void stop()
     throw error
   }

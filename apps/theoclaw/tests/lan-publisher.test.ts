@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createBonjourPublisher } from '../src/discovery/bonjour-publisher.js'
+import { createBonjourPublisher } from '../src/discovery/lan-publisher.js'
 import type { ServicePublisher, TheoClawDiscoveryError } from '../src/discovery/publisher.js'
 
 /** An address reserved for documentation (RFC 5737): no host owns it, so binding it fails. */
