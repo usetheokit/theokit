@@ -348,4 +348,21 @@ describe('a restart', () => {
     expect(ids).toEqual(['theoclaw-telegram-dm-restart_dreset-g1'])
     expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['what was the word'])
   })
+
+  it('a generation 1 transcript is found under its old agent id after a restart', { timeout: 30_000 }, async () => {
+    const workspace = freshWorkspace()
+    const first = await start({ startTheoClaw }, workspace)
+    await say(first.telegram, 'the word is stork', 'restart-g1')
+    expect(await say(first.telegram, '/reset', 'restart-g1')).toBe(CONFIRMATION)
+    await say(first.telegram, 'the word is crane', 'restart-g1')
+    await stop(first)
+
+    const ids: string[] = []
+    const second = await start(await reloaded(), workspace, ids)
+    await say(second.telegram, 'what was the word', 'restart-g1')
+
+    // The id format is the one the app has always used, so the pool resumes the stored generation 1.
+    expect(ids).toEqual(['theoclaw-telegram-dm-restart_dg1-g1'])
+    expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['the word is crane', 'what was the word'])
+  })
 })

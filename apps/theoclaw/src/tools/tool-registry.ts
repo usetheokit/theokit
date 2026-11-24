@@ -1,25 +1,9 @@
 import type { CustomTool, McpServerConfig, MemorySettings, Plugin } from '@theokit/sdk'
 import { createACPTool } from 'theokit/server/agent'
+import { assistantAgentTools, assistantWorkerTools } from '@theokit/agents/presets'
 import type { ToolScope } from '@theokit/agents/tool-scope'
-import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
-import { createGithubLinkPreviewTool } from '@theokit/sdk-tools/github-link-preview'
-import { createReadPdfTool } from '@theokit/sdk-tools/read-pdf'
 import { createScreenshotLogbookTool } from '@theokit/sdk-tools/screenshot-logbook'
-import {
-  createApplyPatchTool,
-  createEditFileTool,
-  createGitDiffTool,
-  createInteractiveShellTool,
-  createListDirTool,
-  createReadFileTool,
-  createShellTool,
-  createTodolistTool,
-  createViewImageTool,
-  createWebFetchTool,
-  createWebSearchTool,
-  createWriteFileTool,
-  createWriteStdinTool,
-} from '@theokit/agents/tools'
+import { createShellTool, createWebSearchTool } from '@theokit/agents/tools'
 
 import { widgetTool } from '../canvas/widget.js'
 import type { TurnAgent } from '../agent-port.js'
@@ -73,20 +57,28 @@ function webSearchTool(settings: ToolSettings): CustomTool | undefined {
   return adapter === undefined ? undefined : createWebSearchTool({ search: adapter })
 }
 
-/** `web_fetch` on the settings' fetch and DNS lookup, its SSRF screen kept (B-398 FR-003). */
-function webFetchTool(settings: ToolSettings): CustomTool {
-  return createWebFetchTool({ fetchImpl: settings.fetchImpl, ...(settings.lookup === undefined ? {} : { lookup: settings.lookup }) })
-}
-
 /** The sandboxed shell over the settings' backend; `shell_exec`. */
 export function shellToolFor(settings: ToolSettings): CustomTool {
   return bindDuplicated(toolScopeOf(settings), createShellTool)()
 }
 
+/** What the assistant preset needs of the settings: the root, the scope, the modes and the web. */
+function presetOptions(settings: ToolSettings, scope: ToolScope = toolScopeOf(settings)) {
+  const search = webSearchTool(settings)
+  return {
+    toolRoot: settings.toolRoot,
+    sandboxMode: settings.sandboxMode,
+    scope,
+    hostTools: settings.hostTools,
+    fetchImpl: settings.fetchImpl,
+    ...(settings.lookup === undefined ? {} : { lookup: settings.lookup }),
+    ...(search === undefined ? {} : { webSearch: search }),
+  }
+}
+
 /** The two read-only file tools: the `minimal` tool profile. */
 export function fileReadTools(settings: ToolSettings): CustomTool[] {
-  const scope = toolScopeOf(settings)
-  return [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)()]
+  return [...assistantAgentTools({ ...presetOptions(settings), hostTools: false, profile: 'minimal' }).tools]
 }
 
 /**
@@ -94,11 +86,7 @@ export function fileReadTools(settings: ToolSettings): CustomTool[] {
  * the web and change nothing on the host (plan D3). Host-changing tools wait for exec approval.
  */
 export function readOnlyTools(settings: ToolSettings): CustomTool[] {
-  const scope = toolScopeOf(settings)
-  const tools: CustomTool[] = [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)(), webFetchTool(settings)]
-  const search = webSearchTool(settings)
-  if (search !== undefined) tools.push(search)
-  return tools
+  return assistantWorkerTools(presetOptions(settings))
 }
 
 /**
@@ -127,38 +115,19 @@ function bindDuplicated<O>(scope: ToolScope, factory: (options: O) => CustomTool
  * proven to write in the tool root and nowhere else on this host.
  */
 export function buildTools(settings: ToolSettings, permission: AcpPermissionOptions = {}, scope: ToolScope = toolScopeOf(settings)): CustomTool[] {
-  const tools: CustomTool[] = [
-    scope.bind(createReadFileTool)(),
-    scope.bind(createListDirTool)(),
-    // Documents and PDFs are read from the tool root, GitHub links over the settings' fetch (OC-69).
-    createReadPdfTool({ projectRoot: settings.toolRoot }),
-    createExtractDocumentTool({ projectRoot: settings.toolRoot }),
-    createGithubLinkPreviewTool({ fetchImpl: settings.fetchImpl }),
-    webFetchTool(settings),
-    // `TodolistTool` types its handler with the todo input union; the SDK validates the model's
-    // arguments against the tool's own `inputSchema` before calling it, so the wider type is safe.
-    createTodolistTool() as unknown as CustomTool,
-    widgetTool(),
-  ]
-  // The ChatGPT subscription wire rejects an image in a tool result, so `view_image` is not offered there.
-  if (settings.imageResults !== false) tools.splice(2, 0, scope.bind(createViewImageTool)())
-  const search = webSearchTool(settings)
-  if (search !== undefined) tools.push(search)
-  if (settings.gitRepository && settings.sandboxEnforced) tools.push(bindDuplicated(scope, createGitDiffTool)())
-  if (settings.hostTools) {
-    // The file writers take a project root and no sandbox, so `read-only` can only leave them out
-    // (plan D3); the shell stays, confined by the read-only backend.
-    if (settings.sandboxMode !== 'read-only') {
-      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)(), createScreenshotLogbookTool({ projectRoot: settings.toolRoot }))
-    }
-    tools.push(bindDuplicated(scope, createShellTool)())
-    if (settings.interactive !== undefined) {
-      // A provider function, not the backend: the SDK tells the two apart by `instanceof`, which
-      // fails across the duplicated SDK installs and then calls the backend as a function.
-      const backend = settings.interactive
-      const interactive = () => backend
-      tools.push(createInteractiveShellTool({ interactive }), createWriteStdinTool({ interactive }))
-    }
+  // The ChatGPT subscription wire rejects an image in a tool result, so `view_image` is not offered there (`imageResults`).
+  const { tools } = assistantAgentTools({
+    ...presetOptions(settings, scope),
+    gitDiff: 'when-enforced',
+    gitRepository: settings.gitRepository,
+    sandboxEnforced: settings.sandboxEnforced,
+    ...(settings.imageResults === undefined ? {} : { imageResults: settings.imageResults }),
+    // The file writers take a project root and no sandbox, so `read-only` leaves them out (plan D3); the shell stays.
+    ...(settings.interactive === undefined ? {} : { interactive: settings.interactive }),
+    extra: [widgetTool()],
+  })
+  if (settings.hostTools && settings.sandboxMode !== 'read-only') {
+    tools.push(createScreenshotLogbookTool({ projectRoot: settings.toolRoot }))
   }
   tools.push(...acpTools(settings, permission))
   return tools

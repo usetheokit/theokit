@@ -4,7 +4,7 @@ import { join, resolve, sep } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
-import type { AgentOptions, Plugin } from '@theokit/sdk'
+import type { AgentOptions, Plugin, SDKAgent, SessionPool } from '@theokit/sdk'
 
 import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
 import { OWNER_SCOPE } from '../memory/memory-store.js'
@@ -14,7 +14,7 @@ import { createMemory, type MemoryWiring, memoryEnabled } from '../memory/wiring
 import { withSdkSkills } from '../agent/create-agent.js'
 import { Container } from '@theokit/di'
 import { createAgentBoundary } from '@theokit/di-agent'
-import { TheoClawConfigError } from '../control-plane/errors.js'
+import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
 import {
   createChannelAgentFactory,
   isIncognito,
@@ -26,7 +26,7 @@ import { SessionRouter } from '@theokit/gateway'
 import { MAIN_AGENT, readAgentRouter } from '../routing/routing-env.js'
 import { Generations } from './generations.js'
 import type { ThinkingLevel } from '../agent/create-agent.js'
-import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
+import { agentIdFor, type SessionAgent, type SessionLease } from './session-agents.js'
 import { createSessionRouter } from './session-key.js'
 import { readSessionSettings, type SessionSettings } from './session-settings.js'
 
@@ -48,6 +48,22 @@ export function sessionsFile(workspace: string): string {
   return join(workspace, '.theoclaw', 'sessions.json')
 }
 
+/** The chat sessions as the events see them: `Agent.sessionPool` keyed by session, fed the event. */
+export interface ChatSessionPool {
+  /** The agent of the event's session, held for one turn until `release()`. */
+  lease(event: MessageEvent): Promise<SessionLease>
+  /** Start the event's session afresh (`/new`, `/reset`): the next message opens the next generation. */
+  reset(event: MessageEvent): Promise<void>
+  /** Close the event's current agent once no turn holds it; its next message reopens the same id. */
+  rebuild(event: MessageEvent): void
+  heldIds(): string[]
+  /** Refuse new turns, wait up to 30 s for the ones in flight, then dispose every agent. */
+  disposeAll(): Promise<void>
+}
+
+/** How long stopping waits for turns in flight before disposing their agents anyway. */
+const STOP_WAIT_MS = 30_000
+
 /** The chat path's request boundary: it holds the request's event and leases that session's agent. */
 export type ChatBoundary = <R>(
   event: MessageEvent,
@@ -61,7 +77,7 @@ export type ChatBoundary = <R>(
  * the end of the request leaves the agent open (D2).
  */
 export function chatSessions(options: ChatSessionsOptions): {
-  readonly sessions: SessionAgents
+  readonly sessions: ChatSessionPool
   readonly withAgent: ChatBoundary
   readonly keyOf: (event: MessageEvent) => string
   /** Set the session's thinking level; its agent is rebuilt for the next turn. */
@@ -115,13 +131,17 @@ export function chatSessions(options: ChatSessionsOptions): {
     return done
   }
   const container = new Container()
-  // The request's event: the seed of the request scope `withAgent` opens, undefined outside one.
-  const currentEvent = (): MessageEvent | undefined => {
-    try {
-      return container.requestSeed<MessageEvent>()
-    } catch {
-      return undefined
-    }
+  const optionsFor = (event: MessageEvent): AgentOptions => {
+    // A bound peer or platform is answered by its own agent: that agent's workspace and persona.
+    const workspace =
+      agentRouter?.route({ platform: event.platform, peer: event.sender.id }).workspace ??
+      settings.workspace
+    const base = sessionAgentOptions(options.env, workspace)
+    const profiled = options.toolsFor?.(event)
+    const plugins = [...(options.plugins?.() ?? []), ...(profiled?.plugins ?? [])]
+    const withPlugins =
+      plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
+    return profiled === undefined ? withPlugins : { ...withPlugins, tools: [...profiled.tools] }
   }
   const thinking = new Map<string, ThinkingLevel>()
   // Spread after the channel's options, which carry the instance-wide THEOCLAW_THINKING, so the session's level wins.
@@ -129,64 +149,82 @@ export function chatSessions(options: ChatSessionsOptions): {
     const level = thinking.get(key)
     return level === undefined ? {} : { thinking: level }
   }
-  const sessions = new SessionAgents({
-    router,
-    // Opened by the chat path's own factory, whose protected options are applied last, so the
-    // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
-    // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
-    getOrCreate: async (id, sessionOptions) => {
-      const dir = sessionOptions.local?.sessionDir
-      const scope = scopeOf(currentEvent(), owners)
-      await importLegacy(scope)
-      const backendOptions = (await memory?.agentOptions()) ?? {}
-      const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
-        createChannelAgentFactory<SessionAgent>(options.env, (channel) =>
-          open(agentId, {
-            ...sessionOptions,
-            ...backendOptions,
-            ...channel,
-            ...extra,
-            // The SDK's memory: this sender's own partition, outside the cwd, reviewed after each turn.
-            ...(memory === undefined ? {} : { memory: memory.settings(scope) }),
-            ...(backendOptions.plugins === undefined
-              ? {}
-              : {
-                  plugins: [
-                    ...pluginList(extra.plugins ?? channel.plugins ?? sessionOptions.plugins),
-                    ...pluginList(backendOptions.plugins),
-                  ],
-                }),
-            // The session's prompt carries the persona; `...channel` would replace it with the bare notice.
-            systemPrompt: extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt,
-            local: { ...sessionOptions.local, ...channel.local },
-          }),
-        )()
+  // Opened by the chat path's own factory, whose protected options are applied last, so the
+  // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
+  // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
+  const openSession = async (id: string, event: MessageEvent): Promise<SessionAgent> => {
+    const sessionOptions = optionsFor(event)
+    const dir = sessionOptions.local?.sessionDir
+    const scope = scopeOf(event, owners)
+    await importLegacy(scope)
+    const backendOptions = (await memory?.agentOptions()) ?? {}
+    const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
+      createChannelAgentFactory<SessionAgent>(options.env, (channel) =>
+        open(agentId, {
+          ...sessionOptions,
+          ...backendOptions,
+          ...channel,
+          ...extra,
+          // The SDK's memory: this sender's own partition, outside the cwd, reviewed after each turn.
+          ...(memory === undefined ? {} : { memory: memory.settings(scope) }),
+          ...(backendOptions.plugins === undefined
+            ? {}
+            : {
+                plugins: [
+                  ...pluginList(extra.plugins ?? channel.plugins ?? sessionOptions.plugins),
+                  ...pluginList(backendOptions.plugins),
+                ],
+              }),
+          // The session's prompt carries the persona; `...channel` would replace it with the bare notice.
+          systemPrompt: extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt,
+          local: { ...sessionOptions.local, ...channel.local },
+        }),
+      )()
+    try {
+      const opened = await build(id, thinkingExtra(keyOf(id)))
+      const agent =
+        memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id), scope)
+      return reportDisposeFailure(transient ? withIncognitoCleanup(agent, dir) : agent, keyOf(id), options.write)
+    } catch (error) {
+      if (transient) removeIncognitoDir(dir)
+      throw error
+    }
+  }
+  const generations = options.generations ?? Generations.load(sessionsFile(settings.workspace))
+  const pool: SessionPool<MessageEvent> = Agent.sessionPool<MessageEvent>({
+    // The pool hands the first lease's event to the factory: the options and scope come from it.
+    // The pool types its agents as `SDKAgent`; these are `SessionAgent`s (the app's own port).
+    agent: async ({ agentId, context }) => (await openSession(agentId, context)) as unknown as SDKAgent,
+    agentId: agentIdFor,
+    generations,
+    idleMs: settings.idleMinutes * 60_000,
+    maxOpen: settings.maxOpenSessions,
+  })
+  let stopping = false
+  const refuseIfStopping = (): void => {
+    if (stopping) throw new Error('theoclaw is stopping: no new chat turn starts')
+  }
+  const sessions: ChatSessionPool = {
+    async lease(event) {
+      refuseIfStopping()
       try {
-        const opened = await build(id, thinkingExtra(keyOf(id)))
-        const agent =
-          memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id), scope)
-        return transient ? withIncognitoCleanup(agent, dir) : agent
+        const lease = await pool.lease(router.resolveAgentId(event), event)
+        return { agent: lease.agent as unknown as SessionAgent, agentId: lease.agentId, release: lease.release }
       } catch (error) {
-        if (transient) removeIncognitoDir(dir)
+        // A stop that began while the lease waited (a reset, a dispose, an opening) refuses it.
+        refuseIfStopping()
         throw error
       }
     },
-    optionsFor: (event) => {
-      // A bound peer or platform is answered by its own agent: that agent's workspace and persona.
-      const workspace =
-        agentRouter?.route({ platform: event.platform, peer: event.sender.id }).workspace ??
-        settings.workspace
-      const base = sessionAgentOptions(options.env, workspace)
-      const profiled = options.toolsFor?.(event)
-      const plugins = [...(options.plugins?.() ?? []), ...(profiled?.plugins ?? [])]
-      const withPlugins =
-        plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
-      return profiled === undefined ? withPlugins : { ...withPlugins, tools: [...profiled.tools] }
+    reset: (event) => pool.reset(router.resolveAgentId(event)),
+    rebuild: (event) => pool.rebuild(router.resolveAgentId(event)),
+    heldIds: () => pool.heldIds(),
+    async disposeAll() {
+      stopping = true
+      const { stillRunning } = await pool.disposeAll({ drainMs: STOP_WAIT_MS })
+      for (const key of stillRunning) options.write(`theoclaw: stopping with a turn still running in session ${key}`)
     },
-    generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
-    settings,
-    write: options.write,
-  })
+  }
   const boundary = createAgentBoundary<MessageEvent, SessionLease>({
     container,
     factory: (event) => sessions.lease(event),
@@ -269,4 +307,29 @@ export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefine
 function removeIncognitoDir(dir: string | undefined): void {
   if (dir !== undefined && resolve(dir).startsWith(resolve(tmpdir()) + sep))
     rmSync(dir, { recursive: true, force: true })
+}
+
+/** A disposal that fails is named in one line and swallowed: the pool's drain must reach every agent. */
+function reportDisposeFailure(
+  agent: SessionAgent,
+  key: string,
+  write: (line: string) => void,
+): SessionAgent {
+  return new Proxy(agent, {
+    get(target, property) {
+      if (property === 'dispose') {
+        return async (): Promise<void> => {
+          try {
+            await target.dispose()
+          } catch (error) {
+            write(`theoclaw: disposing the agent of session ${key} failed: ${describeError(error)}`)
+          }
+        }
+      }
+      const value: unknown = Reflect.get(target, property, target)
+      return typeof value === 'function'
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value
+    },
+  })
 }

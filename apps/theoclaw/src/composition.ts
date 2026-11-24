@@ -95,9 +95,9 @@ import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
 import { browserLine } from './tools/browser-server.js'
 import { createSharedBrowser, type BrowserLauncher, type SharedBrowser } from '@theokit/host/browser'
 import type { MemoryWiring } from './memory/wiring.js'
-import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
+import { type ChatBoundary, type ChatSessionPool, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
-import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
+import type { SessionAgent } from './sessions/session-agents.js'
 import { startTranscriptSweeper } from './sessions/transcript-gc.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
 import { withFailedStatusLog } from './channels/whatsapp-status-log.js'
@@ -169,7 +169,7 @@ export interface TheoClawOptions {
    */
   readonly generations?: Generations
   /**
-   * Resolves a chat session's agent by id; default `Agent.getOrCreate`. `SessionAgents` calls it
+   * Resolves a chat session's agent by id; default `Agent.getOrCreate`. The chat session pool calls it
    * once per agent id it opens, through `createChannelAgentFactory`, with `sessionAgentOptions`
    * (plan D5, T5.1).
    */
@@ -216,7 +216,7 @@ export interface ComposedTheoClaw {
   /** The one request boundary of every event run: a fresh tool-less agent per run. */
   readonly withEventAgent: EventWithAgent
   /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
-  readonly sessions: SessionAgents
+  readonly sessions: ChatSessionPool
   /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
   readonly withChatAgent: ChatBoundary
   /** `/think` of the chat path: sets a session's thinking level. */
@@ -806,7 +806,7 @@ async function startComposed(
   readVoiceCallSettings(options.env)
   const relay = readRelaySettings(options.env)
   const mcpRelay = readMcpRelaySettings(options.env)
-  // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
+  // The chat session pool alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
   ;(options.agentRegistry ?? Agent.registry).configure({ maxAgents: 0, idleTimeoutMs: 0 })
