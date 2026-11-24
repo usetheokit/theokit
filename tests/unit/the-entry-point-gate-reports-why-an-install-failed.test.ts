@@ -13,7 +13,13 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { describeCommandFailure, runWithOneRetry } from '../../scripts/describe-command-failure.mjs'
+import {
+  describeCommandFailure,
+  missingPackage,
+  peerSpecs,
+  specForMissing,
+  runWithOneRetry,
+} from '../../scripts/describe-command-failure.mjs'
 
 const LONG_ARGV = `npm install ${'/tmp/load-siblings-abcdef/theokit-presenter-1.0.0.tgz '.repeat(6)}`
 const NPM_STDERR = [
@@ -71,5 +77,64 @@ describe('the entry-point gate reports why an install failed', () => {
 
     expect(() => runWithOneRetry(attempt, () => {})).toThrow(/ECONNRESET[\s\S]*ECONNRESET/)
     expect(calls).toBe(2)
+  })
+})
+
+describe('the entry-point gate installs the peers a consumer owes', () => {
+  it('test_a_required_theokit_peer_not_packed_installs_at_its_declared_range', () => {
+    const specs = peerSpecs(
+      {
+        peerDependencies: {
+          '@theokit/sdk': '>=12.0.0 <14',
+          '@theokit/gateway': '>=0.30.0 <1',
+          'bonjour-service': '1.4.4',
+          react: '>=18',
+        },
+        peerDependenciesMeta: { '@theokit/gateway': { optional: true } },
+      },
+      new Set(),
+    )
+
+    expect(specs).toContain('@theokit/sdk@>=12.0.0 <14')
+    expect(specs).toContain('react@18')
+    expect(specs.some((s) => s.startsWith('@theokit/gateway'))).toBe(false)
+  })
+
+  it('test_a_packed_sibling_peer_is_left_to_its_tarball', () => {
+    const specs = peerSpecs(
+      { peerDependencies: { '@theokit/agents': '^1.0.0' } },
+      new Set(['@theokit/agents']),
+    )
+
+    expect(specs).toEqual([])
+  })
+})
+
+describe('the entry-point gate supplies what an entry imports and the consumer owes', () => {
+  const manifest = {
+    peerDependencies: { '@theokit/gateway': '>=0.30.0 <1', '@theokit/sdk': '>=12.0.0 <14' },
+    peerDependenciesMeta: { '@theokit/gateway': { optional: true } },
+  }
+  const tarballs = new Map([['@theokit/presenter', '/tmp/presenter.tgz']])
+
+  it('test_the_missing_package_is_read_from_node_stderr', () => {
+    expect(
+      missingPackage(
+        "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@theokit/gateway' imported",
+      ),
+    ).toBe('@theokit/gateway')
+    expect(missingPackage('SyntaxError: boom')).toBeUndefined()
+  })
+
+  it('test_an_optional_peer_is_installed_at_its_range_and_a_packed_sibling_from_its_tarball', () => {
+    expect(specForMissing('@theokit/gateway', manifest, tarballs)).toBe(
+      '@theokit/gateway@>=0.30.0 <1',
+    )
+    expect(specForMissing('@theokit/presenter', manifest, tarballs)).toBe('/tmp/presenter.tgz')
+  })
+
+  it('test_an_undeclared_dependency_is_not_supplied', () => {
+    expect(specForMissing('left-pad', manifest, tarballs)).toBeUndefined()
+    expect(specForMissing('@theokit/sdk', manifest, tarballs)).toBeUndefined()
   })
 })
