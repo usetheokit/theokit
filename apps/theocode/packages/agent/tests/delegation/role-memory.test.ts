@@ -39,7 +39,8 @@ type Def = { prompt: string; memory?: string }
 // argument or it stops standing in for it, and the repo's convention marks a deliberately
 // unused parameter with the underscore rather than dropping it.
 const fakeApply = <T extends Def>(d: T, _agent: string, cwd: string, home?: string): T => {
-  if (d.memory === 'bogus') throw new Error(`memory scope "bogus" is not one of: project, local, user`)
+  if (d.memory === 'bogus')
+    throw new Error(`memory scope "bogus" is not one of: project, local, user`)
   if (d.memory === undefined) return d
   const root = d.memory === 'user' ? (home ?? '<no-home>') : cwd
   return { ...d, prompt: `${d.prompt}\n\n## Your memory\n\nnote from ${root}` }

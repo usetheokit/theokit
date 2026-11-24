@@ -1,15 +1,6 @@
 import { homedir } from 'node:os'
 
-import {
-  DelegationTimeoutError,
-  type HookHandlers,
-  type SDKAgent,
-  Squad,
-  TheokitAgentError,
-  Tool,
-  withClockCap,
-  withEphemeralAgent,
-} from '@theokit/agents'
+import { type HookHandlers, type SDKAgent, Squad, TheokitAgentError, Tool } from '@theokit/agents'
 import { z } from 'zod'
 
 import { type AgentConfig, type TrustPosture } from '../config/index.js'
@@ -17,10 +8,26 @@ import { resolveFreshCredential } from '../auth/index.js'
 import { resolveToolScope } from '../tools/index.js'
 import { buildRoleAgent, TEAM_ROLES, type RoleAgentContext } from './roles.js'
 
-async function buildTeam(ctx: RoleAgentContext): Promise<{ squad: Squad; members: SDKAgent[] }> {
-  const members = await Promise.all(TEAM_ROLES.map((role) => buildRoleAgent(role, ctx)))
-  const squad = Squad.create({ agents: members, process: 'sequential', name: 'theocode-team' })
-  return { squad, members }
+/**
+ * The squad owns its members: it disposes them after every run, and a disposal failure reaches
+ * `onDisposeError` without replacing the delegation's outcome (B-043).
+ */
+async function buildTeam(
+  ctx: RoleAgentContext,
+  report: (line: string) => void,
+): Promise<{ squad: Squad }> {
+  const members: SDKAgent[] = await Promise.all(TEAM_ROLES.map((role) => buildRoleAgent(role, ctx)))
+  const squad = Squad.create({
+    agents: members,
+    process: 'sequential',
+    name: 'theocode-team',
+    ownsMembers: true,
+    onDisposeError: (error, i) =>
+      report(
+        `[delegation] team member ${TEAM_ROLES[i] ?? String(i)} failed to dispose: ${String(error)}\n`,
+      ),
+  })
+  return { squad }
 }
 
 export interface TeamContext {
@@ -56,49 +63,6 @@ class DelegationExpiredError extends TheokitAgentError {
   }
 }
 
-/**
- * Run a squad under the framework's clock cap, and dispose its members when it ends.
- *
- * A squad that hits the cap is abandoned AND its members are disposed (cancelled) at once:
- * `withEphemeralAgent` disposes in a `finally`, so the timeout cannot leave members running. A
- * disposal failure is reported and never replaces the delegation's own outcome (B-043).
- */
-export async function runTeamWithCap<R>(
-  members: readonly { [Symbol.asyncDispose]: () => PromiseLike<void> }[],
-  run: () => Promise<R>,
-  report: (line: string) => void,
-  capMs: number = DELEGATION_CAP_MS,
-): Promise<R> {
-  return withEphemeralAgent(
-    () => ({
-      agent: undefined,
-      // The helper owns "a failing dispose never replaces the result"; this only gathers every
-      // member's disposal so one failure does not skip the others.
-      dispose: async () => {
-        const disposals = await Promise.allSettled(members.map((m) => m[Symbol.asyncDispose]()))
-        const reasons = disposals.flatMap((d) => (d.status === 'rejected' ? [d.reason] : []))
-        if (reasons.length > 0) throw new AggregateError(reasons, 'team members failed to dispose')
-      },
-    }),
-    async () => {
-      try {
-        return await withClockCap(run(), capMs, 'delegate_to_team')
-      } catch (error) {
-        if (error instanceof DelegationTimeoutError) throw new DelegationExpiredError(capMs)
-        throw error
-      }
-    },
-    {
-      onDisposeError: (error) => {
-        const reasons = error instanceof AggregateError ? (error.errors as unknown[]) : [error]
-        for (const reason of reasons) {
-          report(`[delegation] a team member failed to dispose: ${String(reason)}\n`)
-        }
-      },
-    },
-  )
-}
-
 export function createDelegateToTeamTool(context: TeamContext) {
   return Tool.create({
     name: 'delegate_to_team',
@@ -115,21 +79,22 @@ export function createDelegateToTeamTool(context: TeamContext) {
     }),
     handler: async ({ task }: { task: string }) => {
       const scope = resolveToolScope({ sandbox_mode: context.sandbox_mode }, context.cwd)
-      const { squad, members } = await buildTeam({
-        apiKey: () =>
-          resolveFreshCredential({ env: process.env, home: homedir() }).then((c) => c.apiKey),
-        parent: { model: context.model, reasoning_effort: context.reasoning_effort },
-        posture: context.posture,
-        cwd: scope.cwd,
-        sandbox: scope.sandbox,
-        writeRoot: scope.writeRoot,
-        ...(context.hooks !== undefined ? { hooks: context.hooks } : {}),
-      })
-      const run = await runTeamWithCap(
-        members,
-        () => squad.run(task),
+      const { squad } = await buildTeam(
+        {
+          apiKey: () =>
+            resolveFreshCredential({ env: process.env, home: homedir() }).then((c) => c.apiKey),
+          parent: { model: context.model, reasoning_effort: context.reasoning_effort },
+          posture: context.posture,
+          cwd: scope.cwd,
+          sandbox: scope.sandbox,
+          writeRoot: scope.writeRoot,
+          ...(context.hooks !== undefined ? { hooks: context.hooks } : {}),
+        },
         (line) => process.stderr.write(line),
       )
+      // The cap cancels the member in flight through the run's signal and resolves `timedOut`.
+      const run = await squad.run(task, { timeoutMs: DELEGATION_CAP_MS })
+      if (run.timedOut === true) throw new DelegationExpiredError(DELEGATION_CAP_MS)
       return JSON.stringify({
         result: run.result,
         status: run.status,

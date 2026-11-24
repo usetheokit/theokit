@@ -93,7 +93,6 @@ describe('#74 — what a delegated role is allowed to read', () => {
     expect(local.compatSources).toBeUndefined()
   })
 
-
   it('test_inheriting_the_roots_does_not_cost_the_role_its_sandbox', async () => {
     // The one way this fix could have gone wrong, named by the theokit-sdk session while implementing
     // the same inheritance upstream: `local` is assembled from several conditional pieces, and a
@@ -114,7 +113,6 @@ describe('#74 — what a delegated role is allowed to read', () => {
       'the role kept its roots and lost its sandbox — a default-open trade',
     ).toEqual({ enabled: true })
   })
-
 
   it('test_a_role_does_not_get_the_builtin_shell_nobody_declared', async () => {
     // #80 — a local agent is given a `shell` tool by the framework whether or not the caller asks,
