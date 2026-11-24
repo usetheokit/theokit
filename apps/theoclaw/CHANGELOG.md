@@ -12,6 +12,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - The TUI's turn inbox is the framework's `createControlStreamInbox`, and the control client asks `createControlClient` to drop `interrupt_ok`, `steer_ok` and `no_turn` (`dropAcknowledgements`); the app's `createTurnInbox` and its frame filter are gone (#2945).
+- The LAN publisher is the shared `@theokit/host/discovery-bonjour` adapter; the app-local copy is gone (#2948).
+- The sessionless turn builds its usage record from the `usage` of `runAgentTurn`'s outcome and no longer wraps the agent to catch `wait()`; the record is the same. A run that reports neither token count is `in=0 out=0`, unpriced, even if it reported a cost (#2952).
+- `installPlugin` calls the SDK's `installWorkspacePlugin` (with `replace`), and `plugins/manifest.ts` is gone in favour of the SDK's `parsePluginManifest`; the `trustFile` input is removed because the SDK resolves its own trust record. A trust record that cannot be parsed now fails the install instead of being replaced (#2940).
 - The computer live test tells the model the code is the six capital characters in the large heading, and renders the typed text small and monospace, so the describer no longer reports the typed word as the code (#2882).
 - The live authorization tests count a finished run once even when both the reply handler and the gateway handler wait on it, and the TUI live test matches the interruption notice regardless of case (#2876).
 - The TUI feeds `useAgentStream` from the framework's `createControlStreamSource`, replacing its own frame conversion.

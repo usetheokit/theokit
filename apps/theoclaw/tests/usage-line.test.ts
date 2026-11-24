@@ -108,6 +108,24 @@ describe("the usage line (FR-004)", () => {
     expect(usageLines(plane.stderr)).toEqual([`theoclaw: usage control ${MODEL} in=7 out=5 cost=unpriced`]);
   });
 
+  it("a sessionless unpriced turn writes an unpriced usage line", async () => {
+    const plane = await startPlane(() => priced(7, 5, undefined));
+    const client = await peer(plane.handle);
+
+    client.send({ type: "chat", message: "hello" });
+    await waitFor(() => usageLines(plane.stderr).length === 1, 2000, "the usage line");
+    expect(usageLines(plane.stderr)).toEqual([`theoclaw: usage control ${MODEL} in=7 out=5 cost=unpriced`]);
+  });
+
+  it("a sessionless turn that reports no usage writes zeros, unpriced", async () => {
+    const plane = await startPlane(() => ({ frames: [assistant("ok"), finished()], result: { status: "finished" } }));
+    const client = await peer(plane.handle);
+
+    client.send({ type: "chat", message: "hello" });
+    await waitFor(() => usageLines(plane.stderr).length === 1, 2000, "the usage line");
+    expect(usageLines(plane.stderr)).toEqual([`theoclaw: usage control ${MODEL} in=0 out=0 cost=unpriced`]);
+  });
+
   it("a failed turn writes no usage line", async () => {
     const plane = await startPlane(() => ({ ...priced(1, 1, 0.1), result: { status: "error" } }));
     const client = await peer(plane.handle);

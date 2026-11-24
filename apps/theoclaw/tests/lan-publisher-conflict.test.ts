@@ -4,7 +4,7 @@ import { once } from 'node:events'
 import { Bonjour } from 'bonjour-service'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createBonjourPublisher } from '../src/discovery/bonjour-publisher.js'
+import { createBonjourPublisher } from '../src/discovery/lan-publisher.js'
 import { announceOnLan, type LanAnnouncement } from '../src/discovery/lan-announcer.js'
 import type { ServicePublisher, TheoClawDiscoveryError } from '../src/discovery/publisher.js'
 

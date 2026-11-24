@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createBonjourPublisher } from '../../src/discovery/bonjour-publisher.js'
+import { createBonjourPublisher } from '../../src/discovery/lan-publisher.js'
 import type { ServicePublisher, TheoClawDiscoveryError } from '../../src/discovery/publisher.js'
 import { type MdnsSocket, openMdnsSocket, querySrv } from './support/mdns-client.js'
 

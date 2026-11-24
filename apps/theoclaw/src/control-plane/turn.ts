@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { type AgentStreamEvent, type AgentTurnAgent, runAgentTurn } from '@theokit/agents/bridge'
+import { type AgentStreamEvent, runAgentTurn } from '@theokit/agents/bridge'
 import { maskSecrets } from '@theokit/gateway'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
@@ -74,32 +74,9 @@ export function outcomeOf(
   return model === undefined ? { ok: true } : { ok: true, usage: usageOf(result, model) }
 }
 
-type RunResult = Awaited<ReturnType<TurnRun['wait']>>
-
-/** `agent` as `runAgentTurn` reads it, keeping the result of the run's `wait()` for the usage record. */
-function tapped(agent: TurnAgent, onResult: (result: RunResult) => void): AgentTurnAgent {
-  return {
-    async send(message, sendOptions) {
-      const run = await agent.send(message, sendOptions)
-      return {
-        stream: () => run.stream(),
-        cancel: () => run.cancel(),
-        wait: async () => {
-          const result = await run.wait()
-          onResult(result)
-          return result
-        },
-      }
-    },
-  }
-}
-
 async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutcome> {
-  let result: RunResult | undefined
   const outcome = await runAgentTurn({
-    agent: tapped(agent, (settled) => {
-      result = settled
-    }),
+    agent,
     message: options.message,
     runId: options.runId,
     emit: options.emit,
@@ -109,7 +86,11 @@ async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutc
   // `runAgentTurn` masks and flushes: a cancelled turn emits nothing more.
   if (!outcome.ok) return outcome
   // An SDK run that ended as `cancelled` is not a failure here, as it never was.
-  return options.model === undefined ? { ok: true } : { ok: true, usage: usageOf(result ?? {}, options.model) }
+  if (options.model === undefined) return { ok: true }
+  // No token count reported: the outcome has no usage, and the record is zeros, as it always was.
+  const { inputTokens = 0, outputTokens = 0, costUsd } = outcome.usage ?? {}
+  const base = { inputTokens, outputTokens, model: options.model }
+  return { ok: true, usage: costUsd === undefined ? { ...base, costUnpriced: true } : { ...base, costUsd } }
 }
 
 /**
