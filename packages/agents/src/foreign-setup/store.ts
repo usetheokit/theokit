@@ -34,7 +34,7 @@ export class ForeignImportError extends TheokitAgentError {
   constructor(message: string, reason: ForeignImportErrorReason) {
     super(message, {
       code: `foreign_import_${reason}`,
-      // a held lock may clear; a refusal or an unreadable path fails the same way next time.
+      // 'locked' clears when the other import finishes; the other two do not change on a retry.
       isRetryable: reason === 'locked',
     })
     this.reason = reason

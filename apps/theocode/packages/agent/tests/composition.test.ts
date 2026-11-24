@@ -166,14 +166,16 @@ interface CompiledAgent {
   approvals: Record<string, { question: string }>
   mcpServers: Record<string, unknown>
   skills: string[]
-  settingSources: { user?: boolean; project?: { trustedBy: unknown } }
+  settingSources: string[]
+  compatSources?: unknown
   memory: { enabled: boolean }
   model: string
 }
 
 async function compile(overrides: Record<string, unknown>): Promise<CompiledAgent> {
   const { buildChatAgent } = await import('../src/chat/chat.js')
-  return buildChatAgent(overrides as never) as unknown as CompiledAgent
+  const { withCapabilities } = await import('./helpers/with-capabilities.js')
+  return withCapabilities(await buildChatAgent(overrides as never)) as unknown as CompiledAgent
 }
 
 const namesOf = (a: CompiledAgent): string[] => a.tools.map((t) => t.name)
@@ -388,7 +390,8 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
       agent.settingSources,
       'the `project` setting source stayed on for an untrusted repo, which re-enables repository ' +
         'subagents and repository hooks behind the per-hook fingerprint gate (B-008)',
-    ).toEqual({ user: true })
+    ).toEqual(['user'])
+    expect(agent.compatSources, 'an untrusted repo got its `.claude/` imported').toBeUndefined()
     expect(agent.memory.enabled, 'memory writes into an untrusted working tree').toBe(false)
   })
 
@@ -401,9 +404,6 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
     // The counter-proof to the untrusted case, in the M86 shape: `project` is present, and the grant
     // carries the posture that authorized it — including `source`, so a refusal further down can say
     // where the decision came from rather than only that it was refused.
-    const grant = {
-      trustedBy: { level: 'trusted', source: 'store', allows: { projectSettings: true } },
-    }
     // #65 — `claudeCode` carries the SAME evidence, deliberately. `.claude/` is repository-controlled
     // and holds a `hooks.json` that executes shell, so the second door takes the evidence the first
     // one takes; a weaker grant would be a gate with a bypass named after another product.
@@ -419,11 +419,13 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
     // them once the grant is enforced — silently, which is the failure the grant exists to prevent,
     // arriving from this side. Not a widening: this product already received those rules on every
     // run, and the name is what keeps that true.
-    expect(agent.settingSources).toEqual({
-      user: true,
-      project: grant,
-      claudeCode: { ...grant, import: ['skills', 'subagents', 'plugins', 'commands', 'context'] },
-    })
+    // The grant itself is built inside `codingAgentPreset` now, and the framework resolves it to the
+    // compiled form before it reaches the agent: the roots that were granted, and the foreign root
+    // with the surfaces it may import.
+    expect(agent.settingSources).toEqual(['user', 'project'])
+    expect(agent.compatSources).toEqual([
+      { kind: 'claude-code', import: ['skills', 'subagents', 'plugins', 'commands', 'context'] },
+    ])
     // Trust is necessary and no longer sufficient: memory is off unless the config asks for it, so
     // a trusted directory alone leaves it off. The two halves are asserted apart, below, because
     // collapsing them would let either one carry the other.

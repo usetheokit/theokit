@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { configurationPath } from '../src/config-file.js'
 import { daemonInstall, daemonRestart, daemonStatus, daemonUninstall } from '../src/daemon.js'
 import type { Runner } from '../src/run-command.js'
 import { type Harness, harness } from './support/daemon-harness.js'
@@ -43,6 +44,27 @@ function expectPrivateDirGone(path: string): void {
 }
 
 describe('theoclaw daemon on Windows (Task Scheduler)', () => {
+  it('a_relative_config_path_is_written_resolved_against_the_working_directory', async () => {
+    const h = harness({ platform: 'win32', env: { ...WINDOWS_ENV, THEOCLAW_CONFIG: 'conf/custom.env' } })
+    mkdirSync(join(h.io.cwd, 'conf'), { recursive: true })
+    writeFileSync(join(h.io.cwd, 'conf', 'custom.env'), 'THEOCLAW_MODEL="m"\n')
+    const c = capturing(h)
+    expect(await daemonInstall(h.io, c.runner)).toBe(0)
+    const args = /<Arguments>(.*)<\/Arguments>/.exec(c.xml()!)![1]!
+    expect(args).toContain(join(h.io.cwd, 'conf', 'custom.env'))
+    expect(args).not.toContain('--config conf')
+  })
+
+  it('the_task_arguments_keep_the_absolute_config_path_and_profile', async () => {
+    const h = harness({ platform: 'win32', env: { ...WINDOWS_ENV, THEOCLAW_PROFILE: 'work' } })
+    const c = capturing(h)
+    expect(await daemonInstall(h.io, c.runner)).toBe(0)
+    const args = /<Arguments>(.*)<\/Arguments>/.exec(c.xml()!)![1]!
+    expect(args).toContain(`--config`)
+    expect(args).toContain(resolve(h.io.cwd, configurationPath(h.io.env, h.io.homeDir)).replaceAll('&', '&amp;'))
+    expect(args).toContain('--profile work')
+  })
+
   it('the_task_xml_is_utf_16_with_no_time_limit_and_passes_the_configuration_as_an_argument', async () => {
     const h = harness({ platform: 'win32', env: { ...WINDOWS_ENV, THEOCLAW_PROFILE: 'work' } })
     const c = capturing(h)
