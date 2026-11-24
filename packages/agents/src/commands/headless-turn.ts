@@ -18,6 +18,8 @@ export interface HeadlessTurnResult {
   readonly outcome: HeadlessOutcome
   readonly stopReason?: 'step_limit' | 'no_progress'
   readonly errorCode?: string
+  /** Message of the first failure: a thrown stream, an `error` event or (with `onFormatError: 'fail'`) a throwing `format`. */
+  readonly errorMessage?: string
   readonly usage?: WireTurnMetadata['usage']
   /** ok 0, error 1, empty 1, cut 2 unless overridden. */
   readonly exitCode: number
@@ -36,6 +38,8 @@ export interface HeadlessTurnOptions {
    * Outcome and exit code are unchanged. Takes precedence over `json`.
    */
   readonly format?: (event: AgentOutputEvent) => { out?: string; err?: string } | undefined
+  /** What a throwing `format` does. Default `'ignore'`; `'fail'` makes the outcome `error` and records the message. */
+  readonly onFormatError?: 'ignore' | 'fail'
 }
 
 const DEFAULT_EXIT_CODES: Record<HeadlessOutcome, number> = { ok: 0, error: 1, empty: 1, cut: 2 }
@@ -94,17 +98,29 @@ interface Collected {
   readonly events: AgentOutputEvent[]
   meta?: WireTurnMetadata
   errorCode?: string
+  errorMessage?: string
   failed: boolean
 }
 
 type Format = NonNullable<HeadlessTurnOptions['format']>
 
-function emit(event: AgentOutputEvent, io: HeadlessIo, json: boolean, format?: Format): void {
+function emit(
+  event: AgentOutputEvent,
+  io: HeadlessIo,
+  json: boolean,
+  state: Collected,
+  format?: Format,
+  failOnFormat = false,
+): void {
   if (format !== undefined) {
     let r: ReturnType<Format>
     try {
       r = format(event)
-    } catch {
+    } catch (e) {
+      if (failOnFormat) {
+        state.failed = true
+        state.errorMessage ??= errorMessage(e)
+      }
       return
     }
     if (r?.out !== undefined) safe(io.out, r.out)
@@ -124,6 +140,7 @@ async function collect(
   io: HeadlessIo,
   json: boolean,
   format?: Format,
+  failOnFormat = false,
 ): Promise<Collected> {
   const reader = createWireReader()
   const state: Collected = { events: [], failed: false }
@@ -135,12 +152,14 @@ async function collect(
         if (event.type === 'error') {
           state.failed = true
           state.errorCode ??= event.code
+          state.errorMessage ??= event.message
         }
-        emit(event, io, json, format)
+        emit(event, io, json, state, format, failOnFormat)
       }
     }
   } catch (e) {
     state.failed = true
+    state.errorMessage ??= errorMessage(e)
     if (format === undefined) safe(io.err, `error: ${errorMessage(e)}\n`)
   }
   return state
@@ -178,7 +197,13 @@ export async function runHeadlessTurn(
   options: HeadlessTurnOptions,
 ): Promise<HeadlessTurnResult> {
   const { io } = options
-  const state = await collect(chunks, io, options.json === true, options.format)
+  const state = await collect(
+    chunks,
+    io,
+    options.json === true,
+    options.format,
+    options.onFormatError === 'fail',
+  )
   const finalText = finalMessageOf(state.events)
   const stopReason = state.meta?.stopReason
   let outcome = classify(state, finalText)
@@ -193,13 +218,14 @@ export async function runHeadlessTurn(
     if (builtIn) safe(io.err, `error: could not write the last message: ${errorMessage(e)}\n`)
   }
 
-  const { errorCode } = state
+  const { errorCode, errorMessage: failure } = state
   const usage = state.meta?.usage
   return {
     finalText,
     outcome,
     ...(stopReason === undefined ? {} : { stopReason }),
     ...(errorCode === undefined ? {} : { errorCode }),
+    ...(failure === undefined ? {} : { errorMessage: failure }),
     ...(usage === undefined ? {} : { usage }),
     exitCode: { ...DEFAULT_EXIT_CODES, ...options.exitCodes }[outcome],
   }

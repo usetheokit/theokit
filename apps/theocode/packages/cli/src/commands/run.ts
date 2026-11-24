@@ -16,7 +16,6 @@ import {
 } from '@theokit/agents/commands'
 import { sessionHasWriter, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
 import { streamTurnForkingIfBusy } from '@theokit/agents/session'
-import type { WireChunk } from '@theokit/presenter/wire'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -265,40 +264,24 @@ async function driveTurn(
   openStream: ReturnType<typeof openTurnStream>,
   processor: ExecProcessor,
 ): Promise<DrivenTurn> {
-  let error: string | undefined
-  let processorFailed = false
   const forked = streamTurnForkingIfBusy(sessionId, openStream as never, {
     onFork: (from, to) =>
       process.stderr.write(
         `[exec] session ${from} is being written by another process — forking to ${to}\n`,
       ),
   })
-  // `runHeadlessTurn` turns a thrown stream into an `error` outcome without its message; this
-  // wrapper only keeps the message for the `[exec]` line and the JSONL `turn.failed`.
-  async function* keepStreamError(chunks: AsyncIterable<WireChunk>): AsyncGenerator<WireChunk> {
-    try {
-      yield* chunks
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err)
-      throw err
-    }
-  }
-  const turn = await runHeadlessTurn(keepStreamError(forked.chunks), {
+  const turn = await runHeadlessTurn(forked.chunks, {
     io: { out: () => {}, err: () => {} },
+    // A processor that throws is a failed run.
+    onFormatError: 'fail',
     format: (event) => {
-      try {
-        processor.event(event)
-      } catch (err) {
-        // The framework swallows a `format` that throws; a processor that failed is a failed run.
-        processorFailed = true
-        error ??= err instanceof Error ? err.message : String(err)
-      }
+      processor.event(event)
       return undefined
     },
   })
   return {
-    status: turn.outcome === 'error' || processorFailed ? 'error' : 'finished',
-    error,
+    status: turn.outcome === 'error' ? 'error' : 'finished',
+    error: turn.errorMessage,
     finish: {
       finalText: turn.finalText,
       ...(turn.stopReason === undefined ? {} : { stopReason: turn.stopReason }),

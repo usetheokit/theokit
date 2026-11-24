@@ -140,6 +140,8 @@ export function createHumanProcessor(
 ): ExecProcessor {
   const events: AgentOutputEvent[] = []
   let errorSeen = false
+  // An `error` event already printed its message; the same text reaching `finish` is not repeated.
+  const reportedErrors = new Set<string>()
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
   const writes: ToolChunk[] = []
@@ -162,6 +164,7 @@ export function createHumanProcessor(
     error: (event) => {
       if (event.type !== 'error') return
       errorSeen = true
+      reportedErrors.add(event.message)
       io.err(`ERROR: ${event.message}`)
     },
   }
@@ -174,7 +177,7 @@ export function createHumanProcessor(
     finish(status, extra = {}) {
       if (status === 'error') {
         errorSeen = true
-        if (extra.error !== undefined) io.err(`ERROR: ${extra.error}`)
+        if (extra.error !== undefined && !reportedErrors.has(extra.error)) io.err(`ERROR: ${extra.error}`)
       }
       const finalText = extra.finalText ?? finalMessageOf(events)
       if (finalText.length > 0) io.out(finalText)

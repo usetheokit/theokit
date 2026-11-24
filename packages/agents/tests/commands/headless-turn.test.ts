@@ -147,6 +147,38 @@ describe('runHeadlessTurn format', () => {
     expect(t.err.length).toBeGreaterThan(0)
     expect(t.err.every((s) => s === 'e')).toBe(true)
   })
+
+  it('keeps the message of a thrown stream when a format is given', async () => {
+    async function* boom(): AsyncGenerator<WireChunk> {
+      yield* from(text('a', 'hi'))
+      throw new Error('boom')
+    }
+    const r = await runHeadlessTurn(boom(), { io: io().io, format: () => undefined })
+    expect(r.outcome).toBe('error')
+    expect(r.errorMessage).toBe('boom')
+  })
+
+  it('ignores a throwing format by default', async () => {
+    const r = await runHeadlessTurn(from([...text('a', 'hi'), finish()]), {
+      io: io().io,
+      format: () => {
+        throw new Error('bad')
+      },
+    })
+    expect(r.outcome).toBe('ok')
+    expect(r.errorMessage).toBeUndefined()
+  })
+
+  it("onFormatError 'fail' makes a throwing format an error and keeps draining", async () => {
+    const r = await runHeadlessTurn(from([...text('a', 'hi'), finish()]), {
+      io: io().io,
+      onFormatError: 'fail',
+      format: () => {
+        throw new Error('bad')
+      },
+    })
+    expect(r).toMatchObject({ outcome: 'error', exitCode: 1, errorMessage: 'bad', finalText: 'hi' })
+  })
 })
 
 describe('readHeadlessPrompt', () => {
