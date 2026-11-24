@@ -43,9 +43,8 @@ function loadPersonalSource(
  *
  * - `personalFiles` defaults to `['claude-json']` (`~/.claude.json`); any other string is a directory
  *   holding a `.mcp.json`. When personal files repeat a name, the earlier one wins.
- * - A malformed PROJECT file throws `McpFileError`, because it is the project's own declaration. A
- *   malformed PERSONAL file only warns, because one stray comma in a shared home file must not break
- *   every project on the machine.
+ * - A malformed file, personal or project, only warns (once, naming the file) and contributes no
+ *   servers, so one stray comma never takes the other scope's servers down with it.
  * - When `projectAllowed` is false the project file is parsed only to list its names in
  *   `projectWithheld`; none of its entries reach `servers`. (Names the operator policy already denies
  *   are not listed, since the loader drops them while parsing.)
@@ -70,7 +69,15 @@ export function loadMcpScopes(input: {
     }
   }
 
-  const project = loadMcpJson(input.cwd, opts)
+  let project: McpServersMap = {}
+  try {
+    project = loadMcpJson(input.cwd, opts)
+  } catch (err) {
+    const warn = opts.onWarn ?? ((m: string) => process.stderr.write(`[@theokit/agents] ${m}\n`))
+    warn(
+      `${input.cwd}/.mcp.json could not be read for MCP servers, so the project's were not loaded: ${describeIt(err)}`,
+    )
+  }
   const projectWithheld = input.projectAllowed ? [] : Object.keys(project)
   const projectMap = new Map(input.projectAllowed ? Object.entries(project) : [])
 

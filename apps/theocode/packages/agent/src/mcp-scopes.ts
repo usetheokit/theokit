@@ -44,26 +44,14 @@ export function mcpServersFor(opts: {
   readonly onWarn?: (warning: string) => void
 }): McpScopes {
   const personalDir = homeStateDir(opts.env, opts.home)
-  const base = {
+  const result = loadMcpScopes({
     cwd: opts.cwd,
     home: opts.home,
     personalFiles: [personalDir],
-    onClash: 'personal-wins' as const,
+    onClash: 'personal-wins',
+    projectAllowed: opts.posture.allows.mcp,
     ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
-  }
-  const load = (projectAllowed: boolean): McpScopesResult => {
-    try {
-      return loadMcpScopes({ ...base, projectAllowed })
-    } catch (error) {
-      // The framework throws on a malformed PROJECT file; this product warns and carries on with
-      // the personal scope, so one bad file never takes the operator's own servers down with it.
-      opts.onWarn?.(
-        `mcp: ignoring ${opts.cwd}/.mcp.json — ${error instanceof Error ? error.message : String(error)}`,
-      )
-      return loadMcpScopes({ ...base, cwd: personalDir, projectAllowed })
-    }
-  }
-  const result = load(opts.posture.allows.mcp)
+  })
   // Wording is ours: the framework reports the clash as data, the operator reads this sentence.
   for (const { name } of result.shadowed) {
     opts.onWarn?.(
