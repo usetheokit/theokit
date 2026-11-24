@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- A malformed project `.mcp.json` no longer makes personal MCP servers appear as "also declared by the project" or as servers withheld by trust; the framework now warns once and keeps the personal scope, and the retry is gone (#2895).
 - Removed `classifyEntry` (no caller) and `legacyRootHint`; the TUI uses the framework's `transcriptRootHint`, so the empty-session hint now reads "No sessions under …" (#2937).
 - Removed `tools/check-theokit-updates.mjs`, `tools/report-theokit-staleness.mjs` and the `deps:theokit`, `deps:theokit:json` and `deps:theokit:report` scripts; run `pnpm check:app-deps apps/theocode` from the repository root instead (#2938).
 - Removed `npm run blockers` and `tools/check-upstream-blockers.mjs`: the three SDK gaps it checked have landed, and its issue numbers pointed at unrelated issues here (#2939).
