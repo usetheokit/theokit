@@ -1,9 +1,11 @@
+import { DiscoveryError, type DiscoveryErrorRoute } from '@theokit/host/discovery'
+
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
 /**
  * The port between the LAN announcer and the library that speaks DNS-SD (plan D2). This file
  * imports no library and no UDP module: the announcer is tested against a fake that opens no
- * socket, and `bonjour-publisher.ts` is the one adapter.
+ * socket, and `lan-publisher.ts` wraps the one adapter, `@theokit/host/discovery-bonjour`.
  */
 
 /** The one DNS-SD service TheoClaw publishes: `_theoclaw._tcp` with the bound port. */
@@ -25,32 +27,13 @@ export interface ServicePublisher {
 
 export type PublisherFactory = (options: { onError(error: TheoClawDiscoveryError): void }) => ServicePublisher
 
-/**
- * Which path delivered a library error: the socket's `error` event, the library's answer-path
- * `errorCallback`, a wrapped send of a response or of a query (plan D5), or a synchronous throw
- * while creating or publishing.
- */
-export type DiscoveryErrorRoute = 'socket' | 'answer' | 'send-respond' | 'send-query' | 'publish'
-
-function codeOf(cause: unknown): string {
-  if (typeof cause === 'object' && cause !== null && 'code' in cause) {
-    const { code } = cause as { code: unknown }
-    if (typeof code === 'string' && code !== '') return code
-  }
-  return 'UNKNOWN'
-}
+export type { DiscoveryErrorRoute }
 
 /** A LAN discovery failure. Discovery stops and TheoClaw keeps serving on its listener (plan D3). */
-export class TheoClawDiscoveryError extends Error {
-  readonly code: string
-  readonly route: DiscoveryErrorRoute
-
+export class TheoClawDiscoveryError extends DiscoveryError {
   constructor(cause: unknown, route: DiscoveryErrorRoute) {
-    const code = codeOf(cause)
-    super(`LAN discovery failed: ${code} (${route})`, { cause })
+    super(cause, route)
     this.name = 'TheoClawDiscoveryError'
-    this.code = code
-    this.route = route
   }
 }
 
