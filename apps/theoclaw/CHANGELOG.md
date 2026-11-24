@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Peer tools no longer wrap their handler to name a refused connection: `createA2ATool` in `@theokit/agents` now rejects with `A2A call to "<name>" failed: ...` and the original as `cause` (#2913).
 - The terminal UI renders `AgentSession` from `@theokit/tui` 0.83.10 (0.83.9 was published without it) instead of its own transcript, queue and Esc logic (#2933). A message typed during a turn is queued and counted in the footer, with no "sent when the running turn ends" notice; a draft can still span lines (`AgentSession`'s composer is multi-line by default). `/new` after Esc is allowed, and the new session's first chat waits for the interrupted one to finish unwinding.
 - `ops/proxy.ts` installs the proxy dispatcher with `applyOutboundProxy` and `proxy validate` uses the host's `validateProxy`; the app's own copies are gone (#2931). `validate` now sends `Proxy-Authorization` from the URL's user info, accepts any 2xx CONNECT answer, and reports host failure messages. A blank `THEOCLAW_DEBUG_PROXY_URL` now falls back to `THEOCLAW_PROXY_URL`.
 - The tool route uses the bridge's default `validateAgainstInputSchema`; `validateToolArgs` is gone, and a wrong argument type still answers 400 with `<path>: <message>`. `completeWith` stays, because `runTheoClawTurn` masks the model id and records usage, and an SDK-cancelled run on `/v1/chat/completions` stays a completion (#2951).
