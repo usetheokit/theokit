@@ -9,6 +9,7 @@ import { turnDiff } from '../../src/presets-entry.js'
 
 describe('turnDiff', () => {
   let dir: string
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- test fixture runs git from PATH
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' })
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'turn-diff-'))
