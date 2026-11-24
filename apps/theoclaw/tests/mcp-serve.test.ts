@@ -41,6 +41,24 @@ describe('theoclaw mcp', () => {
     expect(JSON.stringify(replies[2])).toContain('hello.txt')
   })
 
+  it('refuses a call into the state directory over stdio and still serves others', async () => {
+    const h = harness()
+    mkdirSync(join(h.io.cwd, '.theoclaw'), { recursive: true })
+    const stdin = h.io.stdin as PassThrough
+    stdin.write(`${call(1, 'list_dir', { path: '../.theoclaw' })}\n`)
+    stdin.write(`${call(2, 'list_dir', { path: '.' })}\n`)
+    stdin.end()
+    expect(await runCli(['mcp'], h.io)).toBe(0)
+    const replies = h
+      .stdout()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    expect(replies[0].result.isError).toBe(true)
+    expect(replies[0].result.content[0].text).toContain('theoclaw: ')
+    expect(replies[1].result.isError).toBe(false)
+  })
+
   it('refuses arguments', async () => {
     const h = harness()
     expect(await runCli(['mcp', 'x'], h.io)).toBe(2)
@@ -144,6 +162,19 @@ describe('theoclaw mcp', () => {
         })
       ).json()
       expect(r.result.isError).toBe(false)
+    })
+
+    it('a tools/call into the state directory is refused with isError', async () => {
+      const r = await (
+        await rpc({
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: { name: 'list_dir', arguments: { path: '../.theoclaw' } },
+        })
+      ).json()
+      expect(r.result.isError).toBe(true)
+      expect(r.result.content[0].text).toContain('theoclaw: ')
     })
 
     it('unknown method, bad JSON and ids', async () => {
