@@ -20320,7 +20320,7 @@
         },
         "SettingsFileError": {
           "tier": "stable",
-          "declaration": "declare class SettingsFileError extends Error {\n    readonly path: string;\n    readonly kind: 'unreadable' | 'malformed';\n    readonly detail: string;\n    readonly name = \"SettingsFileError\";\n    constructor(path: string, kind: 'unreadable' | 'malformed', detail: string);\n}",
+          "declaration": "declare class SettingsFileError extends TheokitAgentError {\n    readonly path: string;\n    readonly kind: 'unreadable' | 'malformed';\n    readonly detail: string;\n    readonly name = \"SettingsFileError\";\n    constructor(path: string, kind: 'unreadable' | 'malformed', detail: string);\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
