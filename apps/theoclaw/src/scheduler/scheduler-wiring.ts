@@ -80,33 +80,11 @@ function createDeliverPort(
   }
 }
 
-const INBOX_GUIDANCE =
-  `The platform "${INBOX_PLATFORM}" is local, not a chat: the answer is stored in the instance and read back with read_schedule_inbox, ` +
-  'so a user with no chat platform (web only) can use it. For it, channelId is just a free label you choose (for example "main"): do not ask the user for an id.'
-
-/** Tell the model what the inbox target is: the framework's own text only knows chat platforms. */
-function withInboxGuidance(tool: CustomTool): CustomTool {
-  if (tool.name !== 'schedule_job') return tool
-  const schema = tool.inputSchema as { properties?: Record<string, Record<string, unknown>> }
-  const channel = schema.properties?.channelId
-  return {
-    ...tool,
-    description: `${tool.description} ${INBOX_GUIDANCE}`,
-    inputSchema: {
-      ...schema,
-      properties: {
-        ...schema.properties,
-        ...(channel === undefined
-          ? {}
-          : {
-              channelId: {
-                ...channel,
-                description: `${String(channel.description)} For platform "${INBOX_PLATFORM}", any label such as "main".`,
-              },
-            }),
-      },
-    },
-  }
+const INBOX_TARGET = {
+  name: INBOX_PLATFORM,
+  description:
+    'local, not a chat: the answer is stored in the instance and read back with read_schedule_inbox, so a user with no chat platform (web only) can use it',
+  channelIdHint: 'a free label you choose, such as "main"; do not ask the user for an id',
 }
 
 /** A transient job the scheduler runs beside the stored ones (the heartbeat, T2.2). */
@@ -170,8 +148,8 @@ export function wireScheduler(options: WireSchedulerOptions): RunningScheduler {
     scheduleTools: [
       ...createScheduleTools({
         scheduler,
-        platforms: inbox === undefined ? options.platforms : [...options.platforms, INBOX_PLATFORM],
-      }).map((tool) => (inbox === undefined ? tool : withInboxGuidance(tool))),
+        platforms: inbox === undefined ? options.platforms : [...options.platforms, INBOX_TARGET],
+      }),
       ...(inbox === undefined ? [] : [createInboxTool(inbox)]),
     ],
     async start() {
