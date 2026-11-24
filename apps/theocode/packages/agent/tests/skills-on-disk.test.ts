@@ -232,3 +232,21 @@ describe('an unreadable skills root', () => {
     }
   })
 })
+
+describe('the comparisons come from the framework inventory', () => {
+  it('test_a_bundle_skill_is_present_and_an_absent_one_is_named', () => {
+    const dir = join(cwd, '.claude', 'plugins', 'kit', 'skills', 'bundled')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: bundled\n---\nbody\n')
+    const found = skillsOnDisk(cwd, ['bundled', 'ghost'], home)
+    expect(found.declaredButAbsent).toEqual(['ghost'])
+    expect(found.bundledSkills).toEqual(['bundled'])
+  })
+
+  it('test_a_native_root_skill_with_punctuation_is_undeclared_by_its_whole_name', () => {
+    const dir = join(cwd, '.theokit', 'skills', 'my.skill_v2')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: x\n---\nbody\n')
+    expect(skillsOnDisk(cwd, [], home).presentButUndeclared).toEqual(['my.skill_v2'])
+  })
+})

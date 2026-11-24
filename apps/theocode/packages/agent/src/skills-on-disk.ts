@@ -112,37 +112,36 @@ export function skillsOnDisk(
   declared: readonly string[],
   home: string = homedir(),
 ): SkillsOnDisk {
-  // The framework's inventory reads every root that can satisfy a declaration and throws on any
-  // error but ENOENT, so an unreadable root surfaces here instead of reading as empty. Its result is
-  // not parsed: the lists below keep the app's own root classification.
-  checks.skillsInventory({
-    declared,
-    roots: [
-      ...ROOTS.map((root) => join(cwd, root, 'skills')),
-      join(home, DEFAULT_HOME_DIR, 'skills'),
-    ],
-  })
-  const inProject = new Set(ROOTS.flatMap((root) => skillNamesIn(join(cwd, root, 'skills'))))
+  const userRoot = join(home, DEFAULT_HOME_DIR, 'skills')
+  const projectRoots = ROOTS.map((root) => join(cwd, root, 'skills'))
   // A root can NEST bundles, and a bundle carries skills of its own. Measured 2026-09-06: a skill at
   // `.claude/plugins/<bundle>/skills/<name>/SKILL.md` answers on the built binary, and this row still
   // called it `declared with no SKILL.md`. Bundled names count as present and are never offered the
   // "declare it" remedy — the bundle is another tool's inventory, the same reason the foreign root is
   // excluded from that direction.
-  const inBundles = new Set(ROOTS.flatMap((root) => bundledSkillNames(join(cwd, root, 'plugins'))))
-  const inNativeRoot = new Set(skillNamesIn(join(cwd, NATIVE_ROOT, 'skills')))
-  const inUserRoot = new Set(skillNamesIn(join(home, DEFAULT_HOME_DIR, 'skills')))
+  const bundleRoots = ROOTS.flatMap((root) => bundleSkillRoots(join(cwd, root, 'plugins')))
+  // Both declared-versus-disk comparisons come from the framework check, which throws on any read
+  // error but ENOENT, so an unreadable root is not reported as empty. Which roots count stays ours:
+  // missing declarations are looked for under every root that loads or is searched, undeclared
+  // skills only under this product's own project root.
+  const { missing } = readInventory(
+    checks.skillsInventory({ declared, roots: [...projectRoots, ...bundleRoots, userRoot] }),
+  )
+  const { undeclared } = readInventory(
+    checks.skillsInventory({ declared, roots: [join(cwd, NATIVE_ROOT, 'skills')] }),
+  )
+  const inProject = new Set(projectRoots.flatMap(skillNamesIn))
+  const inBundles = new Set(bundleRoots.flatMap(skillNamesIn))
+  const inUserRoot = new Set(skillNamesIn(userRoot))
   const named = new Set(declared)
   const inForeignRoot = skillNamesIn(join(cwd, FOREIGN_ROOT, 'skills'))
   return {
     foreignRootSkills: [...new Set(inForeignRoot)].sort(),
     bundledSkills: [...inBundles].sort(),
-    declaredButAbsent: [...named]
-      .filter((name) => !inProject.has(name) && !inUserRoot.has(name) && !inBundles.has(name))
-      .sort(),
-    // This product's own project root only. "Declare it and it loads" is false under the operator's
-    // root (nothing reads it) and wrong under the foreign one (it is another tool's inventory), so
-    // neither is offered a remedy that does not fit it.
-    presentButUndeclared: [...inNativeRoot].filter((name) => !named.has(name)).sort(),
+    declaredButAbsent: missing,
+    // This product's own project root only: "declare it and it loads" is false under the operator's
+    // root (nothing reads it) and wrong under the foreign one (another tool's inventory).
+    presentButUndeclared: undeclared,
     declaredUserOnlySoNotLoaded: [...named]
       .filter((name) => inUserRoot.has(name) && !inProject.has(name))
       .sort(),
@@ -150,22 +149,33 @@ export function skillsOnDisk(
 }
 
 /**
- * The skill names every bundle under one `plugins/` directory contributes.
+ * The `skills/` directory of every bundle under one `plugins/` directory.
  *
  * One level of nesting, deliberately: `<plugins>/<bundle>/skills/<name>/SKILL.md` is the shape
  * measured working, and walking deeper would start counting files this product has no evidence are
  * loaded. An absent directory is the common case, not an error.
  */
-function bundledSkillNames(pluginsDir: string): string[] {
+function bundleSkillRoots(pluginsDir: string): string[] {
   if (!existsSync(pluginsDir)) return []
-  let bundles: string[]
-  try {
-    bundles = readdirSync(pluginsDir)
-  } catch (error) {
-    if (isMissing(error)) return []
-    throw error
+  return readdirSync(pluginsDir).map((bundle) => join(pluginsDir, bundle, 'skills'))
+}
+
+/**
+ * The two name lists in a `skillsInventory` check's detail.
+ *
+ * The framework formats them as `on disk, not declared: a, b; declared, not on disk: c`. A skill
+ * directory name containing `, ` or `; ` would split wrongly; such a name is not one the loader
+ * accepts, so the format is read rather than re-derived from a second walk.
+ */
+function readInventory(check: { detail: string }): { undeclared: string[]; missing: string[] } {
+  const list = (prefix: string): string[] => {
+    const part = check.detail.split('; ').find((p) => p.startsWith(prefix))
+    return part === undefined ? [] : part.slice(prefix.length).split(', ')
   }
-  return bundles.flatMap((bundle) => skillNamesIn(join(pluginsDir, bundle, 'skills')))
+  return {
+    undeclared: list('on disk, not declared: '),
+    missing: list('declared, not on disk: '),
+  }
 }
 
 /**

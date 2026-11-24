@@ -241,6 +241,7 @@ describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
         )
         expect(row.status).toBe('fail')
         expect(row.detail).toContain('EACCES')
+        expect(row.detail).toContain('skipped')
         expect(code).not.toBe(0)
       } finally {
         chmodSync(dir, 0o755)
