@@ -36,45 +36,25 @@ const FAILED: Readonly<Record<string, string>> = {
  *
  * The teardown is `@theokit/host`'s `createAppHost`, which stops services in reverse order of their
  * registration: the control plane is registered first so it is stopped last. The host attaches its
- * own listeners a tick after `start()`, so this attaches the process's listeners at once and hands
- * each signal to the host's once it has started; a signal that arrives in between is not lost.
+ * listeners at creation (`attachSignalsEarly`), so a signal before `start()` has run is not lost.
  *
  * The channel loop's `stopAll` does not reject: it writes a runner whose `stop()` rejects and goes
  * on with the others. A failing `disconnect()` is not seen at all, because `GatewayRunner.stop()`
  * in `@theokit/gateway` 0.11 discards it, so a platform that failed to disconnect still exits 0.
  */
 export function installShutdown(options: ShutdownOptions): () => void {
-  let disarmed = false
-  let last: ShutdownSignal = 'SIGTERM'
-  const hostListeners = new Map<ShutdownSignal, () => void>()
   const host = createAppHost({
-    signals: {
-      on: (event, listener) => void hostListeners.set(event, listener),
-      off: () => undefined,
-    },
+    signals: options.signals,
+    attachSignalsEarly: true,
     exit: options.exit,
     stopTimeoutMs: STOP_TIMEOUT_MS,
-    onError: (step, error) => {
-      if (step === 'signal') options.write(`theoclaw: ${last} ignored, already stopping`)
+    onError: (step, error, detail) => {
+      if (step === 'signal') options.write(`theoclaw: ${detail?.signal ?? 'signal'} ignored, already stopping`)
       else options.write(`theoclaw: ${FAILED[step] ?? `stopping ${step} failed`}: ${describeError(error)}`)
     },
   })
-  host.service('control plane', () => undefined, () => (disarmed ? undefined : options.closeServer()))
-  host.service('runners', () => undefined, () => (disarmed ? undefined : options.stopAll()))
-  const started = host.start()
-  const listenerFor = (signal: ShutdownSignal) => (): void => {
-    last = signal
-    void started.then(() => {
-      if (!disarmed) hostListeners.get(signal)?.()
-    })
-  }
-  const onSigint = listenerFor('SIGINT')
-  const onSigterm = listenerFor('SIGTERM')
-  options.signals.on('SIGINT', onSigint)
-  options.signals.on('SIGTERM', onSigterm)
-  return () => {
-    disarmed = true
-    options.signals.off('SIGINT', onSigint)
-    options.signals.off('SIGTERM', onSigterm)
-  }
+  host.service('control plane', () => undefined, () => options.closeServer())
+  host.service('runners', () => undefined, () => options.stopAll())
+  void host.start()
+  return host.detachSignals
 }

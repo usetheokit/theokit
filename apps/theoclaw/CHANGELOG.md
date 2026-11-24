@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `installShutdown` hands the process's signals to `createAppHost` (`attachSignalsEarly`, `detachSignals`, the signal named in `onError`); its listener-forwarding and `disarmed` shim is gone (#2929).
 - `TurnRun` streams the bridge's `SdkMessage` and `SdkTimelineEvent` directly: `toSdkMessage`, `toSdkTimelineEvent` and the scheduler's `handleOf` are gone, and `agentRunPort` takes the worker agent as it is. A scheduled run now drains its stream before waiting (#2908).
 - Restore re-homes session transcripts with `rehomeTranscripts` from `@theokit/host/backup`; the app's own `rehomed` is gone (#2932).
 - Every event run (trigger routes, the e-mail trigger, MCP events) opens one shared tool-less agent boundary, `withEventAgent`, instead of three containers. `composeTheoClaw` is built on `createChannelAssistant` (`@theokit/host/channel-assistant`): the channel set, hook order (e-mail trigger, owner policy, product hooks, help), webhook router, transcript sweeper and the ordered stop (channels, sweeper, sessions) come from the framework; `startChannelLoop` is a wrapper over its `startChannels` (#2897).
