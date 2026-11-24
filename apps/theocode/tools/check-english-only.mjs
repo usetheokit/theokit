@@ -151,7 +151,10 @@ const ALLOWED = new Set([
   // A line-anchored exemption survives an edit above it badly and a relocation not at all. Still
   // the right trade — the alternative exempts every future accented line in this file — but the
   // failure mode is a repository-wide move, not only an editor.
-  'packages/agent/tests/ask/ask-bridge.test.ts:160',
+  //
+  // FOURTH ROT: 160 -> 166 when `3331bbc8` (ask-bridge.ts keeps its own copy of the open question
+  // per thread) added six lines above the assertion in the test file.
+  'packages/agent/tests/ask/ask-bridge.test.ts:166',
 ])
 
 function* walk(dir) {
