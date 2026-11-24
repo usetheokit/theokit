@@ -12,13 +12,13 @@ import { configuredVoiceReplies, VOICE_FAILED, withVoiceReplies } from '../src/v
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
 
 const env = { THEOCLAW_VOICE_OPENAI_API_KEY: 'audio-secret', THEOCLAW_TELEGRAM_TOKEN: 'telegram-secret' }
-function note(sender = 1, bytes: Uint8Array = new TextEncoder().encode('OggS')): MessageEvent {
+function note(sender = 1, bytes: Uint8Array = new TextEncoder().encode('OggS'), size?: number): MessageEvent {
   const event = parseInbound({ message: {
     message_id: sender + 2, date: 10, from: { id: sender }, chat: { id: 42, type: 'private' },
     voice: { file_id: 'voice-id', mime_type: 'audio/ogg' },
   } })
   if (!event) throw new Error('fixture did not parse')
-  return { ...event, audio: { read: vi.fn(async () => bytes), mediaType: 'audio/ogg', durationSeconds: 1 } }
+  return { ...event, audio: { read: vi.fn(async () => bytes), ...(size === undefined ? {} : { size }), mediaType: 'audio/ogg', durationSeconds: 1 } }
 }
 function context(event: MessageEvent): GatewayContext {
   return { event, reply: vi.fn(async () => ({ ok: true })) }
@@ -205,8 +205,7 @@ describe('voice note replies', () => {
     const request = network()
     if (failure === 'http') request.mockResolvedValueOnce(new Response('', { status: 401 }))
     if (failure === 'transcription') request.mockResolvedValueOnce(Response.json({ text: null }))
-    const event = note(1, failure === 'empty' ? new Uint8Array() : failure === 'oversize-bytes' ? new Uint8Array(21 * 1024 * 1024) : undefined)
-    if (failure === 'oversize-size') event.audio = { ...event.audio!, size: 21 * 1024 * 1024 }
+    const event = note(1, failure === 'empty' ? new Uint8Array() : failure === 'oversize-bytes' ? new Uint8Array(21 * 1024 * 1024) : undefined, failure === 'oversize-size' ? 21 * 1024 * 1024 : undefined)
     const handler = vi.fn(async () => undefined)
     const ctx = context(event)
     await withVoiceReplies(handler, configuredVoiceReplies(env, request))(event, ctx)
