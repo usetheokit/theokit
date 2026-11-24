@@ -78,6 +78,17 @@ describe('#65 — roles are discovered in the operator root as well as the proje
     expect(found.both?.description).toBe('from the project')
   })
 
+  it('test_a_project_role_dropped_for_bad_memory_leaves_the_operator_role_of_that_name', async () => {
+    // Memory is applied per root: a project role that fails it is dropped alone, and the operator's
+    // same-named role stays. Merging first would have deleted the name.
+    writeRole(home, 'both', 'from the operator root')
+    writeRole(cwd, 'both', 'from the project', 'bogus')
+
+    const found = await discoverRoles({ cwd, home, projectAllowed: true })
+
+    expect(found.both?.description).toBe('from the operator root')
+  })
+
   it('test_the_operator_root_is_read_even_when_the_directory_is_untrusted', async () => {
     // Deliberate, and the same rule `context/user-agents-md.ts` already states for instructions: the
     // trust gate asks "do I trust the code in THIS directory?", and nobody's home is the repository.

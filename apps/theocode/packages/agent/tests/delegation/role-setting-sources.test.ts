@@ -31,6 +31,7 @@ vi.mock('@theokit/agents/config', async (orig) => ({
         origin: 'project',
       },
     },
+    shadowed: {},
     withheld: [],
   })),
 }))

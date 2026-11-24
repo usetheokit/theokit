@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import type { AgentDefinition, TrustPosture } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -280,6 +280,11 @@ export interface DiscoverSubagentsAcrossRootsOptions {
 export interface DiscoverSubagentsAcrossRootsResult {
   /** Project wins a name clash. */
   readonly definitions: Record<string, RootedAgentDefinition>
+  /**
+   * Operator definitions a same-named project definition replaced. A caller that drops a project
+   * definition (an invalid `memory:`, say) can fall back to the operator's instead of losing the name.
+   */
+  readonly shadowed: Record<string, RootedAgentDefinition>
   /** Agent roots present and not read, each named with why. */
   readonly withheld: readonly WithheldRoot[]
 }
@@ -291,36 +296,46 @@ export interface DiscoverSubagentsAcrossRootsResult {
  * through the SDK's one parser. `~/.claude/agents/` is read only when `compatSources.operator`
  * names `claude-code`, and is otherwise reported in `withheld`.
  */
+function withheldAgentRoots(
+  home: string,
+  cwd: string,
+  operatorCompat: readonly SubagentCompatSource[],
+  project: DiscoverSubagentsAcrossRootsOptions['project'],
+  projectTrusted: boolean,
+): WithheldRoot[] {
+  const out: WithheldRoot[] = []
+  const foreign = join(home, '.claude', 'agents')
+  const granted = operatorCompat.some(
+    (c) => (typeof c === 'string' ? c : c.kind) === FOREIGN_DIALECT,
+  )
+  if (!granted && exists(foreign)) {
+    out.push({
+      root: foreign,
+      reason: `not loaded — declare the '${FOREIGN_DIALECT}' dialect in compatSources to receive it`,
+    })
+  }
+  // When the project IS the home, the operator read of that directory already happened.
+  const native = join(cwd, '.theokit', 'agents')
+  if (!projectTrusted && resolve(cwd) !== resolve(home) && exists(native)) {
+    out.push({
+      root: native,
+      reason:
+        project === false
+          ? 'not loaded — project roots were not requested'
+          : 'not loaded — the project is not trusted',
+    })
+  }
+  return out
+}
+
 export async function discoverSubagentsAcrossRoots(
   options: DiscoverSubagentsAcrossRootsOptions,
 ): Promise<DiscoverSubagentsAcrossRootsResult> {
   const home = options.homeDir ?? homedir()
-  const withheld: WithheldRoot[] = []
   const operatorCompat = options.compatSources?.operator ?? []
+  const projectCompat = options.compatSources?.project ?? []
   const projectTrusted =
     options.project !== false && options.project.trustedBy.allows.projectSettings
-
-  if (!operatorCompat.some((c) => (typeof c === 'string' ? c : c.kind) === FOREIGN_DIALECT)) {
-    const root = join(home, '.claude', 'agents')
-    if (exists(root)) {
-      withheld.push({
-        root,
-        reason: `not loaded — declare the '${FOREIGN_DIALECT}' dialect in compatSources to receive it`,
-      })
-    }
-  }
-  if (!projectTrusted) {
-    const root = join(options.cwd, '.theokit', 'agents')
-    if (exists(root)) {
-      withheld.push({
-        root,
-        reason:
-          options.project === false
-            ? 'not loaded — project roots were not requested'
-            : 'not loaded — the project is not trusted',
-      })
-    }
-  }
 
   const [operator, project] = await Promise.all([
     discoverSubagents(home, {
@@ -330,19 +345,29 @@ export async function discoverSubagentsAcrossRoots(
     projectTrusted
       ? discoverSubagents(options.cwd, {
           settingSources: ['project'],
-          ...(options.compatSources?.project?.length
-            ? { compatSources: options.compatSources.project }
-            : {}),
+          ...(projectCompat.length > 0 ? { compatSources: projectCompat } : {}),
         })
       : Promise.resolve({} as Record<string, AgentDefinition>),
   ])
 
   const definitions: Record<string, RootedAgentDefinition> = {}
+  const shadowed: Record<string, RootedAgentDefinition> = {}
   for (const [name, def] of Object.entries(operator)) {
     definitions[name] = { ...def, origin: 'operator' }
   }
   for (const [name, def] of Object.entries(project)) {
+    if (name in definitions) shadowed[name] = definitions[name] as RootedAgentDefinition
     definitions[name] = { ...def, origin: 'project' }
   }
-  return { definitions, withheld }
+  return {
+    definitions,
+    shadowed,
+    withheld: withheldAgentRoots(
+      home,
+      options.cwd,
+      operatorCompat,
+      options.project,
+      projectTrusted,
+    ),
+  }
 }

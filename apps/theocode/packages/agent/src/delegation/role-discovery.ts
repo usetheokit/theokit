@@ -18,7 +18,7 @@ import type { SubagentDefinition } from '@theokit/agents'
  *
  * Measured 2026-09-05 with a positive control: `.theokit/agents/<name>.md` in the project delegates
  * and answers; the identical file under `~/.theokit/agents/` leaves the model reporting that no such
- * subagent exists. The gap was ours. `@theokit/sdk` has no user-configuration layer for any surface (the framework's `discoverSubagentsAcrossRoots` adds the merge) —
+ * subagent exists. The gap was ours. `@theokit/sdk` has no user-configuration layer for any surface —
  * its only user-root accessor lives in credential, transcript and token storage — so the user-level
  * rules and `AGENTS.md` that DO load are read by `context/rules.ts` and `context/user-agents-md.ts`,
  * this product's own code. Two surfaces got a user layer; two fell through to nothing.
@@ -46,13 +46,14 @@ export async function discoverRoles(opts: {
   readonly projectAllowed: boolean
 }): Promise<Record<string, SubagentDefinition>> {
   const home = opts.home ?? homedir()
-  const { definitions } = await discoverSubagentsAcrossRoots({
+  const { definitions, shadowed } = await discoverSubagentsAcrossRoots({
     cwd: opts.cwd,
     homeDir: home,
     project: opts.projectAllowed
       ? {
-          // This surface's own decision (`posture.allows.subagents`) is the one gate; it is
-          // expressed as a posture so the framework call enforces it.
+          // A pass-through, not a decision: TheoCode's own `posture.allows.subagents` already
+          // chose, and `projectAllowed` is that answer. The framework wants a posture, so this
+          // one always allows. Pass a real posture here once callers hold one.
           trustedBy: resolveTrustPosture({
             capabilities: ['projectSettings'] as const,
             isTrusted: () => true,
@@ -67,9 +68,14 @@ export async function discoverRoles(opts: {
   })
   // The origin travels with each definition: `project` and `local` memory resolve against the root
   // the agent came FROM, `user` against home. Applied per origin, after the merge.
+  // A project role dropped for bad memory must leave the operator's same-named role standing, as
+  // when each root was applied on its own — so the shadowed operator roles join the operator half.
   const byOrigin: Record<'operator' | 'project', Record<string, SubagentDefinition>> = {
     operator: {},
     project: {},
+  }
+  for (const [name, { origin: _origin, ...definition }] of Object.entries(shadowed)) {
+    byOrigin.operator[name] = definition
   }
   for (const [name, { origin, ...definition }] of Object.entries(definitions)) {
     byOrigin[origin][name] = definition

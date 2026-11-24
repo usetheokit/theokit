@@ -92,4 +92,45 @@ describe('discoverSubagentsAcrossRoots', () => {
     expect(Object.keys(granted.definitions)).toEqual(['foreign'])
     expect(granted.withheld).toEqual([])
   })
+
+  it('returns the operator definition a project one replaced as shadowed', async () => {
+    role(home, 'shared', 'from operator')
+    role(cwd, 'shared', 'from project')
+    const { shadowed } = await discoverSubagentsAcrossRoots({
+      cwd,
+      homeDir: home,
+      project: { trustedBy: posture(true) },
+    })
+    expect(shadowed.shared?.origin).toBe('operator')
+    expect(shadowed.shared?.description).toBe('from operator')
+  })
+
+  it('treats a trusted project without .theokit/agents as empty, with nothing withheld', async () => {
+    role(home, 'reviewer', 'op')
+    const { definitions, withheld } = await discoverSubagentsAcrossRoots({
+      cwd,
+      homeDir: home,
+      project: { trustedBy: posture(true) },
+    })
+    expect(Object.keys(definitions)).toEqual(['reviewer'])
+    expect(withheld).toEqual([])
+  })
+
+  it('reads a directory that is both home and project once, as the project, and withholds nothing', async () => {
+    role(home, 'solo', 'x')
+    const untrusted = await discoverSubagentsAcrossRoots({
+      cwd: home,
+      homeDir: home,
+      project: { trustedBy: posture(false) },
+    })
+    expect(untrusted.definitions.solo?.origin).toBe('operator')
+    expect(untrusted.withheld).toEqual([])
+
+    const trusted = await discoverSubagentsAcrossRoots({
+      cwd: home,
+      homeDir: home,
+      project: { trustedBy: posture(true) },
+    })
+    expect(trusted.definitions.solo?.origin).toBe('project')
+  })
 })

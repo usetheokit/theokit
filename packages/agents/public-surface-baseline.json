@@ -19788,7 +19788,7 @@
         },
         "DiscoverSubagentsAcrossRootsResult": {
           "tier": "stable",
-          "declaration": "interface DiscoverSubagentsAcrossRootsResult {\n    readonly definitions: Record<string, RootedAgentDefinition>;\n    readonly withheld: readonly WithheldRoot[];\n}",
+          "declaration": "interface DiscoverSubagentsAcrossRootsResult {\n    readonly definitions: Record<string, RootedAgentDefinition>;\n    readonly shadowed: Record<string, RootedAgentDefinition>;\n    readonly withheld: readonly WithheldRoot[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -20641,7 +20641,7 @@
           ],
           "internals": {
             "dist/config.d.ts#DiscoverSubagentsAcrossRootsOptions": "interface DiscoverSubagentsAcrossRootsOptions {\n    readonly cwd: string;\n    readonly homeDir?: string;\n    readonly project: {\n        readonly trustedBy: TrustPosture<'projectSettings'>;\n    } | false;\n    readonly compatSources?: {\n        readonly project?: readonly SubagentCompatSource[];\n        readonly operator?: readonly SubagentCompatSource[];\n    };\n}",
-            "dist/config.d.ts#DiscoverSubagentsAcrossRootsResult": "interface DiscoverSubagentsAcrossRootsResult {\n    readonly definitions: Record<string, RootedAgentDefinition>;\n    readonly withheld: readonly WithheldRoot[];\n}",
+            "dist/config.d.ts#DiscoverSubagentsAcrossRootsResult": "interface DiscoverSubagentsAcrossRootsResult {\n    readonly definitions: Record<string, RootedAgentDefinition>;\n    readonly shadowed: Record<string, RootedAgentDefinition>;\n    readonly withheld: readonly WithheldRoot[];\n}",
             "dist/config.d.ts#RootedAgentDefinition": "type RootedAgentDefinition = AgentDefinition & {\n    readonly origin: SubagentRootOrigin;\n};",
             "dist/config.d.ts#SubagentCompatSource": "type SubagentCompatSource = string | {\n    readonly kind: string;\n    readonly import?: readonly string[];\n};",
             "dist/config.d.ts#SubagentRootOrigin": "type SubagentRootOrigin = 'project' | 'operator';",

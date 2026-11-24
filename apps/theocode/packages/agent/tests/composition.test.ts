@@ -153,7 +153,7 @@ const discoverSubagentsAcrossRoots = vi.fn((o: { project: unknown }) => {
       definitions[name] = { ...(def as object), origin: 'project' }
     }
   }
-  return Promise.resolve({ definitions, withheld: [] })
+  return Promise.resolve({ definitions, shadowed: {}, withheld: [] })
 })
 
 vi.mock('@theokit/agents', async (orig) => ({
@@ -645,6 +645,10 @@ describe('path 3 — buildRoleAgent composes a delegated team member', () => {
           createAgent: () => Promise.resolve({} as never),
         } as never),
       ).resolves.toBeDefined()
+      // The gate closed at the framework call, not by a later check.
+      expect(discoverSubagentsAcrossRoots).toHaveBeenLastCalledWith(
+        expect.objectContaining({ project: false }),
+      )
     } finally {
       operatorRoles = {}
     }
