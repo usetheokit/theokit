@@ -1,7 +1,7 @@
 /**
  * The composition B-130 actually depends on, which nothing exercised.
  *
- * `createRetryRecord` is at 100% and `turnErrorText` is at 100%, and neither proves the thing the
+ * `createTurnRetries` is at 100% and `turnErrorText` is at 100%, and neither proves the thing the
  * user sees. The count only reaches the message if the record's `sink` is wired to the stream AND
  * `attempts()` is read at error time — two arguments to the same options object, a hundred lines
  * into `commands/run.ts`, on a path no test reaches (the file sits at 9.8%).

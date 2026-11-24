@@ -13,3 +13,5 @@ export {
 } from './errors/turn-failure.js'
 export type { TurnFailure, TurnFailureHints } from './errors/turn-failure.js'
 export type { KnownAgentRunErrorCode } from '@theokit/sdk/errors'
+export { createTurnRetries } from './errors/turn-retries.js'
+export type { TurnRetries } from './errors/turn-retries.js'

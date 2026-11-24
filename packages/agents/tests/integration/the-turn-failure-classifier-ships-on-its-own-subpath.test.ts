@@ -37,6 +37,7 @@ describe('the turn-failure subpath', () => {
     const mod = (await import(pathToFileURL(path).href)) as Record<string, unknown>
     expect(typeof mod.classifyTurnFailure).toBe('function')
     expect(typeof mod.describeTurnFailure).toBe('function')
+    expect(typeof mod.createTurnRetries).toBe('function')
     expect(mod.DEFAULT_TURN_FAILURE_HINTS).toBeTypeOf('object')
   })
 })
