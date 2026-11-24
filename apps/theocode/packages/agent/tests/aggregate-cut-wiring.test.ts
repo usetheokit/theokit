@@ -2,7 +2,7 @@
  * B-173 — the WIRING arm: what the aggregate ceiling cut reaches the published record.
  *
  * The two halves are unit-tested next door — `context/aggregate-cut-reporting.test.ts` pins what
- * `composeInstructions` reports, `packages/tui/tests/commands/rules-row.test.ts` pins how the row
+ * `composeTheoCodePrompt` reports, `packages/tui/tests/commands/rules-row.test.ts` pins how the row
  * renders it. Both could pass against a product where the number never travels between them,
  * which is exactly the state this item found: the information existed, in a `warn` string, and
  * nothing carried it to the record.
