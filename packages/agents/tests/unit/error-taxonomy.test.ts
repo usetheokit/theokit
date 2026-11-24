@@ -138,6 +138,20 @@ const CASES = [
     args: [new Error('exited with code 3')],
     retryable: false,
   },
+  {
+    mod: '../../src/foreign-setup/store.js',
+    load: () => import('../../src/foreign-setup/store.js'),
+    name: 'ForeignImportError',
+    args: ['cannot create x', 'unreadable'],
+    retryable: false,
+  },
+  {
+    mod: '../../src/config/settings-roots.js',
+    load: () => import('../../src/config/settings-roots.js'),
+    name: 'SettingsFileError',
+    args: ['/x/settings.json', 'malformed', 'bad'],
+    retryable: false,
+  },
 ] as const
 
 /**
