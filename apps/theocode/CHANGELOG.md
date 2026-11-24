@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `skillsOnDisk` reads the declared-versus-disk comparison through `checks.skillsInventory`, and an unreadable skills root now throws instead of reading as empty; `theocode doctor` reports it as a failed `skills-on-disk` line (#2923).
+- The per-turn retry count comes from `createTurnRetries` in `@theokit/agents/errors`; `@theocode/shared/retry-record` is gone (#2953).
 - `skillsOnDisk` maps only directories under `plugins/` to a bundle's `skills/`; a plain file there is ignored, a symlink to a directory still counts (#3026).
 - The builtin verbs `sessionCommands` defines take their definitions from it (#2919); names and aliases (so `/reset` now means `/new`) come from it, while descriptions, optional arguments and the `CommandAction` mapping stay here.
 - `ask-bridge.ts` reads the open question from `AskBridge.pending` and observes changes with `AskBridge.onChange`; its own thread → id and thread → text maps are gone. `setListener` now accepts any number of observers instead of throwing `ConcurrentListenerError` on a second (#2920).

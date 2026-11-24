@@ -30,7 +30,7 @@ probe "where is session persistence?".
    repository root owns `tools/` for build gates, and tab-completion hitting two unrelated
    `tools/` directories was the measured cost.
 4. **A file adapting a shared primitive does not reuse its basename.** The TUI's process holder
-   over `@theocode/shared/retry-record` is `retry-record-holder.ts`, so a grep or jump-to-file
+   over `createTurnRetries` (`@theokit/agents/errors`) is `retry-record-holder.ts`, so a grep or jump-to-file
    distinguishes the contract from the adapter. `formatting/turn-error.ts` keeps its name — the
    folder already carries the role.
 5. **Session vocabulary.** `agent/src/session` = engine state (ops, history, GC, artifacts);
