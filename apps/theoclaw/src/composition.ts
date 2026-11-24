@@ -850,7 +850,13 @@ async function startComposed(
   // the scheduler, then the loop, so no run or turn starts once the agents are being disposed), the
   // rollback of a failed start and the once-only stop. The whole-teardown bound is the shutdown's.
   const host = createAppHost({ stopTimeoutMs: 60_000 })
+  // Set by the first stop: a start that sees it must not register or use services the host no longer owns.
+  let closing = false
+  const refuseWhenClosing = (): void => {
+    if (closing) throw new Error('theoclaw: shut down while starting')
+  }
   const stopped = async (): Promise<void> => {
+    closing = true
     const result = await host.close()
     if (result.ok) return
     const steps = [
@@ -922,6 +928,8 @@ async function startComposed(
         ? undefined
         : relayRoute(relay.serveToken, { persistPath: join(relayDir, 'relay-mailbox-v2.json') })
 
+    // A signal that arrived during the awaits above closed the host: it can neither take services nor start.
+    refuseWhenClosing()
     // Registered in the order they start; stopped in the reverse, once. A getter works from its own start on.
     host.service(
       'browser',
@@ -1040,6 +1048,8 @@ async function startComposed(
       )
     }
     await host.start()
+    // A signal during the start stopped what had started; `app()` would throw a HostError instead.
+    refuseWhenClosing()
     composed = app()
     scheduled = scheduler()
 
@@ -1108,7 +1118,8 @@ async function startComposed(
   } catch (error) {
     // A service that did not start (a database that is down) or a listener that never bound (a busy
     // port, an address the host lacks): the host stops what started and the entry exits 1.
-    removeShutdown()
+    // A signal that closed the host is mid-shutdown: its hooks stay, and its exit ends the process.
+    if (!closing) removeShutdown()
     options.signals.off('exit', flushOnExit)
     await host.close()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
