@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import * as entry from '../control-entry.js'
 import {
   type ControlStreamClient,
   type ControlStreamFrame,
+  createControlStreamInbox,
   createControlStreamSource,
 } from './control-stream.js'
 
@@ -103,5 +105,46 @@ describe('createControlStreamSource', () => {
       { type: 'text-delta', text: 'b' },
     ])
     expect(left).toEqual([late])
+  })
+})
+
+describe('createControlStreamInbox', () => {
+  it('is exported from the control entry', () => {
+    expect(entry.createControlStreamInbox).toBe(createControlStreamInbox)
+  })
+
+  it('yields frame, notice, frame in arrival order', async () => {
+    let clock = 0
+    const stamp = () => ++clock
+    const inbox = createControlStreamInbox({ stamp })
+    const frame = (content: string): ControlStreamFrame => ({
+      type: 'event',
+      event: { type: 'text_delta', content } as never,
+      arrivedAt: stamp(),
+    })
+    const first = frame('a')
+    inbox.post({ variant: 'warning', text: 'between' })
+    const second = frame('b')
+    const done: ControlStreamFrame = { type: 'done', arrivedAt: stamp() }
+    const client = clientOf([first, second, done])
+    const events = await collect(createControlStreamSource(client, 's', 'hi', { inbox })())
+    expect(events).toEqual([
+      { type: 'text-delta', text: 'a' },
+      { type: 'notice', variant: 'warning', text: 'between' },
+      { type: 'text-delta', text: 'b' },
+    ])
+    expect(inbox.take()).toEqual([])
+  })
+
+  it('takes only notices before the stamp and wakes a waiter on post', async () => {
+    const inbox = createControlStreamInbox()
+    const waiting = inbox.wait()
+    inbox.post({ variant: 'error', text: 'one' })
+    await waiting
+    const mark = inbox.stamp()
+    inbox.post({ variant: 'error', text: 'two' })
+    expect(inbox.take(mark).map((n) => n.text)).toEqual(['one'])
+    expect(inbox.take().map((n) => n.text)).toEqual(['two'])
+    await expect(Promise.race([inbox.wait(), Promise.resolve('idle')])).resolves.toBe('idle')
   })
 })

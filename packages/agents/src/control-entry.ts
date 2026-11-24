@@ -31,6 +31,7 @@ export {
   type ControlClient,
 } from './control/control-client.js'
 export {
+  createControlStreamInbox,
   createControlStreamSource,
   type ControlStreamClient,
   type ControlStreamEvent,

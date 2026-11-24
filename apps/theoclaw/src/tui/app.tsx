@@ -8,13 +8,13 @@ import {
   StatusFooter,
   TheoTUIProvider,
 } from '@theokit/tui'
-import { createControlStreamSource } from '@theokit/agents/control'
+import { createControlStreamInbox, createControlStreamSource } from '@theokit/agents/control'
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import { Text } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
-import type { ControlClient } from '../control-client/control-client.js'
-import { createTurnInbox, nextSessionId, type TurnInbox } from './frames.js'
+import { type ControlClient, nextArrival } from '../control-client/control-client.js'
+import { nextSessionId } from './frames.js'
 
 export interface TheoClawTuiProps {
   /** The connection to the running instance; the TUI builds no agent (plan D1). */
@@ -52,10 +52,10 @@ interface SessionProps {
 /** One session's screen: remounted (by `key`) when `/new` moves to another session, which clears it. */
 function Session({ client, session, previous, onFresh, onQuit }: SessionProps): ReactElement {
   // The turn the stream is on, for the notices and the refusal of `/new` while it runs.
-  const turn = useRef<{ readonly inbox: TurnInbox; readonly signal: AbortSignal; ended: boolean } | undefined>(undefined)
+  const turn = useRef<{ readonly inbox: ReturnType<typeof createControlStreamInbox>; readonly signal: AbortSignal; ended: boolean } | undefined>(undefined)
 
   const stream = (message: string, signal: AbortSignal): AsyncIterable<AgentStreamEvent> => {
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const mine = { inbox, signal, ended: false }
     // A function source: the turn is opened when the session consumes it, exactly once.
     const source = createControlStreamSource(client, session, message, { inbox })
