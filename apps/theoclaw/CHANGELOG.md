@@ -11,7 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Voice replies read the note with the gateway's `event.audio.read()` and send the spoken reply as an `audio` attachment through `ctx.reply`, so the Telegram adapter's own Bot API root is used; the app's `getFile`, file download and `sendVoice` calls are gone. The attachment is `audio/mpeg`, because plugin-voice 0.12.0 always synthesizes MP3. A failed attachment still falls back to text once (#2934).
+- Voice replies read the note with the gateway's `event.audio.read()` and send the spoken reply as an `audio` attachment through `ctx.reply`, so the Telegram adapter's own Bot API root is used; the app's `getFile`, file download and `sendVoice` calls are gone. The attachment is `audio/mpeg`, because plugin-voice 0.12.0 always synthesizes MP3, and carries the caption `AI-generated voice` alone, not the answer text. A failed attachment still falls back to text once (#2934).
 - The sessionless turn builds its usage record from the `usage` of `runAgentTurn`'s outcome and no longer wraps the agent to catch `wait()`; the record is the same. A run that reports neither token count is `in=0 out=0`, unpriced, even if it reported a cost (#2952).
 - `installPlugin` calls the SDK's `installWorkspacePlugin` (with `replace`), and `plugins/manifest.ts` is gone in favour of the SDK's `parsePluginManifest`; the `trustFile` input is removed because the SDK resolves its own trust record. A trust record that cannot be parsed now fails the install instead of being replaced (#2940).
 - The computer live test tells the model the code is the six capital characters in the large heading, and renders the typed text small and monospace, so the describer no longer reports the typed word as the code (#2882).
@@ -33,6 +33,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - Channels, WebChat and the terminal UI route their slash commands through one `createCommandRegistry` each, in place of regular expressions, a `switch` and `if` chains. `/new` and `/reset` are `exact`, so `/new chat` is a message to the agent. `/think` with extra words (`/think a b`) now answers the usage line instead of going to the model (#2726).
 - Pairing and the owner policy hook now come from `@theokit/gateway` 0.30.0 (`createFilePairingStore`, `createAccessPolicyHook` with its `messages` option, `senderKey`); `pairing-store.ts` is gone and `owner-policy-hook.ts` wraps the gateway hook with TheoClaw's reply texts. TheoClaw still answers an owner's bare `/approve` in a DM with the invalid-code text, lets an owner's `/approve` in a group go on to the agent without pairing anyone (only a DM pairs), and admits an unauthenticated-platform DM under `open`. Observable differences: pairing codes run 100000 to 999999 (no leading zeros); a failed write is no longer logged with its path (the code is still kept for a retry); an owner's DM no longer fails when the pairing store's `isPaired` throws, since the owner is known before the store is read; a pairing file that cannot be read still stops the start and names the path and `THEOCLAW_STATE_DIR` (#2704).
 - `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
+
 ### Changed
 
 - `sessions list|show|export|share|resume` read transcripts through `readThreadHistoryFile` and `threadToUIMessages` from `@theokit/agents/session` instead of staging a copy in a temporary directory. Output is unchanged: `export` still prints text only, and the message count still counts each assistant record (#2753).
@@ -72,7 +73,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - The turn event mask moved into `@theokit/agents/bridge` as `createAgentEventMask`, and `runAgentTurn` takes the same masking as `secrets`; `control-plane/event-mask.ts` is gone (#2735).
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
-
 
 - `theoclaw worker pair` redeems its setup code with `redeemPairing` from `@theokit/agents/control` instead of a hand-written POST. A control URL whose scheme is not `http(s)` or `ws(s)` is now refused with exit code 1 (#2711).
 - A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 11.0.0 does not mirror the reviewer's fact, so the repository carries a pnpm patch (`patches/@theokit__sdk@11.0.0.patch`) until an SDK release does (#2743).

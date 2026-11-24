@@ -10,6 +10,8 @@ export interface VoiceReplies {
 const TIMEOUT_MS = 60_000
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024
 const SPEECH_MEDIA_TYPE = 'audio/mpeg'
+/** The caption of a spoken reply; the answer text itself is not sent beside the audio. */
+export const VOICE_DISCLOSURE = 'AI-generated voice'
 export const VOICE_FAILED = 'I could not process that voice note. Please send text instead.'
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -36,7 +38,7 @@ export function withVoiceReplies(handler: GatewayHandler, voice: VoiceReplies | 
       reply: async (answer, opts) => {
         try {
           const data = await voice!.speak(answer)
-          const sent = await ctx.reply(answer, { attachments: [{ kind: 'audio', mediaType: SPEECH_MEDIA_TYPE, data, filename: 'reply.mp3' }] })
+          const sent = await ctx.reply(VOICE_DISCLOSURE, { attachments: [{ kind: 'audio', mediaType: SPEECH_MEDIA_TYPE, data, filename: 'reply.mp3' }] })
           if (sent.ok) return sent
         } catch {
           // fall through to text
@@ -81,6 +83,7 @@ export function configuredVoiceReplies(
   request: typeof fetch = fetch,
 ): VoiceReplies | undefined {
   const key = env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim()
+  // Voice stays a Telegram feature: the token is only a switch here; the adapter does the transport.
   const token = env.THEOCLAW_TELEGRAM_TOKEN?.trim()
   if (!key || !token) return undefined
   const call = (url: string | URL, init?: RequestInit): Promise<Response> => request(url, {

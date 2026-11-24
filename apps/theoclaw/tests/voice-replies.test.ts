@@ -8,7 +8,7 @@ import { processSecrets } from '../src/secrets.js'
 import { channelHooks } from '../src/channel-hooks.js'
 import { parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
-import { configuredVoiceReplies, VOICE_FAILED, withVoiceReplies } from '../src/voice/voice-replies.js'
+import { configuredVoiceReplies, VOICE_DISCLOSURE, VOICE_FAILED, withVoiceReplies } from '../src/voice/voice-replies.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
 
 const env = { THEOCLAW_VOICE_OPENAI_API_KEY: 'audio-secret', THEOCLAW_TELEGRAM_TOKEN: 'telegram-secret' }
@@ -66,7 +66,7 @@ describe('voice note replies', () => {
       expect(JSON.parse(String(speech?.body))).toEqual({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: 'Hello [redacted]', response_format: 'mp3' })
       expect(adapter.sent).toHaveLength(1)
       const sent = adapter.sent[0]!
-      expect(sent.text).toBe('Hello [redacted]')
+      expect(sent.text).toBe('AI-generated voice')
       expect(sent.attachments).toHaveLength(1)
       const [audio] = sent.attachments!
       expect(audio).toMatchObject({ kind: 'audio', mediaType: 'audio/mpeg' })
@@ -147,7 +147,7 @@ describe('voice note replies', () => {
     const handler = vi.fn(async (inner: MessageEvent, innerCtx: GatewayContext) => { expect(inner.text).toBe('hello from voice'); await innerCtx.reply('answer') })
     await withVoiceReplies(handler, configuredVoiceReplies(env, network()))(event, ctx)
     expect(handler).toHaveBeenCalledOnce()
-    expect(ctx.reply).toHaveBeenCalledExactlyOnceWith('answer', {
+    expect(ctx.reply).toHaveBeenCalledExactlyOnceWith(VOICE_DISCLOSURE, {
       attachments: [{ kind: 'audio', mediaType: 'audio/mpeg', data: new TextEncoder().encode('OggS-reply'), filename: 'reply.mp3' }],
     })
   })
