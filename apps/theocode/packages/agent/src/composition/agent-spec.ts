@@ -145,25 +145,7 @@ export function reviewerShape(ctx: SpecContext): AgentShape {
  * in `@theokit/sdk`, which is published from another repository, and is tracked on #736 with the
  * measurement. Nothing here pretends otherwise.
  */
-/**
- * What an `ask` verdict resolves to for THIS run, derived from the approval policy the operator set.
- *
- * #826 — `ask` is the verdict `PermissionEngine` returns for a tool no rule matches, and it is the
- * one verdict the rules do not answer. Leaving it to the SDK's default made it a hard block, so the
- * first `permissions` block an operator wrote killed every tool they had not enumerated.
- *
- * Derived rather than chosen, and the derivation is the existing one: `approvalModeFor` already maps
- * the policy to a mode, and `full-auto` is precisely "the operator said do not ask me". A second
- * mapping here would be a second source of truth for one decision.
- *
- * `suggest` hands a tool that HAS an approval card to that card, and refuses the rest with what
- * would change it. #945 — measured in the TUI on 2026-10-02: the refusal used to cover every tool,
- * so a `permissions.allow` list without `ApplyPatch` meant no file could be written and no card was
- * shown, while the same request with no `permissions` block got the card. The card is keyed by the
- * build-time `.approvals({...})` map (`humanGated`), and letting `ask` through for those tools is
- * what reaches it: the TUI shows it, and a headless run answers it with its approval posture. A tool
- * outside that map has no asker, and for it the refusal below is still the honest answer.
- */
+/** The text a tool no `permissions` rule matched is refused with: names `permissions.allow` and `approval_policy="never"`. */
 export function refusalMessage(toolName: string, policy: ApprovalPolicy): string {
   return (
     `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
@@ -210,7 +192,23 @@ export function orderedPermissionRules(
   )
 }
 
-
+/**
+ * The `permissions` rules as a plugin, with the `ask` verdict answered by `onAskForPolicy`.
+ *
+ * #826 — `ask` is the verdict `PermissionEngine` returns for a tool no rule matches, and it is the
+ * one verdict the rules do not answer. Leaving it to the SDK's default made it a hard block, so the
+ * first `permissions` block an operator wrote killed every tool they had not enumerated.
+ *
+ * The decision comes from the approval policy: `never` (`full-auto`) is "the operator said do not
+ * ask me", so it allows. Otherwise a tool that HAS an approval card (`humanGated`) is handed to that
+ * card, and any other tool is refused with `refusalMessage`. #945 — measured in the TUI on
+ * 2026-10-02: the refusal used to cover every tool, so a `permissions.allow` list without
+ * `ApplyPatch` meant no file could be written and no card was shown, while the same request with no
+ * `permissions` block got the card. The card is keyed by the build-time `.approvals({...})` map, and
+ * letting `ask` through for those tools is what reaches it: the TUI shows it, and a headless run
+ * answers it with its approval posture. A tool outside that map has no asker, and for it the
+ * refusal is still the honest answer.
+ */
 export function permissionsPluginsFor(
   cwd: string,
   operatorHome: string,
