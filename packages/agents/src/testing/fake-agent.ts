@@ -1,5 +1,7 @@
 import type { InteractionUpdate } from '@theokit/sdk'
 
+import type { SdkMessage, SdkTimelineEvent } from '../bridge/index.js'
+
 /** A stream frame as `@theokit/sdk` emits it, narrowed to what the presenter reads. */
 export type SdkFrame = { readonly type: string } & Readonly<Record<string, unknown>>
 
@@ -50,6 +52,14 @@ function until(gate: Promise<void> | undefined, signal: AbortSignal | undefined)
   })
 }
 
+/**
+ * A frame as the bridge's `SdkMessage`. The fake's frames are loose test data, so this is the one
+ * place they are trusted to be the SDK's messages; a real run yields `SdkMessage`s without it.
+ */
+function asMessage(frame: SdkFrame): SdkMessage {
+  return frame as unknown as SdkMessage
+}
+
 const never = new Promise<void>(() => undefined)
 
 /** A timeline event as `run.events()` yields it. */
@@ -84,15 +94,15 @@ export class FakeAgent {
     const aborted = (): boolean => signal?.aborted === true
     const deltas = turn.deltas ?? []
     return {
-      async *stream(): AsyncGenerator<SdkFrame> {
+      async *stream(): AsyncGenerator<SdkMessage> {
         await until(turn.before, signal)
         for (const frame of frames) {
           if (aborted()) return
-          yield frame
+          yield asMessage(frame)
         }
         if (turn.streamError) throw turn.streamError
       },
-      async *events(): AsyncGenerator<FakeTimelineEvent> {
+      async *events(): AsyncGenerator<SdkTimelineEvent> {
         await until(turn.before, signal)
         if (turn.toolHeld === true) {
           if (aborted()) return
@@ -115,7 +125,11 @@ export class FakeAgent {
         await until(turn.afterDeltas, signal)
         for (const frame of frames) {
           if (aborted()) return
-          yield { kind: 'message', message: frame, textAlreadyStreamed: deltas.length > 0 }
+          yield {
+            kind: 'message',
+            message: asMessage(frame),
+            textAlreadyStreamed: deltas.length > 0,
+          }
         }
         if (turn.streamError) throw turn.streamError
       },

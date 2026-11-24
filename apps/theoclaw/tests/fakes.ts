@@ -1,6 +1,7 @@
 import { BasePlatformAdapter } from '@theokit/gateway'
 import type { MessageEvent, OutboundMessage, PlatformName, SendResult } from '@theokit/gateway'
 import { FakeAgent } from '@theokit/agents/testing'
+import type { SdkMessage } from '@theokit/agents/bridge'
 import type { SdkFrame } from '@theokit/agents/testing'
 
 import type { TurnMessage } from '../src/agent-port.js'
@@ -159,4 +160,9 @@ export class DisposableFake extends FakeAgent {
 /** The text of a message the port carries, whether it was sent as a string or with images. */
 export function turnText(message: TurnMessage): string {
   return typeof message === 'string' ? message : message.text
+}
+
+/** A loosely built frame as the bridge's `SdkMessage`: the one trusted cast of a hand-written fake stream. */
+export function sdkMessage(frame: { readonly type: string } & Readonly<Record<string, unknown>>): SdkMessage {
+  return frame as unknown as SdkMessage
 }

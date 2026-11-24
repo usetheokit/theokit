@@ -5110,12 +5110,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -5138,12 +5138,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkMessage": {
@@ -5151,9 +5151,9 @@
           "declaration": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"],
+          "references": ["dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkRun": {
@@ -5182,12 +5182,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -5210,12 +5210,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage": "type SdkStreamMessage = SDKMessage;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkRunAgent": {
@@ -5245,14 +5245,14 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkRun",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -5276,14 +5276,14 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkRun": "interface SdkRun extends SdkTurnHandle<SdkStreamMessage> {\n    wait: () => Promise<SdkTurnOutcome & {\n        status: string;\n    }>;\n    stream: () => AsyncIterable<SdkStreamMessage>;\n    events: () => AsyncIterable<SdkTimelineEvent>;\n    cancel: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage": "type SdkStreamMessage = SDKMessage;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkSendOptions": {
@@ -5308,12 +5308,12 @@
           "runtime": false,
           "deprecatedSince": null,
           "references": [
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkTurnHandle": {
@@ -5342,10 +5342,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -5368,10 +5368,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkTurnOutcome": {
@@ -8184,8 +8184,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -8208,8 +8208,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
           }
         },
         "declareAgentShape": {
@@ -8694,8 +8694,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -8718,8 +8718,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
           }
         },
         "foldLayers": {
@@ -9076,14 +9076,14 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "isDone": {
@@ -9250,14 +9250,14 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "isPartialToolCall": {
@@ -10649,12 +10649,12 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface",
             "dist/setting-sources-gate-<hash>.d.ts#GATED",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource",
@@ -10721,12 +10721,12 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    toolDecisions?: SendOptions['toolDecisions'];\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource": "type GatedCompatSource = ResolvedCompatSource & {\n    readonly [GATED]: true;\n};",
@@ -10857,13 +10857,13 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds",
             "dist/sdk-adapter-<hash>.d.ts#toAgentFactory",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface",
             "dist/setting-sources-gate-<hash>.d.ts#GATED",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource",
@@ -10930,13 +10930,13 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    toolDecisions?: SendOptions['toolDecisions'];\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/sdk-adapter-<hash>.d.ts#toAgentFactory": "declare function toAgentFactory(def: DefinitionOrThunk, opts: {\n    apiKey: string | (() => string | Promise<string>);\n    approvals: ApprovalPosture;\n    overrides?: RuntimeOverrides;\n    withholdBuiltinShell?: boolean;\n}): (sessionId: string) => Promise<SdkAgentHandle<SdkMessage>>;",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource": "type GatedCompatSource = ResolvedCompatSource & {\n    readonly [GATED]: true;\n};",
@@ -11050,8 +11050,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -11074,8 +11074,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "translateTimelineEvent": {
@@ -11104,11 +11104,11 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -11131,11 +11131,11 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "unicodeNormalizer": {
@@ -11247,12 +11247,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -11276,12 +11276,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "worktreeProvider": {
@@ -14599,12 +14599,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -14627,12 +14627,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkMessage": {
@@ -14640,9 +14640,9 @@
           "declaration": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"],
+          "references": ["dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkRun": {
@@ -14671,12 +14671,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -14699,12 +14699,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage": "type SdkStreamMessage = SDKMessage;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkRunAgent": {
@@ -14734,14 +14734,14 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkRun",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -14765,14 +14765,14 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkRun": "interface SdkRun extends SdkTurnHandle<SdkStreamMessage> {\n    wait: () => Promise<SdkTurnOutcome & {\n        status: string;\n    }>;\n    stream: () => AsyncIterable<SdkStreamMessage>;\n    events: () => AsyncIterable<SdkTimelineEvent>;\n    cancel: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
             "dist/sdk-adapter-<hash>.d.ts#SdkStreamMessage": "type SdkStreamMessage = SDKMessage;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkSendOptions": {
@@ -14797,12 +14797,12 @@
           "runtime": false,
           "deprecatedSince": null,
           "references": [
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkTurnHandle": {
@@ -14831,10 +14831,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -14857,10 +14857,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SdkTurnOutcome": {
@@ -16001,8 +16001,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -16025,8 +16025,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
           }
         },
         "delegate": {
@@ -16399,8 +16399,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -16423,8 +16423,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}"
           }
         },
         "foreignSurfaceInventory": {
@@ -16741,14 +16741,14 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "isDone": {
@@ -16907,14 +16907,14 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "isPartialToolCall": {
@@ -17742,12 +17742,12 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface",
             "dist/setting-sources-gate-<hash>.d.ts#GATED",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource",
@@ -17814,12 +17814,12 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    toolDecisions?: SendOptions['toolDecisions'];\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource": "type GatedCompatSource = ResolvedCompatSource & {\n    readonly [GATED]: true;\n};",
@@ -17942,13 +17942,13 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds",
             "dist/sdk-adapter-<hash>.d.ts#toAgentFactory",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface",
             "dist/setting-sources-gate-<hash>.d.ts#GATED",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource",
@@ -18015,13 +18015,13 @@
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    toolDecisions?: SendOptions['toolDecisions'];\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/sdk-adapter-<hash>.d.ts#toAgentFactory": "declare function toAgentFactory(def: DefinitionOrThunk, opts: {\n    apiKey: string | (() => string | Promise<string>);\n    approvals: ApprovalPosture;\n    overrides?: RuntimeOverrides;\n    withholdBuiltinShell?: boolean;\n}): (sessionId: string) => Promise<SdkAgentHandle<SdkMessage>>;",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
             "dist/setting-sources-gate-<hash>.d.ts#GatedCompatSource": "type GatedCompatSource = ResolvedCompatSource & {\n    readonly [GATED]: true;\n};",
@@ -18119,8 +18119,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -18143,8 +18143,8 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "translateTimelineEvent": {
@@ -18173,11 +18173,11 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -18200,11 +18200,11 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#PendingToolResult": "interface PendingToolResult {\n    readonly ids: readonly string[];\n    event: AgentStreamEvent;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#ToolSeen": "interface ToolSeen {\n    readonly started: Set<string>;\n    readonly completed: Set<string>;\n    pending: PendingToolResult[];\n    sawThinkingDelta: boolean;\n}",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "validateAgainstInputSchema": {
@@ -18262,12 +18262,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -18291,12 +18291,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "worktreeProvider": {
@@ -21348,12 +21348,12 @@
             "dist/control.d.ts#SessionTurnContext",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -21379,12 +21379,12 @@
             "dist/control.d.ts#SessionTurnContext": "interface SessionTurnContext<A> {\n    agent: A;\n    message: string;\n    runId: string;\n    signal: AbortSignal;\n    emit: (e: AgentStreamEvent) => void;\n    onRun: (cancel: () => Promise<void>) => void;\n    onEventsEnded: () => void;\n}",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "SocketOutcome": {
@@ -21651,12 +21651,12 @@
             "dist/control.d.ts#SessionTurnContext",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -21685,12 +21685,12 @@
             "dist/control.d.ts#SessionTurnContext": "interface SessionTurnContext<A> {\n    agent: A;\n    message: string;\n    runId: string;\n    signal: AbortSignal;\n    emit: (e: AgentStreamEvent) => void;\n    onRun: (cancel: () => Promise<void>) => void;\n    onEventsEnded: () => void;\n}",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
           }
         },
         "pairRoute": {
@@ -25411,16 +25411,20 @@
         },
         "FakeAgent": {
           "tier": "stable",
-          "declaration": "declare class FakeAgent {\n    private readonly turn;\n    readonly sent: string[];\n    readonly signals: (AbortSignal | undefined)[];\n    readonly queueModes: (string | undefined)[];\n    cancels: number;\n    constructor(turn: FakeTurn);\n    send(text: string, options?: {\n        readonly signal?: AbortSignal;\n        readonly queueMode?: string;\n    }): Promise<{\n        stream(): AsyncGenerator<SdkFrame>;\n        events(): AsyncGenerator<FakeTimelineEvent>;\n        cancel: () => Promise<void>;\n        wait: () => Promise<{\n            readonly status: string;\n            readonly error?: {\n                readonly code?: string;\n            };\n            readonly usage?: {\n                readonly inputTokens?: number;\n                readonly outputTokens?: number;\n            };\n            readonly cost?: {\n                readonly amountUsd?: number;\n            };\n        }>;\n    }>;\n}",
+          "declaration": "declare class FakeAgent {\n    private readonly turn;\n    readonly sent: string[];\n    readonly signals: (AbortSignal | undefined)[];\n    readonly queueModes: (string | undefined)[];\n    cancels: number;\n    constructor(turn: FakeTurn);\n    send(text: string, options?: {\n        readonly signal?: AbortSignal;\n        readonly queueMode?: string;\n    }): Promise<{\n        stream(): AsyncGenerator<SdkMessage>;\n        events(): AsyncGenerator<SdkTimelineEvent>;\n        cancel: () => Promise<void>;\n        wait: () => Promise<{\n            readonly status: string;\n            readonly error?: {\n                readonly code?: string;\n            };\n            readonly usage?: {\n                readonly inputTokens?: number;\n                readonly outputTokens?: number;\n            };\n            readonly cost?: {\n                readonly amountUsd?: number;\n            };\n        }>;\n    }>;\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/testing.d.ts#FakeTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds",
             "dist/testing.d.ts#FakeTurn",
             "dist/testing.d.ts#SdkFrame"
           ],
           "internals": {
-            "dist/testing.d.ts#FakeTimelineEvent": "type FakeTimelineEvent = {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n} | {\n    readonly kind: 'message';\n    readonly message: SdkFrame;\n    readonly textAlreadyStreamed: boolean;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
+            "dist/sdk-timeline-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
+            "dist/sdk-timeline-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/testing.d.ts#FakeTurn": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
             "dist/testing.d.ts#SdkFrame": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;"
           }
@@ -26847,70 +26851,20 @@
         },
         "agentRunPort": {
           "tier": "stable",
-          "declaration": "declare function agentRunPort(withAgent: <R>(work: (agent: SdkAgentHandle) => Promise<R>) => Promise<R>, options?: {\n    sendOptions?: SdkSendOptions;\n}): RunPort;",
+          "declaration": "declare function agentRunPort(withAgent: <R>(work: (agent: ScheduledRunAgent) => Promise<R>) => Promise<R>, options?: {\n    sendOptions?: SdkSendOptions;\n}): RunPort;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
-            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
-            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
-            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
-            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
-            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
-            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
-            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
-            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds",
             "dist/tools.d.ts#RunPort",
-            "dist/tools.d.ts#RunResult"
+            "dist/tools.d.ts#RunResult",
+            "dist/tools.d.ts#ScheduledRunAgent"
           ],
           "internals": {
-            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
-            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;",
             "dist/tools.d.ts#RunPort": "type RunPort = (prompt: string, signal: AbortSignal) => Promise<RunResult>;",
-            "dist/tools.d.ts#RunResult": "type RunResult = {\n    ok: true;\n    text: string;\n} | {\n    ok: false;\n    error: string;\n};"
+            "dist/tools.d.ts#RunResult": "type RunResult = {\n    ok: true;\n    text: string;\n} | {\n    ok: false;\n    error: string;\n};",
+            "dist/tools.d.ts#ScheduledRunAgent": "interface ScheduledRunAgent {\n    send(message: string, options?: SdkSendOptions): Promise<{\n        stream?: () => AsyncIterable<unknown>;\n        wait: () => Promise<{\n            status?: string;\n            result?: string;\n            error?: {\n                message?: string;\n                code?: string;\n            };\n        }>;\n    }>;\n}"
           }
         },
         "buildEnvContext": {
