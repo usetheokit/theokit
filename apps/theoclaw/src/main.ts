@@ -9,6 +9,7 @@ import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 import { resolveSecretRefs } from '@theokit/agents/auth'
 import { teeOutput } from '@theokit/host'
+import { InstanceConfigError } from '@theokit/host/instance-config'
 import { restartSelf, waitForPredecessor } from '@theokit/host/service'
 
 import { startTheoClaw } from './composition.js'
@@ -19,7 +20,6 @@ import {
   createAgentFactory,
   createChannelAgentFactory,
 } from './control-plane/agent-factory.js'
-import { InstanceConfigError } from '@theokit/host/instance-config'
 import { loadConfiguration, theoclawConfig } from './config-file.js'
 import { watchConfiguration } from './ops/hot-reload.js'
 import { describeError } from './control-plane/errors.js'
@@ -82,8 +82,7 @@ try {
     theoclawConfig.applyEntryArgs(process.argv.slice(2), process.env)
   } catch (error) {
     if (!(error instanceof InstanceConfigError)) throw error
-    process.stderr.write(`theoclaw: ${error.message}
-`)
+    process.stderr.write(`theoclaw: ${error.message}\n`)
     process.exit(2)
   }
   // The configuration file next (B-374): it fills only what the environment leaves unset.

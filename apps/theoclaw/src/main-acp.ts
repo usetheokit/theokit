@@ -5,11 +5,11 @@ import { homedir } from 'node:os'
 
 import { resolveSecretRefs } from '@theokit/agents/auth'
 import { serveAcp } from '@theokit/acp'
+import { InstanceConfigError } from '@theokit/host/instance-config'
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 
 import type { TheoClawAgentOptions } from './agent/create-agent.js'
-import { InstanceConfigError } from '@theokit/host/instance-config'
 import { loadConfiguration, theoclawConfig } from './config-file.js'
 import { createAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
@@ -32,8 +32,7 @@ try {
     theoclawConfig.applyEntryArgs(process.argv.slice(2), process.env)
   } catch (error) {
     if (!(error instanceof InstanceConfigError)) throw error
-    process.stderr.write(`theoclaw: ${error.message}
-`)
+    process.stderr.write(`theoclaw: ${error.message}\n`)
     process.exit(2)
   }
   loadConfiguration(process.env, homedir())
