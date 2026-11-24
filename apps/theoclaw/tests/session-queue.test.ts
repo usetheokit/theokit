@@ -11,9 +11,8 @@ import { composeTheoClaw, startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
 
 import { Generations } from '../src/sessions/generations.js'
-import { SessionAgents } from '../src/sessions/session-agents.js'
+import { chatSessions, type ChatSessionPool } from '../src/sessions/chat-sessions.js'
 import type { SessionAgent } from '../src/sessions/session-agents.js'
-import { createSessionRouter } from '../src/sessions/session-key.js'
 import type { SessionSettings } from '../src/sessions/session-settings.js'
 import { capturingStream, fakeBuilders, scratchWorkspace, OPEN_DMS } from './composition-fixtures.js'
 import { FakeAgent, assistant, deferred, finished, messageEvent, waitFor } from './fakes.js'
@@ -44,18 +43,17 @@ function idleAgent(): SessionAgent {
   return { send: () => Promise.reject(new Error('no turn here')), dispose: vi.fn(async () => undefined) }
 }
 
-function sessions(getOrCreate: (id: string, options: AgentOptions) => Promise<SessionAgent>): SessionAgents {
-  return new SessionAgents({
-    router: createSessionRouter(SETTINGS),
+function sessions(getOrCreate: (id: string, options: AgentOptions) => Promise<SessionAgent>): ChatSessionPool {
+  return chatSessions({
+    env: { THEOCLAW_MODEL: 'stub', OPENROUTER_API_KEY: 'key-value' },
     getOrCreate,
-    optionsFor: () => ({ model: 'stub' }),
     generations: new Generations(),
-    settings: SETTINGS,
+    sessionSettings: SETTINGS,
     write: () => undefined,
-  })
+  }).sessions
 }
 
-describe('SessionAgents.lease', () => {
+describe('chat sessions lease', () => {
   it('two first messages of one session make one getOrCreate call', async () => {
     for (let repetition = 0; repetition < 20; repetition += 1) {
       const resolving = deferred<SessionAgent>()
