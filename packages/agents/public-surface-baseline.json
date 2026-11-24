@@ -19249,7 +19249,7 @@
         },
         "HeadlessTurnOptions": {
           "tier": "stable",
-          "declaration": "interface HeadlessTurnOptions {\n    readonly io: HeadlessIo;\n    readonly json?: boolean;\n    readonly outputLastMessage?: (text: string) => void | Promise<void>;\n    readonly exitCodes?: Partial<Record<HeadlessOutcome, number>>;\n    readonly format?: (event: AgentOutputEvent) => {\n        out?: string;\n        err?: string;\n    } | undefined;\n}",
+          "declaration": "interface HeadlessTurnOptions {\n    readonly io: HeadlessIo;\n    readonly json?: boolean;\n    readonly outputLastMessage?: (text: string) => void | Promise<void>;\n    readonly exitCodes?: Partial<Record<HeadlessOutcome, number>>;\n    readonly format?: (event: AgentOutputEvent) => {\n        out?: string;\n        err?: string;\n    } | undefined;\n    readonly onFormatError?: 'ignore' | 'fail';\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": ["dist/commands.d.ts#HeadlessIo", "dist/commands.d.ts#HeadlessOutcome"],
@@ -19260,7 +19260,7 @@
         },
         "HeadlessTurnResult": {
           "tier": "stable",
-          "declaration": "interface HeadlessTurnResult {\n    readonly finalText: string;\n    readonly outcome: HeadlessOutcome;\n    readonly stopReason?: 'step_limit' | 'no_progress';\n    readonly errorCode?: string;\n    readonly usage?: WireTurnMetadata['usage'];\n    readonly exitCode: number;\n}",
+          "declaration": "interface HeadlessTurnResult {\n    readonly finalText: string;\n    readonly outcome: HeadlessOutcome;\n    readonly stopReason?: 'step_limit' | 'no_progress';\n    readonly errorCode?: string;\n    readonly errorMessage?: string;\n    readonly usage?: WireTurnMetadata['usage'];\n    readonly exitCode: number;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": ["dist/commands.d.ts#HeadlessOutcome"],
@@ -19543,8 +19543,8 @@
           "internals": {
             "dist/commands.d.ts#HeadlessIo": "interface HeadlessIo {\n    readonly out: (s: string) => void;\n    readonly err: (s: string) => void;\n}",
             "dist/commands.d.ts#HeadlessOutcome": "type HeadlessOutcome = 'ok' | 'error' | 'cut' | 'empty';",
-            "dist/commands.d.ts#HeadlessTurnOptions": "interface HeadlessTurnOptions {\n    readonly io: HeadlessIo;\n    readonly json?: boolean;\n    readonly outputLastMessage?: (text: string) => void | Promise<void>;\n    readonly exitCodes?: Partial<Record<HeadlessOutcome, number>>;\n    readonly format?: (event: AgentOutputEvent) => {\n        out?: string;\n        err?: string;\n    } | undefined;\n}",
-            "dist/commands.d.ts#HeadlessTurnResult": "interface HeadlessTurnResult {\n    readonly finalText: string;\n    readonly outcome: HeadlessOutcome;\n    readonly stopReason?: 'step_limit' | 'no_progress';\n    readonly errorCode?: string;\n    readonly usage?: WireTurnMetadata['usage'];\n    readonly exitCode: number;\n}"
+            "dist/commands.d.ts#HeadlessTurnOptions": "interface HeadlessTurnOptions {\n    readonly io: HeadlessIo;\n    readonly json?: boolean;\n    readonly outputLastMessage?: (text: string) => void | Promise<void>;\n    readonly exitCodes?: Partial<Record<HeadlessOutcome, number>>;\n    readonly format?: (event: AgentOutputEvent) => {\n        out?: string;\n        err?: string;\n    } | undefined;\n    readonly onFormatError?: 'ignore' | 'fail';\n}",
+            "dist/commands.d.ts#HeadlessTurnResult": "interface HeadlessTurnResult {\n    readonly finalText: string;\n    readonly outcome: HeadlessOutcome;\n    readonly stopReason?: 'step_limit' | 'no_progress';\n    readonly errorCode?: string;\n    readonly errorMessage?: string;\n    readonly usage?: WireTurnMetadata['usage'];\n    readonly exitCode: number;\n}"
           }
         },
         "sessionCommands": {
