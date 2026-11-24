@@ -5,7 +5,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Agent } from '@theokit/sdk'
-import type { ImportedSetup } from '../src/migration/import-store.js'
+import type { StoredForeignImport } from '@theokit/agents/foreign-setup'
 import { theoClawAgentOptions, withSdkSkills, type TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { startModelStub, type ModelStub } from './model-stub.js'
 
@@ -26,7 +26,7 @@ afterEach(async () => {
   for (const stub of stubs.splice(0)) await stub.close()
 })
 
-type Extra = { approvedHooks?: ReadonlySet<string>; pluginWorkspace?: string; userSkillsDir?: string; custodian?: boolean; imported?: { setup: ImportedSetup; mcp: boolean } }
+type Extra = { approvedHooks?: ReadonlySet<string>; pluginWorkspace?: string; userSkillsDir?: string; custodian?: boolean; imported?: { setup: StoredForeignImport; mcp: boolean } }
 
 /** What the model is sent in the first request of one turn, with the real SDK reading `skillsDir` (and the rest). */
 async function firstRequest(skillsDir: string, extra: Extra = {}): Promise<string> {
@@ -47,8 +47,8 @@ async function skillRead(options: TheoClawAgentOptions, name: string): Promise<s
   return JSON.stringify(await (tool?.handler as unknown as (input: unknown, ctx: unknown) => unknown)({ name }, {}))
 }
 
-const importOf = (...skills: Array<{ name: string; description: string; instructions: string }>): { setup: ImportedSetup; mcp: boolean } => ({
-  setup: { instructions: '', memory: '', mcpServers: {}, skills } as unknown as ImportedSetup,
+const importOf = (...skills: Array<{ name: string; description: string; instructions: string }>): { setup: StoredForeignImport; mcp: boolean } => ({
+  setup: { instructions: '', memory: '', mcpServers: {}, skills } as unknown as StoredForeignImport,
   mcp: false,
 })
 
