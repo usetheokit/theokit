@@ -38,12 +38,14 @@ export type { SessionsGcArgs, SessionsGcOptions, SessionsGcOutcome } from './ses
 export {
   createShutdown,
   exitAfterDrain,
+  exitAfterFlush,
   DEFAULT_WATCHDOG_MS,
   SHUTDOWN_EXIT_CODES,
 } from './shutdown.js'
 export type {
   CleanupTask,
   ExitAfterDrainDeps,
+  ExitAfterFlushDeps,
   Shutdown,
   ShutdownDeps,
   ShutdownOutcome,

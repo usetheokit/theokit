@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1645 export(s) across 30 entry point(s).
+1647 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -1706,6 +1706,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `defineCommand` | value |
 | `EmptyPromptError` | value |
 | `exitAfterDrain` | value |
+| `exitAfterFlush` | value |
 | `formatGcJson` | value |
 | `formatGcPlan` | value |
 | `parseSessionsGcArgs` | value |
@@ -1720,6 +1721,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `CommandDefinition` | type |
 | `CommandRegistry` | type |
 | `ExitAfterDrainDeps` | type |
+| `ExitAfterFlushDeps` | type |
 | `HeadlessIo` | type |
 | `HeadlessOutcome` | type |
 | `HeadlessTurnOptions` | type |

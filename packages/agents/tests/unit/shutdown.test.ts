@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { SHUTDOWN_EXIT_CODES, createShutdown, exitAfterDrain } from '../../src/commands/shutdown.js'
+import {
+  SHUTDOWN_EXIT_CODES,
+  createShutdown,
+  exitAfterDrain,
+  exitAfterFlush,
+} from '../../src/commands/shutdown.js'
 
 /**
  * M83 — orderly shutdown, with a watchdog.
@@ -183,5 +188,53 @@ describe('disposer and exitAfterDrain', () => {
     expect(exit).toHaveBeenCalledWith(130)
     vi.useRealTimers()
     process.exitCode = undefined
+  })
+})
+
+describe('exitAfterFlush', () => {
+  it('exits after a slow write callback, and not before', async () => {
+    vi.useFakeTimers()
+    try {
+      const exit = vi.fn()
+      const stream = {
+        write: (_c: string, done: () => void) => {
+          setTimeout(done, 50)
+          return false
+        },
+      }
+      const p = exitAfterFlush(4, { streams: [stream], exit })
+      await vi.advanceTimersByTimeAsync(49)
+      expect(exit).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(2)
+      await p
+      expect(exit).toHaveBeenCalledExactlyOnceWith(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('exits after capMs when a callback never runs, once', async () => {
+    vi.useFakeTimers()
+    try {
+      const exit = vi.fn()
+      let late: () => void = () => undefined
+      const stream = {
+        write: (_c: string, done: () => void) => {
+          late = done
+          return false
+        },
+      }
+      const p = exitAfterFlush(1, { streams: [stream], exit, capMs: 100 })
+      await vi.advanceTimersByTimeAsync(99)
+      expect(exit).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(2)
+      await p
+      expect(exit).toHaveBeenCalledExactlyOnceWith(1)
+      late()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(exit).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
