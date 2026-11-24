@@ -115,7 +115,10 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
   it('test_the_four_published_packages_declare_the_sdk_5_to_12_range', () => {
     const floors: Record<string, string> = {
       'packages/theo/package.json': '>=5.32.0 <14',
-      'packages/host/package.json': '>=5.32.0 <14',
+      // The host has a floor of its own: the channel assistant calls `Agent.sessionPool({ agent })`
+      // and the mask handle's `flush()`, which only SDK 12 has. Narrowing the others would break
+      // consumers on SDK 5.x, so only the host moves.
+      'packages/host/package.json': '>=12.0.0 <14',
       'packages/presenter/package.json': '>=5.3.0 <14',
     }
     for (const [manifest, expected] of Object.entries(floors)) {
