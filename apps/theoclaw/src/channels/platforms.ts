@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 
 import { configFromEnv } from '@theokit/gateway'
-import type { ChannelDescriptor, PlatformName } from '@theokit/gateway'
+import type { ChannelDescriptor, EnvOptions, EnvConfig, PlatformName } from '@theokit/gateway'
 import { discordChannel } from '@theokit/gateway-discord'
 import { emailChannel } from '@theokit/gateway-email'
 import { googleChatChannel } from '@theokit/gateway-google-chat'
@@ -185,21 +185,42 @@ export interface PlatformSpec {
 
 const SUPPORTED = Object.keys(CHANNELS) as SupportedPlatform[]
 
-/** The descriptor reduced to the fields TheoClaw reads, under TheoClaw's names and requirements. */
-function readable(spec: ChannelSpec): ChannelDescriptor {
-  const config = spec.keys.flatMap((key) => {
-    const field = spec.descriptor.config.find((candidate) => candidate.key === key)
-    if (field === undefined) return []
-    const env = spec.env?.[key] ?? field.env
-    return [{ ...field, required: field.required || (spec.required?.includes(key) ?? false), ...(env === undefined ? {} : { env }) }]
-  })
-  return { ...spec.descriptor, config }
+/** The descriptor narrowed to the keys TheoClaw reads: the gateway reads every field, and TheoClaw sets only these. */
+function narrowed(spec: ChannelSpec): ChannelDescriptor {
+  return { ...spec.descriptor, config: spec.descriptor.config.filter((field) => spec.keys.includes(field.key)) }
+}
+
+/** The gateway's reading options for one platform: the prefix, TheoClaw's own variable names and its extra required keys. */
+function readingOptions(spec: ChannelSpec): EnvOptions {
+  const rename = Object.fromEntries(Object.entries(spec.env ?? {}).map(([key, name]) => [key, PREFIX + name]))
+  return { prefix: PREFIX, rename, ...(spec.required === undefined ? {} : { require: spec.required }) }
+}
+
+/** The platform's settings read from the environment, the variables it lacks (in `keys` order) and its secrets. */
+function readSpec(spec: ChannelSpec, env: Readonly<Record<string, string | undefined>>): EnvConfig {
+  const descriptor = narrowed(spec)
+  const read = configFromEnv(descriptor, env, readingOptions(spec))
+  const order = (name: string): number => spec.keys.findIndex((key) => variableOf(spec, key) === name)
+  return { ...read, missing: [...read.missing].sort((a, b) => order(a) - order(b)) }
+}
+
+/** The environment variable of one key, prefix included; undefined for a key the descriptor has no variable for. */
+function variableOf(spec: ChannelSpec, key: string): string | undefined {
+  const renamed = spec.env?.[key]
+  if (renamed !== undefined) return PREFIX + renamed
+  const env = spec.descriptor.config.find((field) => field.key === key)?.env
+  return env === undefined ? undefined : PREFIX + env
+}
+
+/** The keys that must be set for the platform to run: the descriptor's required ones and the spec's own. */
+function requiredKeys(spec: ChannelSpec): string[] {
+  return narrowed(spec).config.filter((field) => field.required || (spec.required?.includes(field.key) ?? false)).map((field) => field.key)
 }
 
 /** The ten platforms of FR-001, in the order the loop starts them. */
 export const PLATFORMS: readonly PlatformSpec[] = SUPPORTED.map((platform) => {
   const spec = CHANNELS[platform]
-  const variables = readable(spec).config.flatMap((field) => (field.required && field.env !== undefined ? [PREFIX + field.env] : []))
+  const variables = requiredKeys(spec).flatMap((key) => variableOf(spec, key) ?? [])
   return { platform, variables: spec.enabledBy === undefined ? variables : [spec.enabledBy] }
 })
 
@@ -227,7 +248,7 @@ export function resolvePlatforms(
       skipped.push({ platform, missing: [spec.enabledBy] })
       continue
     }
-    const read = configFromEnv(readable(spec), env, PREFIX)
+    const read = readSpec(spec, env)
     if (read.missing.length > 0) {
       skipped.push({ platform, missing: read.missing })
       continue
@@ -256,7 +277,7 @@ export function resolvePlatforms(
     if (spec.mask === 'secret') secrets.push(...read.secrets)
     else if (spec.mask !== 'none') {
       // Every required value is masked, secret or not; an optional one (a binary path) is not.
-      const required = readable(spec).config.filter((field) => field.required).map((field) => field.key)
+      const required = requiredKeys(spec)
       secrets.push(...required.flatMap((key) => read.config[key] ?? []))
     }
   }
