@@ -73,7 +73,6 @@ const ALWAYS_GATES = {
 const SEARCH_GATE = { web_search: { question: 'Search the web for this?' } }
 
 const realHome = process.env.HOME
-const realSearch = process.env['THEOKIT_SEARCH_API_URL']
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -83,16 +82,12 @@ beforeEach(() => {
 afterEach(() => {
   if (realHome === undefined) delete process.env.HOME
   else process.env.HOME = realHome
-  if (realSearch === undefined) delete process.env['THEOKIT_SEARCH_API_URL']
-  else process.env['THEOKIT_SEARCH_API_URL'] = realSearch
 })
 
-async function compile(writes: boolean, searchConfigured: boolean) {
+async function compile(writes: boolean, searchConfigured: boolean, env: NodeJS.ProcessEnv = searchConfigured ? { BRAVE_API_KEY: 'test-key' } : {}) {
   resolveEffectiveConfig.mockReturnValue(config(writes ? 'workspace-write' : 'read-only'))
-  if (searchConfigured) process.env['THEOKIT_SEARCH_API_URL'] = 'http://search.invalid'
-  else delete process.env['THEOKIT_SEARCH_API_URL']
   const { buildChatAgent } = await import('../../src/chat/chat.js')
-  return (await buildChatAgent({ surface: 'headless', cwd: tempRoot('chat-approvals-cwd-') } as never)) as unknown as {
+  return (await buildChatAgent({ surface: 'headless', cwd: tempRoot('chat-approvals-cwd-'), env } as never)) as unknown as {
     approvals: Record<string, { question: string }>
     tools: { name: string }[]
   }
@@ -117,6 +112,18 @@ describe('the compiled approvals map', () => {
       })
     }
   }
+})
+
+describe('an explicit off switch', () => {
+  it('test_declares_no_web_search_when_THEOKIT_SEARCH_is_off_even_with_a_url', async () => {
+    const agent = await compile(false, false, {
+      THEOKIT_SEARCH: 'off',
+      THEOKIT_SEARCH_API_URL: 'http://search.invalid',
+      THEOKIT_SEARCH_API_KEY: 'k',
+    })
+    expect(agent.tools.some((t) => t.name === 'web_search')).toBe(false)
+    expect(agent.approvals).not.toHaveProperty('web_search')
+  })
 })
 
 describe('the permissions plugin', () => {

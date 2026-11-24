@@ -353,6 +353,74 @@ describe('budgets — explicit ceilings, and a caller who knows it was cut', () 
     expect(warnings.join('\n')).toMatch(/characters/)
   })
 
+  it('test_a_ceiling_cut_reports_found_and_ends_with_the_notice', () => {
+    for (const name of ['a', 'b', 'c']) write(`${name}/THEO.md`, name.repeat(40))
+    const cut = { ...budget, maxChars: 100 }
+    const plain = loadInstructionTree({ cwd: root, roots: ['.'], budget: cut, onWarn })
+    expect([plain.count, plain.found, plain.chars, plain.truncated]).toEqual([2, 3, 120, true])
+    expect(plain.blocks).toHaveLength(2)
+
+    const noted = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: {
+        ...cut,
+        omissionNotice: (omitted, found) => `-${String(omitted)}/${String(found)}`,
+      },
+      onWarn,
+    })
+    expect([noted.count, noted.found]).toEqual([2, 3])
+    expect(noted.blocks.at(-1)?.content).toBe('-1/3')
+    expect(noted.blocks.reduce((n, b) => n + b.content.length, 0)).toBeLessThanOrEqual(100)
+  })
+
+  it('test_the_notice_displaces_whole_blocks_and_stays_within_the_ceiling', () => {
+    for (const name of ['a', 'b', 'c']) write(`${name}/THEO.md`, name.repeat(40))
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: { ...budget, maxChars: 90, omissionNotice: () => 'n'.repeat(20) },
+      onWarn,
+    })
+    expect([tree.count, tree.found]).toEqual([1, 3])
+    expect(tree.blocks.map((b) => b.content.length)).toEqual([40, 20])
+  })
+
+  it('test_no_cut_means_found_equals_count_and_no_notice', () => {
+    write('a/THEO.md', 'one')
+    write('b/THEO.md', 'two')
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: { ...budget, omissionNotice: () => 'never' },
+      onWarn,
+    })
+    expect([tree.count, tree.found, tree.chars, tree.truncated]).toEqual([2, 2, 6, false])
+    expect(tree.blocks.map((b) => b.content)).not.toContain('never')
+  })
+
+  it('test_extra_bases_share_one_ceiling_and_render_decides_the_text', () => {
+    const other = mkdtempSync(join(tmpdir(), 'theokit-instr-other-'))
+    try {
+      write('THEO.md', 'a'.repeat(30))
+      writeFileSync(join(other, 'THEO.md'), 'b'.repeat(30))
+      const tree = loadInstructionTree({
+        cwd: root,
+        roots: ['.'],
+        also: [{ cwd: other, roots: ['.'] }],
+        budget: { ...budget, maxChars: 70 },
+        render: (block) => `[${block.content}]`,
+        separator: '--',
+        onWarn,
+      })
+      // 32 + 2 + 32 = 66 fits; found/chars cover both bases.
+      expect([tree.count, tree.found, tree.chars]).toEqual([2, 2, 66])
+      expect(tree.blocks[1]?.content).toBe(`[${'b'.repeat(30)}]`)
+    } finally {
+      rmSync(other, { recursive: true, force: true })
+    }
+  })
+
   it('test_maxDepth_bounds_the_descent', () => {
     write('THEO.md', 'top')
     write('a/b/c/THEO.md', 'deep')
