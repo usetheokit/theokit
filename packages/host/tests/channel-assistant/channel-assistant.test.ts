@@ -83,14 +83,17 @@ async function until(condition: () => boolean, what: string): Promise<void> {
   }
 }
 
+const openHook: GatewayHook = { name: 'open', pre_inbound: () => undefined }
+
 describe('createChannelAssistant', () => {
   it('replies once with the secret masked, then disconnects and disposes the session agent on close', async () => {
     const adapter = new FakeAdapter('telegram')
     const disposed: string[] = []
     const assistant = createChannelAssistant({
       channels: [{ platform: 'telegram', build: () => adapter }],
-      agent: () => fakeAgent(disposed),
+      sessions: { agent: () => fakeAgent(disposed) },
       secrets: [SECRET],
+      accessHook: openHook,
     })
     await assistant.start()
     expect(adapter.connects).toBe(1)
@@ -119,9 +122,9 @@ describe('createChannelAssistant', () => {
     })
     const assistant = createChannelAssistant({
       channels: [{ platform: 'telegram', build: () => adapter }],
-      agent: () => fakeAgent([]),
+      sessions: { agent: () => fakeAgent([]) },
       preHooks: [hook('pre')],
-      access: hook('access'),
+      accessHook: hook('access'),
       hooks: [hook('app-1'), hook('app-2')],
       help: hook('help'),
     })
@@ -136,7 +139,7 @@ describe('createChannelAssistant', () => {
     const adapter = new FakeAdapter('telegram')
     const assistant = createChannelAssistant({
       channels: [{ platform: 'telegram', build: () => adapter }],
-      agent: () => fakeAgent([]),
+      sessions: { agent: () => fakeAgent([]) },
       access: { owners: new Set(['telegram:boss']), dm: 'allowlist', isAuthenticated: () => true },
     })
     await assistant.start()
@@ -158,8 +161,9 @@ describe('createChannelAssistant', () => {
         },
         { platform: 'telegram', build: () => adapter },
       ],
-      agent: () => fakeAgent([]),
+      sessions: { agent: () => fakeAgent([]) },
       secrets: [SECRET],
+      accessHook: openHook,
       write: (line) => lines.push(line),
     })
     await assistant.start()
@@ -173,7 +177,8 @@ describe('createChannelAssistant', () => {
     const disposed: string[] = []
     const assistant = createChannelAssistant({
       channels: [],
-      agent: () => fakeAgent([]),
+      accessHook: openHook,
+      sessions: { agent: () => fakeAgent([]) },
       events: {
         agent: () =>
           ({
@@ -186,6 +191,152 @@ describe('createChannelAssistant', () => {
     })
     await assistant.withEventAgent(async () => 'done')
     expect(disposed).toEqual(['event'])
+    await assistant.close()
+  })
+
+  it('refuses an assistant with no access policy, or with two', () => {
+    const base = { channels: [], sessions: { agent: () => fakeAgent([]) } }
+    expect(() => createChannelAssistant(base)).toThrow(/access/)
+    expect(() =>
+      createChannelAssistant({
+        ...base,
+        accessHook: openHook,
+        access: { owners: new Set(), dm: 'open', isAuthenticated: () => false },
+      }),
+    ).toThrow(/exactly one/)
+  })
+
+  it('needs a handler with a pool it is given, and uses both', async () => {
+    const pool = { heldIds: () => ['a'], disposeAll: async () => undefined }
+    expect(() =>
+      createChannelAssistant({ channels: [], sessions: { pool }, accessHook: openHook }),
+    ).toThrow(/handler/)
+    const adapter = new FakeAdapter('telegram')
+    const seen: string[] = []
+    const assistant = createChannelAssistant({
+      channels: [{ platform: 'telegram', build: () => adapter }],
+      sessions: { pool },
+      accessHook: openHook,
+      handler: async (incoming) => {
+        seen.push(incoming.text)
+      },
+    })
+    await assistant.start()
+    await adapter.deliver(event('own handler'))
+    await until(() => seen.length > 0, 'the handler')
+    expect(assistant.sessions).toBe(pool)
+    await assistant.close()
+  })
+
+  it('stops services, channels, the sweeper and the sessions in that order, and gives the sweeper the held ids', async () => {
+    const order: string[] = []
+    const adapter = new FakeAdapter('telegram')
+    adapter.disconnect = async () => {
+      order.push('channels')
+    }
+    let heldSeen: readonly string[] = []
+    const assistant = createChannelAssistant({
+      channels: [{ platform: 'telegram', build: () => adapter }],
+      sessions: {
+        pool: {
+          heldIds: () => ['s1'],
+          disposeAll: async () => {
+            order.push('sessions')
+          },
+        },
+      },
+      handler: async () => undefined,
+      accessHook: openHook,
+      transcripts: {
+        start: (heldIds) => {
+          heldSeen = heldIds()
+          return {
+            stop: () => {
+              order.push('sweeper')
+            },
+          }
+        },
+      },
+      services: [
+        {
+          name: 'extra',
+          start: () => {
+            order.push('extra:start')
+          },
+          stop: () => {
+            order.push('extra')
+          },
+        },
+      ],
+    })
+    await assistant.start()
+    await assistant.close()
+    expect(heldSeen).toEqual(['s1'])
+    expect(order).toEqual(['extra:start', 'extra', 'channels', 'sweeper', 'sessions'])
+  })
+
+  it('masks the given streams from start and releases them at close', async () => {
+    const written: string[] = []
+    const stream = {
+      write: (chunk: string) => {
+        written.push(chunk)
+        return true
+      },
+    } as unknown as NodeJS.WritableStream
+    const assistant = createChannelAssistant({
+      channels: [],
+      sessions: { agent: () => fakeAgent([]) },
+      accessHook: openHook,
+      secrets: [SECRET],
+      maskStreams: [stream],
+    })
+    await assistant.start()
+    stream.write(`leak ${SECRET}\n`)
+    assistant.flushMask()
+    await assistant.close()
+    expect(written.join('')).not.toContain(SECRET)
+    expect(written.join('')).toContain('leak')
+  })
+
+  it('answers a webhook request before start without caching an empty route table', async () => {
+    const assistant = createChannelAssistant({
+      channels: [],
+      sessions: { agent: () => fakeAgent([]) },
+      accessHook: openHook,
+    })
+    expect((await assistant.router(new Request('http://localhost/webhooks/telegram'))).status).toBe(
+      404,
+    )
+    await assistant.start()
+    expect((await assistant.router(new Request('http://localhost/webhooks/telegram'))).status).toBe(
+      404,
+    )
+    await assistant.close()
+  })
+
+  it('settles ready and tears down when a service fails to start', async () => {
+    const disposed: string[] = []
+    const assistant = createChannelAssistant({
+      channels: [],
+      sessions: {
+        pool: {
+          heldIds: () => [],
+          disposeAll: async () => {
+            disposed.push('sessions')
+          },
+        },
+      },
+      handler: async () => undefined,
+      accessHook: openHook,
+      transcripts: {
+        start: () => {
+          throw new Error('sweeper refused')
+        },
+      },
+    })
+    await expect(assistant.start()).rejects.toThrow()
+    await assistant.ready
+    expect(disposed).toEqual(['sessions'])
     await assistant.close()
   })
 })
