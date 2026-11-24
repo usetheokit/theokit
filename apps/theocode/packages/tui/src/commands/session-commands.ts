@@ -11,13 +11,13 @@ import {
   archiveSession,
   deleteSession,
   compactSession,
-  legacyRootHint,
   listSessions,
   renameSession,
 } from '@theocode/agent/session'
 import { resolveTrustPosture } from '@theocode/agent/config'
 import { logout, methodsFor, oauthDeviceLogin, knownProviders } from '@theocode/agent/auth'
 import type { AuthMethod } from '@theokit/agents/auth'
+import { transcriptRootHint } from '@theokit/agents/session'
 import type { ForkResult } from '../persistence/fork-session.js'
 import type { ContentPanel, ToastPayload } from '../screen-types.js'
 import { workingDirectory } from '../working-directory.js'
@@ -172,7 +172,7 @@ export function handleListSessions(currentSessionId: () => string, setToast: Set
   void listSessions()
     .then((sessions) => {
       if (sessions.length === 0) {
-        const hint = legacyRootHint(0, join(homedir(), '.theokit'))
+        const hint = transcriptRootHint(0, join(homedir(), '.theokit'), process.env)
         setToast({ message: hint ?? 'No sessions yet.', variant: 'info' })
         return
       }

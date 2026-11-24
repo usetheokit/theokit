@@ -4,7 +4,7 @@ import net from 'node:net'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
-import { ProxyAgent, setGlobalDispatcher } from 'undici'
+import { applyOutboundProxy, validateProxy as hostValidateProxy } from '@theokit/host'
 
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
@@ -36,12 +36,10 @@ export function capturePath(env: NodeJS.ProcessEnv, homeDir: string): string {
   return join(base, 'debug-proxy', 'captures.jsonl')
 }
 
-/** Routes this process's `fetch` through the operator or debug proxy named in the environment. */
+/** Routes this process's `fetch` through the debug proxy if set, else the operator proxy. */
 export function applyProxyEnvironment(env: NodeJS.ProcessEnv): string | undefined {
-  const url = (env.THEOCLAW_DEBUG_PROXY_URL ?? env.THEOCLAW_PROXY_URL ?? '').trim()
-  if (url === '') return undefined
-  setGlobalDispatcher(new ProxyAgent(url))
-  return url
+  const variable = env.THEOCLAW_DEBUG_PROXY_URL?.trim() ? 'THEOCLAW_DEBUG_PROXY_URL' : 'THEOCLAW_PROXY_URL'
+  return applyOutboundProxy(env, { variable }).installed ? env[variable]!.trim() : undefined
 }
 
 export interface Validation {
@@ -49,45 +47,24 @@ export interface Validation {
   readonly message: string
 }
 
-/** CONNECT through the proxy to the target; any HTTP status line from the proxy proves it is reachable. */
-export function validateProxy(proxyUrl: string, target: string, timeoutMs = TIMEOUT_MS): Promise<Validation> {
-  let url: URL
+/** The proxy's scheme and host, without credentials, for the output line. */
+function shownProxy(proxyUrl: string): string {
   try {
-    url = new URL(proxyUrl)
+    const url = new URL(proxyUrl)
+    return `${url.protocol}//${url.host}`
   } catch {
-    return Promise.resolve({ ok: false, message: 'the proxy URL is not a valid URL' })
+    return 'the proxy'
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:')
-    return Promise.resolve({ ok: false, message: `unsupported proxy scheme ${url.protocol}` })
-  const shown = `${url.protocol}//${url.host}`
-  return new Promise((resolve) => {
-    const socket = net.connect({ host: url.hostname, port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80) })
-    let done = false
-    const finish = (result: Validation): void => {
-      if (done) return
-      done = true
-      socket.destroy()
-      resolve(result)
-    }
-    socket.setTimeout(timeoutMs, () => finish({ ok: false, message: `${shown} did not answer within ${timeoutMs} ms` }))
-    socket.on('error', (error) => finish({ ok: false, message: `${shown} is unreachable: ${error.message}` }))
-    socket.on('connect', () => socket.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n\r\n`))
-    let head = ''
-    socket.on('data', (chunk: Buffer) => {
-      head += chunk.toString('latin1')
-      const line = /^HTTP\/1\.[01] (\d{3})/.exec(head)
-      if (line === null) {
-        if (head.length > 1024) finish({ ok: false, message: `${shown} did not answer with HTTP` })
-        return
-      }
-      const status = Number(line[1])
-      finish(
-        status === 200
-          ? { ok: true, message: `${shown} is reachable and tunnels to ${target}` }
-          : { ok: false, message: `${shown} is reachable but refused the tunnel to ${target} (HTTP ${status})` },
-      )
-    })
-  })
+}
+
+/** Runs the host's CONNECT probe and maps its result to one output line (no URL credentials). */
+async function checkProxy(proxyUrl: string, target: string): Promise<Validation> {
+  const result = await hostValidateProxy(proxyUrl, { target, timeoutMs: TIMEOUT_MS })
+  const shown = shownProxy(proxyUrl)
+  if (result.ok) return { ok: true, message: `${shown} is reachable and tunnels to ${target}` }
+  if (result.reason === 'connect_refused')
+    return { ok: false, message: `${shown} is reachable but refused the tunnel to ${target} (HTTP ${result.statusCode ?? '?'})` }
+  return { ok: false, message: `${shown}: ${result.message}` }
 }
 
 export interface Capture {
@@ -174,7 +151,7 @@ export async function proxyCommand(args: readonly string[], io: ProxyIo): Promis
       io.stdout.write('proxy validation requires --proxy-url, THEOCLAW_PROXY_URL or HTTPS_PROXY\n')
       return 1
     }
-    const result = await validateProxy(url.trim(), option(rest, '--target') ?? DEFAULT_TARGET)
+    const result = await checkProxy(url.trim(), option(rest, '--target') ?? DEFAULT_TARGET)
     io.stdout.write(`${result.ok ? 'ok' : 'failed'}: ${result.message}\n`)
     return result.ok ? 0 : 1
   }
