@@ -117,6 +117,16 @@ describe('#2869 — the pointer is protected once, under the name on disk', () =
     expect(existsSync(legacy)).toBe(true)
   })
 
+  it('test_forkSession_refuses_when_the_pointer_is_unreadable', async () => {
+    writeTranscript('src', 100)
+    const dst = writeTranscript('live', 1)
+    mkdirSync(sessionPointerPath(cwd, base), { recursive: true })
+    await expect(forkSession('src', 'live', { cwd, baseDir: base })).rejects.toThrow(
+      /last-session pointer/,
+    )
+    expect(readFileSync(dst, 'utf8')).toBe('{}\n')
+  })
+
   it('test_forkSession_refuses_to_write_onto_the_pointed_session', async () => {
     writeTranscript('src', 100)
     const dst = writeTranscript('live', 1)

@@ -1,7 +1,7 @@
 /**
  * B-143 — one unreadable pointer stopped collection for the whole tree.
  *
- * the pointer read fails fast on any errno but ENOENT, and its docblock gives the reason: what it
+ * the framework's pointer read fails fast on any errno but ENOENT, for this reason: what it
  * returns is a deletion decision, so swallowing an EACCES would drop a live session from the
  * protected set. "Refusing to GC is the safe direction" — correct, and it is an argument about THAT
  * PROJECT.
