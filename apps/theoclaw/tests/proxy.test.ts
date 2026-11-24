@@ -93,7 +93,7 @@ describe('theoclaw proxy', () => {
     await new Promise<void>((r) => auth.listen(0, '127.0.0.1', r))
     try {
       const v = harness()
-      const code = await runCli(['proxy', 'validate', '--proxy-url', `http://user:pass@127.0.0.1:${port(auth)}`], { ...v.io, env: {} })
+      const code = await runCli(['proxy', 'validate', '--proxy-url', `http://user:pass@127.0.0.1:${port(auth)}`], { ...v.io, env: {} }) // trufflehog:ignore -- fake proxy credential for a local test proxy
       expect(code).toBe(0)
       expect(v.stdout()).not.toContain('pass')
       const bad = harness()

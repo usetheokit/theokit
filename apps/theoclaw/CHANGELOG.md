@@ -10,6 +10,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 `theokit-sdk` or the framework packages rather than here. Those carry the repository name.
 
 ## [Unreleased]
+- The proxy test marks its fake local proxy credential `trufflehog:ignore`, so the secret scan passes (#3036).
 - The `theoclaw` vitest project typechecks `tests/**/*.test-d.ts`, so `agent-port.test-d.ts` now runs its type assertions (#3032).
 - The e-mail and MCP event triggers run, frame, mask and deliver through `createEventRun` (`@theokit/gateway-agent` 0.6.0, now pinned); the hook, the subscriptions, the sender/server heading and the "event received" notice stay here. Failure lines now read as the framework writes them, `trigger <name>: <code>`, instead of `email trigger: run failed (<code>)` (#2958).
 - `buildTools`, `readOnlyTools` and the `minimal` profile are built by `assistantAgentTools` and `assistantWorkerTools` from `@theokit/agents/presets`; the tool set, its order apart from `widget` and the ACP tools now following the preset's, and the `THEOCLAW_*` parsing, `/elevated` wrapper and startup off lines stay here (#2909).
