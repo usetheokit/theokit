@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `composeInstructions` in `context/agents-md.ts` is now `composeTheoCodePrompt`, so it no longer shares a name with the framework's; the docblock lists the three differences (base never cut, one summed `rules` cut, group headers). No behaviour change (#2922).
+- `web_search` is chosen by `resolveWebSearchAdapter` from `@theokit/agents/tools`: `BRAVE_API_KEY`, `TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` now enable it, and `THEOKIT_SEARCH=off` disables it. A generic endpoint now needs `THEOKIT_SEARCH_API_KEY` as well as `THEOKIT_SEARCH_API_URL`, so a key-less endpoint stops working, and an unknown `THEOKIT_SEARCH` value fails agent construction (#2926).
 - The `ask` verdict of the `permissions` plugin is answered by `onAskForPolicy` from `@theokit/agents`; `askGateFor` is removed and the refusal wording stays here as `refusalMessage` (#2905).
 - The `THEOKIT_HOME` entry in `ENV_KNOBS` cites one resolvable reader (`backtrack.ts:transcriptRootHint`) instead of a comma-joined list the path-existence invariant could not resolve (#2982).
 - Headless approval is decided by `approvalPostureFor` from `@theokit/agents`; `resolveHeadlessApproval` and `headlessApprovalPosture` keep only the remediation and `danger-full-access` wording, and take a full `SandboxPosture` (#2903).
