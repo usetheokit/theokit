@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- The builtin verbs `sessionCommands` defines take their definitions from it (#2919); names and aliases (so `/reset` now means `/new`) come from it, while descriptions, optional arguments and the `CommandAction` mapping stay here.
 - `ask-bridge.ts` reads the open question from `AskBridge.pending` and observes changes with `AskBridge.onChange`; its own thread → id and thread → text maps are gone. `setListener` now accepts any number of observers instead of throwing `ConcurrentListenerError` on a second (#2920).
 - `CLAUDE_PROJECT_DIR` is no longer written into the process environment at bootstrap; it is passed to hook processes only (`projectDirEnv` for framework hooks, the env of the `SessionStart` runner). The `Bash` tool, MCP and LSP servers no longer inherit it, and an operator's own value no longer overrides the working directory for hooks. `installClaudeProjectDir` is removed (#2921).
 - `readPointerId` is removed; session delete, fork, backtrack and `sessions gc` rely on the framework protection set, which now refuses with `SessionPointerUnreadableError` when the `last-session` pointer cannot be read (#2896).

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createHelpHook, HELP_TEXT } from '../src/channels/help-hook.js'
+import { createReplyHandler, STEER_USAGE_REPLY } from '../src/channels/reply-handler.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createWorkflowApproveHook } from '../src/channels/workflow-approve-hook.js'
 import { createAgentRouter } from '../src/routing/routing-env.js'
@@ -115,5 +116,23 @@ describe('help lists what each handler describes', () => {
   it('takes the /think levels from the level list the handler enforces', async () => {
     const { THINKING_LEVELS } = await import('../src/agent/create-agent.js')
     expect(HELP_TEXT).toContain(`/think ${THINKING_LEVELS.join('|')} - `)
+  })
+})
+
+describe('channel commands of the reply handler', () => {
+  it('route behind a bot suffix, in any case and across a newline', async () => {
+    const replies: string[] = []
+    const handler = createReplyHandler({
+      reset: async () => undefined,
+      withAgent: async () => {
+        throw new Error('no turn expected')
+      },
+    })
+    const ctx = {
+      reply: async (text: string) => (replies.push(text), { ok: true, messageId: 'm' }),
+    } as never
+    await handler(event('/STEER@theobot'), ctx)
+    await handler(event('/steer\n'), ctx)
+    expect(replies).toEqual([STEER_USAGE_REPLY, STEER_USAGE_REPLY])
   })
 })
