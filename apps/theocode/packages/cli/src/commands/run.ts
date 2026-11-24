@@ -82,7 +82,7 @@ export function createDiffGit(
  * the sole production consumer wired two: `startTurn` had a test and no caller. That is not inert
  * here — the fork-if-busy retry opens a SECOND stream on the same hooks when the session is contended,
  * so a `rate_limit` spent on the first pass was still being counted into the second turn's error
- * text. "After 3 attempts" on a turn that made one is the false attribution `RetryRecord.startTurn`
+ * text. "After 3 attempts" on a turn that made one is the false attribution `TurnRetries.startTurn`
  * exists to prevent.
  *
  * Wrapping the opener rather than calling `startTurn()` once before the consume: the fork is opened

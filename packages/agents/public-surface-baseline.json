@@ -21352,6 +21352,14 @@
           "references": [],
           "internals": {}
         },
+        "TurnRetries": {
+          "tier": "stable",
+          "declaration": "interface TurnRetries {\n    readonly onRunEvent: (event: {\n        type: string;\n        attempt?: number;\n    }) => void;\n    attempts(): number;\n    startTurn(): void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "classifyTurnFailure": {
           "tier": "stable",
           "declaration": "declare function classifyTurnFailure(err: unknown): TurnFailure;",
@@ -21360,6 +21368,16 @@
           "references": ["dist/errors.d.ts#TurnFailure"],
           "internals": {
             "dist/errors.d.ts#TurnFailure": "interface TurnFailure {\n    code: KnownAgentRunErrorCode;\n    rawCode?: string;\n    transient: boolean;\n    message: string;\n}"
+          }
+        },
+        "createTurnRetries": {
+          "tier": "stable",
+          "declaration": "declare function createTurnRetries(): TurnRetries;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/errors.d.ts#TurnRetries"],
+          "internals": {
+            "dist/errors.d.ts#TurnRetries": "interface TurnRetries {\n    readonly onRunEvent: (event: {\n        type: string;\n        attempt?: number;\n    }) => void;\n    attempts(): number;\n    startTurn(): void;\n}"
           }
         },
         "describeTurnFailure": {
