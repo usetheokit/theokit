@@ -25421,7 +25421,7 @@
         },
         "CreateScheduleToolsOptions": {
           "tier": "stable",
-          "declaration": "interface CreateScheduleToolsOptions {\n    scheduler: Scheduler;\n    platforms: readonly string[];\n    maxJobs?: number;\n}",
+          "declaration": "interface CreateScheduleToolsOptions {\n    scheduler: Scheduler;\n    platforms: readonly (string | {\n        name: string;\n        description: string;\n        channelIdHint?: string;\n    })[];\n    maxJobs?: number;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -26589,7 +26589,7 @@
             "dist/tools.d.ts#TransientJobOptions"
           ],
           "internals": {
-            "dist/tools.d.ts#CreateScheduleToolsOptions": "interface CreateScheduleToolsOptions {\n    scheduler: Scheduler;\n    platforms: readonly string[];\n    maxJobs?: number;\n}",
+            "dist/tools.d.ts#CreateScheduleToolsOptions": "interface CreateScheduleToolsOptions {\n    scheduler: Scheduler;\n    platforms: readonly (string | {\n        name: string;\n        description: string;\n        channelIdHint?: string;\n    })[];\n    maxJobs?: number;\n}",
             "dist/tools.d.ts#FireOutcome": "type FireOutcome = 'delivered' | 'suppressed' | 'failed' | 'skipped' | 'empty' | 'undelivered' | 'cancelled';",
             "dist/tools.d.ts#ScheduleTarget": "interface ScheduleTarget {\n    platform: string;\n    channelId: string;\n}",
             "dist/tools.d.ts#ScheduledJob": "interface ScheduledJob {\n    id: string;\n    name?: string;\n    cron: string;\n    timezone?: string;\n    prompt: string;\n    target: ScheduleTarget;\n    previousOutput?: string;\n    createdAt: number;\n}",
