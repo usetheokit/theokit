@@ -222,6 +222,27 @@ describe("theoclaw-tui (T4.2)", () => {
     expect(instance.agents[0]!.sent).toEqual(["hi", `${REDIRECT_NOTE}again`]);
   });
 
+  it("/new right after Esc holds the new session's first chat until the interrupted one has unwound", async () => {
+    const teardown = deferred<void>();
+    const instance = await startInstance((n) =>
+      n === 0 ? { frames: [assistant("x")], before: new Promise<void>(() => undefined), teardown: teardown.promise } : quick,
+    );
+    const tui = await renderTui(instance);
+    await tui.type("hi", ENTER);
+    await waitFor(() => instance.agents[0]?.signals.length === 1, 3000, "the turn to start");
+    await tui.type(ESC);
+    await tui.type("/new", ENTER, ENTER);
+    await tui.until((f) => f.includes("owner-1"), "the new session id");
+    await composerReady((key) => tui.view.stdin.write(key), tui.screen, "Message TheoClaw");
+    await tui.type("second", ENTER);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(instance.agents).toHaveLength(1);
+    expect(tui.screen()).not.toContain("already running");
+    teardown.resolve();
+    await waitFor(() => instance.agents.length === 2, 3000, "the new session's chat");
+    expect(instance.agents[1]!.sent).toEqual(["second"]);
+  });
+
   it("/new during a turn is refused, so Esc still stops that turn", async () => {
     const instance = await startInstance(() => ({ frames: [assistant("never")], before: new Promise<void>(() => undefined) }));
     const tui = await renderTui(instance);

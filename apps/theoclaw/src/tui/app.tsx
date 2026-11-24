@@ -43,34 +43,40 @@ const PALETTE = COMMANDS.palette()
 interface SessionProps {
   readonly client: ControlClient
   readonly session: string
+  /** Resolves when the connection's last chat, on this or an earlier session, has finished unwinding. */
+  readonly previous: { current: Promise<void> }
   readonly onFresh: () => void
   readonly onQuit: () => void
 }
 
 /** One session's screen: remounted (by `key`) when `/new` moves to another session, which clears it. */
-function Session({ client, session, onFresh, onQuit }: SessionProps): ReactElement {
+function Session({ client, session, previous, onFresh, onQuit }: SessionProps): ReactElement {
   // The turn the stream is on, for the notices and the refusal of `/new` while it runs.
   const turn = useRef<{ readonly inbox: TurnInbox; readonly signal: AbortSignal; ended: boolean } | undefined>(undefined)
-
-  // The connection runs one chat at a time and the session starts the next turn as soon as Esc is
-  // pressed, so a turn waits for the one before it to finish unwinding on the instance.
-  const previous = useRef<Promise<void>>(Promise.resolve())
 
   const stream = (message: string, signal: AbortSignal): AsyncIterable<AgentStreamEvent> => {
     const inbox = createTurnInbox()
     const mine = { inbox, signal, ended: false }
-    const after = previous.current
-    let finished!: () => void
-    previous.current = new Promise<void>((resolve) => (finished = resolve))
     // A function source: the turn is opened when the session consumes it, exactly once.
     const source = createControlStreamSource(client, session, message, { inbox })
-    signal.addEventListener('abort', () => source.interrupt(), { once: true })
+    const onAbort = (): void => source.interrupt()
     return (async function* () {
+      // The connection runs one chat at a time and the session starts the next turn as soon as Esc
+      // is pressed (or `/new` remounts it), so a turn waits for the chat before it, on any session,
+      // to finish unwinding on the instance. Taken when the stream starts, so a stream that is
+      // closed before it runs leaves the chain alone.
+      const after = previous.current
+      let finished!: () => void
+      previous.current = new Promise<void>((resolve) => (finished = resolve))
       turn.current = mine
       try {
         await after
-        if (!signal.aborted) yield* source()
+        if (!signal.aborted) {
+          signal.addEventListener('abort', onAbort, { once: true })
+          yield* source()
+        }
       } finally {
+        signal.removeEventListener('abort', onAbort)
         mine.ended = true
         finished()
       }
@@ -117,6 +123,7 @@ function Session({ client, session, onFresh, onQuit }: SessionProps): ReactEleme
 export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps): ReactElement {
   const [fresh, setFresh] = useState(0)
   const session = fresh === 0 ? base : nextSessionId(base, fresh)
+  const previous = useRef<Promise<void>>(Promise.resolve())
   return (
     <TheoTUIProvider>
       <InkInputProvider>
@@ -125,6 +132,7 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
             key={session}
             client={client}
             session={session}
+            previous={previous}
             onFresh={() => setFresh((n) => n + 1)}
             onQuit={() => void client.close().then(onExit)}
           />

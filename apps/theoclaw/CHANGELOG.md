@@ -11,7 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- The terminal UI renders `AgentSession` from `@theokit/tui` 0.83.10 (0.83.9 was published without it) instead of its own transcript, queue and Esc logic (#2933). A message typed during a turn is queued and counted in the footer, with no "sent when the running turn ends" notice; the composer is single-line.
+- The terminal UI renders `AgentSession` from `@theokit/tui` 0.83.10 (0.83.9 was published without it) instead of its own transcript, queue and Esc logic (#2933). A message typed during a turn is queued and counted in the footer, with no "sent when the running turn ends" notice; a draft can still span lines (`AgentSession`'s composer is multi-line by default). `/new` after Esc is allowed, and the new session's first chat waits for the interrupted one to finish unwinding.
 - The LAN publisher is the shared `@theokit/host/discovery-bonjour` adapter; the app-local copy is gone (#2948).
 - The sessionless turn builds its usage record from the `usage` of `runAgentTurn`'s outcome and no longer wraps the agent to catch `wait()`; the record is the same. A run that reports neither token count is `in=0 out=0`, unpriced, even if it reported a cost (#2952).
 - `installPlugin` calls the SDK's `installWorkspacePlugin` (with `replace`), and `plugins/manifest.ts` is gone in favour of the SDK's `parsePluginManifest`; the `trustFile` input is removed because the SDK resolves its own trust record. A trust record that cannot be parsed now fails the install instead of being replaced (#2940).
