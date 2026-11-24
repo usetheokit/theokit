@@ -55,7 +55,7 @@
     "@theokit/gateway-raft": "0.2.0",
     "@theokit/gateway-signal": "0.3.0",
     "@theokit/gateway-slack": "0.7.0",
-    "@theokit/gateway-sms": "0.7.0",
+    "@theokit/gateway-sms": "0.7.1",
     "@theokit/gateway-teams": "0.8.0",
     "@theokit/gateway-telegram": "0.14.0",
     "@theokit/gateway-tlon-urbit": "0.2.0",
