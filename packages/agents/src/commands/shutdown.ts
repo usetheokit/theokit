@@ -109,7 +109,11 @@ export async function exitAfterFlush(code: number, deps: ExitAfterFlushDeps = {}
   })
   const flush = (async () => {
     for (const stream of streams) {
-      await new Promise<void>((resolve) => stream.write('', () => resolve()))
+      await new Promise<void>((resolve) =>
+        stream.write('', () => {
+          resolve()
+        }),
+      )
     }
   })()
   try {
