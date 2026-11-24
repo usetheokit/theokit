@@ -1,8 +1,9 @@
 import type { CustomTool } from '@theokit/sdk'
+import { Toolset } from '@theokit/agents'
 import { createSandboxBackend } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { buildTools, fileReadTools, readOnlyTools, shellToolFor } from './tool-registry.js'
+import { buildTools, shellToolFor } from './tool-registry.js'
 import type { AgentToolOptions } from './tool-registry.js'
 import { pathVetoPlugin } from './path-veto.js'
 import { provenanceGuardPlugin } from './provenance-guard.js'
@@ -36,13 +37,26 @@ export function readToolProfile(env: Readonly<Record<string, string | undefined>
  */
 export function profileToolOptions(profile: ToolProfile, settings: ToolSettings, elevated: () => boolean, shell: boolean): AgentToolOptions {
   const plugins = [pathVetoPlugin(settings), provenanceGuardPlugin()]
-  if (profile === 'minimal') return { tools: fileReadTools(settings), plugins }
-  if (profile === 'messaging') return { tools: readOnlyTools(settings), plugins }
   const { interactive, ...withoutInteractive } = settings
-  const base = profile === 'full' || interactive === undefined ? settings : withoutInteractive
-  const tools = buildTools({ ...base, hostTools: settings.hostTools && shell })
-  return { tools: settings.hostTools && shell ? tools.map((tool) => (tool.name === SHELL_TOOL ? elevatable(tool, settings, elevated) : tool)) : tools, plugins }
+  const hostShell = settings.hostTools && shell
+  // Built once, after the runtime facts (host tools, shell gate, search, PTY) are known, so each profile lists only tools that exist.
+  const built = buildTools({ ...(interactive !== undefined && hostShell ? settings : withoutInteractive), hostTools: hostShell })
+  const all = hostShell ? built.map((tool) => (tool.name === SHELL_TOOL ? elevatable(tool, settings, elevated) : tool)) : built
+  const present = new Set(all.map((tool) => tool.name))
+  const named = (names: readonly string[]) => names.filter((name) => present.has(name))
+  const read = ['read_file', 'list_dir']
+  const messaging = named([...read, 'web_fetch', 'web_search'])
+  const everything = all.map((tool) => tool.name)
+  const profiles: Record<ToolProfile, readonly string[]> = {
+    minimal: read,
+    messaging,
+    coding: everything.filter((name) => !INTERACTIVE_TOOLS.includes(name)),
+    full: everything,
+  }
+  return { tools: [...Toolset.from(all, profiles).narrow(profile).all()], plugins }
 }
+
+const INTERACTIVE_TOOLS: readonly string[] = ['interactive_shell', 'write_stdin']
 
 /** `normal`, except that while `elevated()` holds the call goes to a shell on an unconfined backend. */
 function elevatable(normal: CustomTool, settings: ToolSettings, elevated: () => boolean): CustomTool {

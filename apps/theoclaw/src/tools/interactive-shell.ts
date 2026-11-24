@@ -6,6 +6,7 @@ import type { InteractiveBackend } from '@theokit/agents/interactive'
 import { createConfinedPtyBackend, probeConfinement } from '@theokit/sdk-pty'
 import type { ConfinedPtyBackendOptions } from '@theokit/sdk-pty'
 
+import { offToolLine } from './tool-settings.js'
 import type { ToolSettings } from './tool-settings.js'
 
 export interface InteractiveDeps {
@@ -33,7 +34,10 @@ export function createConfinedInteractive(settings: ToolSettings, deps: Interact
  */
 export async function withInteractiveShell(settings: ToolSettings, deps: InteractiveDeps = {}): Promise<ToolSettings> {
   if (!settings.hostTools) return settings
-  const off = (why: string): ToolSettings => ({ ...settings, offLines: [...settings.offLines, `tools: interactive_shell is off (${why})`] })
+  const off = (why: string): ToolSettings => {
+    const tool = { name: 'interactive_shell', reason: why }
+    return { ...settings, offLines: [...settings.offLines, offToolLine(tool)], offTools: [...settings.offTools, tool] }
+  }
   if (!settings.sandboxEnforced) return off('sandbox not enforced')
   if (settings.backend === 'docker') return off('THEOCLAW_SANDBOX_BACKEND=docker has no interactive shell')
   const interactive = createConfinedInteractive(settings, deps)

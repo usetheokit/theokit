@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `profileToolOptions` builds the owner chat's tools once as a `Toolset` with the four profiles and calls `narrow(profile)`; `resolveToolSettings` and `withInteractiveShell` return the tools left off as `offTools` (`OffTool[]`), and the start lines (`offLines`) are formatted from them (#2912).
 - `startComposed` registers its subsystems (browser, app, ACP sessions, schedule store, scheduler, MCP events, MCP relay) as `createAppHost` services where they start: the nine-step `teardown` and the two hand-written rollback blocks are gone, and a failed start, a signal and `close()` share one reverse-order, once-only stop (#2911).
 - The MCP server (`theoclaw mcp` and `/mcp`) passes `pathVetoPlugin` to `serveMcpToolsStdio` and `handleMcpToolsHttp` as `plugins`; `vetoedTools` is gone. A refused call answers a tool result with `isError: true` (#2927).
 - `announceOnLan` publishes and withdraws through `announceService` from `@theokit/host/discovery`; the app's own byte-bounded stop and the `PublishedService`/`ServicePublisher` interfaces are gone (re-exported from the host) (#2930).
