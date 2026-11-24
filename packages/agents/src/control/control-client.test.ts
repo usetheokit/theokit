@@ -89,7 +89,7 @@ describe('createControlClient', () => {
   })
 
   it('yields an acknowledgement by default and drops it with dropAcknowledgements', async () => {
-    const acks = ['interrupt_ok', 'steer_ok', 'no_turn']
+    const acks = new Set(['interrupt_ok', 'steer_ok', 'no_turn'])
     const seenBy = async (options: { dropAcknowledgements?: boolean }): Promise<string[]> => {
       let release!: () => void
       const gate = new Promise<void>((r) => {
@@ -109,12 +109,12 @@ describe('createControlClient', () => {
       return seen
     }
     const kept = await seenBy({})
-    expect(kept.filter((t) => acks.includes(t))).toHaveLength(1)
+    expect(kept.filter((t) => acks.has(t))).toHaveLength(1)
     expect(kept.at(-1)).toBe('done')
     const explicit = await seenBy({ dropAcknowledgements: false })
-    expect(explicit.filter((t) => acks.includes(t))).toHaveLength(1)
+    expect(explicit.filter((t) => acks.has(t))).toHaveLength(1)
     const dropped = await seenBy({ dropAcknowledgements: true })
-    expect(dropped.filter((t) => acks.includes(t))).toEqual([])
+    expect(dropped.filter((t) => acks.has(t))).toEqual([])
     expect(dropped.at(-1)).toBe('done')
   })
 
