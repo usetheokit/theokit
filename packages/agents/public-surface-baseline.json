@@ -22384,7 +22384,7 @@
         },
         "ForeignImportError": {
           "tier": "stable",
-          "declaration": "declare class ForeignImportError extends Error {\n    readonly reason: ForeignImportErrorReason;\n    constructor(message: string, reason: ForeignImportErrorReason);\n}",
+          "declaration": "declare class ForeignImportError extends TheokitAgentError {\n    readonly name = \"ForeignImportError\";\n    readonly reason: ForeignImportErrorReason;\n    constructor(message: string, reason: ForeignImportErrorReason);\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": ["dist/foreign-setup.d.ts#ForeignImportErrorReason"],
