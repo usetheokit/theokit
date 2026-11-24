@@ -56,25 +56,49 @@ function trackedFiles() {
   return out.split('\0').filter((f) => f && LINTABLE.test(f))
 }
 
+/** Node's out-of-memory abort ends the process with SIGABRT (or exit 134 through a shell). */
+export function isOomAbort(r) {
+  return r.signal === 'SIGABRT' || r.status === 134
+}
+
+/**
+ * Lint one shard; when the process aborts out of memory, retry its files as two smaller
+ * sequential shards. Returns true when every file linted cleanly. A single-file abort fails.
+ */
+export function lintShard(shard, run) {
+  const r = run(shard)
+  if (r.status === 0) return true
+  if (!isOomAbort(r) || shard.length < 2) return false
+  const mid = Math.ceil(shard.length / 2)
+  console.error(
+    `lint shard aborted out of memory; retrying as ${mid} + ${shard.length - mid} files`,
+  )
+  const first = lintShard(shard.slice(0, mid), run)
+  const second = lintShard(shard.slice(mid), run)
+  return first && second
+}
+
 function main() {
   const extra = process.argv.slice(2)
   const shards = planShards(trackedFiles())
   let failed = false
   shards.forEach((shard, i) => {
     console.error(`lint shard ${i + 1}/${shards.length} (${shard.length} files)`)
-    const r = spawnSync(
-      process.execPath,
-      [
-        '--max-old-space-size=1536',
-        join(dirname(require.resolve('eslint/package.json')), 'bin', 'eslint.js'),
-        '--no-warn-ignored',
-        ...extra,
-        '--',
-        ...shard,
-      ],
-      { stdio: 'inherit' },
+    const ok = lintShard(shard, (files) =>
+      spawnSync(
+        process.execPath,
+        [
+          '--max-old-space-size=1536',
+          join(dirname(require.resolve('eslint/package.json')), 'bin', 'eslint.js'),
+          '--no-warn-ignored',
+          ...extra,
+          '--',
+          ...files,
+        ],
+        { stdio: 'inherit' },
+      ),
     )
-    if (r.status !== 0) failed = true
+    if (!ok) failed = true
   })
   process.exit(failed ? 1 : 0)
 }
