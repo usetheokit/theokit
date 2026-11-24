@@ -12,6 +12,10 @@ describe('infoReply', () => {
     expect(infoReply('/model other', 'm-1', 'webchat')).toContain('not supported')
     expect(infoReply('/status', 'm-1', 'telegram')).toContain('Surface: telegram')
   })
+  it('reads a bot suffix on /status and keeps the argument', () => {
+    expect(infoReply('/status@theobot', 'm-1', 'telegram')).toContain('Surface: telegram')
+    expect(infoReply('/model@theobot other', 'm-1', 'telegram')).toContain('not supported')
+  })
   it('leaves other text, including a longer command name, alone', () => {
     expect(infoReply('/modelx', 'm', 's')).toBeUndefined()
     expect(infoReply('hello /model', 'm', 's')).toBeUndefined()

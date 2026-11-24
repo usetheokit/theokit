@@ -376,8 +376,8 @@ function channelCommands(options: ReplyHandlerOptions) {
   return createCommandRegistry<ChannelCommandContext>(definitions, CHANNEL_ROUTING)
 }
 
-/** Channel text is matched without regard to case, and a Telegram `/cmd@bot` suffix is accepted. */
-const CHANNEL_ROUTING = { caseInsensitive: true, stripBotSuffix: true } as const
+/** Channel text is matched without regard to case, and a Telegram `/cmd@bot` suffix and a newline after the name are accepted. */
+const CHANNEL_ROUTING = { caseInsensitive: true, stripBotSuffix: true, anyWhitespace: true } as const
 
 /**
  * The handler every runner uses: one agent turn per message with text, on the agent of the

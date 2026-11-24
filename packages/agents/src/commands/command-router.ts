@@ -77,6 +77,8 @@ export interface RouteOptions {
   readonly caseInsensitive?: boolean
   /** Accept a chat-platform `/name@bot` suffix on the command name and drop it before matching. */
   readonly stripBotSuffix?: boolean
+  /** End a command name at any whitespace (a newline too), not only a space or tab. */
+  readonly anyWhitespace?: boolean
 }
 
 /**
@@ -109,7 +111,7 @@ export function routeCommand<Ctx = void>(
   const matches = byLength.filter((entry) =>
     entry.command.exact === true
       ? same(whole, entry.typed, fold)
-      : matchesName(body, entry.typed, fold),
+      : matchesName(body, entry.typed, fold, options.anyWhitespace === true),
   )
   // Guarded by LENGTH rather than by `matches[0] === undefined`: without
   // `noUncheckedIndexedAccess`, indexing an empty array is typed as present, so the compiler calls
@@ -144,10 +146,11 @@ export function routeCommand<Ctx = void>(
  * The name must be followed by a boundary — end of input or whitespace. Without that, `/modelx`
  * would route to `model` with the argument `x`, which is the same swallowing bug one level down.
  */
-function matchesName(body: string, name: string, fold: Fold): boolean {
+function matchesName(body: string, name: string, fold: Fold, anyWhitespace: boolean): boolean {
   if (!same(body.slice(0, name.length), name, fold)) return false
   const next = body.charAt(name.length)
-  return next === '' || next === ' ' || next === '\t'
+  if (next === '' || next === ' ' || next === '\t') return true
+  return anyWhitespace && /\s/.test(next)
 }
 
 type Fold = (text: string) => string

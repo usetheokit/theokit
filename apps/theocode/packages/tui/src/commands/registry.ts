@@ -350,9 +350,11 @@ function definitions(custom: CustomCommands): CommandDefinition[] {
     claimed.add(def.name)
     defs.push(def)
   }
-  // The verbs the framework's session vocabulary defines come from it; this product keeps its own
-  // descriptions, takes every argument as optional (it has never refused a bare `/model`) and
-  // routes no alias beyond its own `/exit` builtin.
+  // The verbs the framework's session vocabulary defines take their definition from it: name,
+  // aliases and palette entry. This product overrides only what it must differ on: its own
+  // description, and an optional argument (it has never refused a bare `/model` or `/clear`, and
+  // never matched on the whole text). A shared alias another command or a custom command already
+  // owns is dropped, so `/exit` stays its own palette entry.
   const noop = (): void => undefined
   const shared = new Map(
     sessionCommands({
@@ -377,13 +379,16 @@ function definitions(custom: CustomCommands): CommandDefinition[] {
       setModel: noop,
     }).map((def) => [def.name, def] as const),
   )
+  const taken = new Set<string>([...claimed, ...BUILTINS.map((b) => b.name), ...CODEX_NAMES.keys()])
   for (const { name, description } of BUILTINS) {
     const base = shared.get(name)
     if (base === undefined) {
       add(defineCommand({ name, description }))
       continue
     }
-    add(defineCommand({ name: base.name, description }))
+    const { run: _run, exact: _exact, aliases, ...rest } = base
+    const free = (aliases ?? []).filter((alias) => !taken.has(alias))
+    add({ ...rest, description, arg: 'optional', ...(free.length > 0 ? { aliases: free } : {}) })
   }
   // Every Codex name, INCLUDING the ones the menu does not offer: being answerable when typed
   // and being advertised are different jobs, and only the first one is what stops a person

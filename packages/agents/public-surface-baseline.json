@@ -19278,7 +19278,7 @@
         },
         "RouteOptions": {
           "tier": "stable",
-          "declaration": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n}",
+          "declaration": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n    readonly anyWhitespace?: boolean;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -19410,7 +19410,7 @@
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
             "dist/commands.d.ts#CommandRegistry": "interface CommandRegistry<Ctx> {\n    palette(): readonly {\n        name: string;\n        description: string;\n    }[];\n    route(input: string): RoutedInput<Ctx>;\n    dispatch(input: string, ctx: Ctx): Promise<RoutedInput<Ctx>>;\n}",
             "dist/commands.d.ts#RouteFailure": "type RouteFailure = 'unknown-command' | 'missing-argument' | 'unexpected-argument' | 'ambiguous-command';",
-            "dist/commands.d.ts#RouteOptions": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n}",
+            "dist/commands.d.ts#RouteOptions": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n    readonly anyWhitespace?: boolean;\n}",
             "dist/commands.d.ts#RoutedInput": "type RoutedInput<Ctx = void> = {\n    readonly kind: 'command';\n    readonly command: CommandDefinition<Ctx>;\n    readonly arg: string;\n} | {\n    readonly kind: 'message';\n    readonly text: string;\n} | {\n    readonly kind: 'error';\n    readonly reason: RouteFailure;\n    readonly input: string;\n};"
           }
         },
@@ -19540,7 +19540,7 @@
             "dist/commands.d.ts#CommandArgument": "type CommandArgument = 'none' | 'optional' | 'required';",
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
             "dist/commands.d.ts#RouteFailure": "type RouteFailure = 'unknown-command' | 'missing-argument' | 'unexpected-argument' | 'ambiguous-command';",
-            "dist/commands.d.ts#RouteOptions": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n}",
+            "dist/commands.d.ts#RouteOptions": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n    readonly anyWhitespace?: boolean;\n}",
             "dist/commands.d.ts#RoutedInput": "type RoutedInput<Ctx = void> = {\n    readonly kind: 'command';\n    readonly command: CommandDefinition<Ctx>;\n    readonly arg: string;\n} | {\n    readonly kind: 'message';\n    readonly text: string;\n} | {\n    readonly kind: 'error';\n    readonly reason: RouteFailure;\n    readonly input: string;\n};"
           }
         },
