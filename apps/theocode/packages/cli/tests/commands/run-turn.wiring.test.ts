@@ -18,7 +18,13 @@ import { describe, expect, it } from 'vitest'
 
 import { turnFailureReporting } from '@theocode/shared/turn-failure-reporting'
 
-import { createDiffGit, perTurnStream } from '../../src/commands/run.js'
+import { createDiffGit, driveTurn, perTurnStream } from '../../src/commands/run.js'
+import {
+  createHumanProcessor,
+  createJsonlProcessor,
+  type ExecIo,
+  type ExecProcessor,
+} from '../../src/runtime/events.js'
 
 const ABSENT_REF = ['rev-parse', '--verify', 'refs/heads/branch-that-does-not-exist-4f2a']
 
@@ -117,5 +123,73 @@ describe('the framework fork-if-busy path the run command uses', () => {
     expect(forks).toEqual(['s1-fork'])
     expect(seen).toEqual(['start', 'text-start', 'finish'])
     await expect(turn.sessionId).resolves.toBe('s1-fork')
+  })
+})
+
+describe('#2918 — driveTurn reports why a turn failed', () => {
+  const text = [
+    { type: 'text-start', id: 'a' },
+    { type: 'text-delta', id: 'a', delta: 'hi' },
+    { type: 'text-end', id: 'a' },
+  ]
+  const open = (chunks: unknown[], thenThrow?: Error) => () =>
+    (async function* () {
+      yield* chunks
+      if (thenThrow !== undefined) throw thenThrow
+    })() as never
+
+  function run(
+    json: boolean,
+    chunks: unknown[],
+    thenThrow?: Error,
+    make?: (io: ExecIo) => ExecProcessor,
+  ) {
+    const out: string[] = []
+    const err: string[] = []
+    const io = { out: (l: string) => out.push(l), err: (l: string) => err.push(l) }
+    const processor = make
+      ? make(io)
+      : json
+        ? createJsonlProcessor(io, 's1')
+        : createHumanProcessor(io, 's1')
+    return driveTurn('s1', open(chunks, thenThrow), processor).then((turn) => {
+      const result = processor.finish(turn.status, {
+        ...turn.finish,
+        ...(turn.error !== undefined ? { error: turn.error } : {}),
+      })
+      return { turn, out, err, result }
+    })
+  }
+
+  it('test_a_thrown_stream_message_reaches_the_failure_line', async () => {
+    const human = await run(false, text, new Error('boom'))
+    expect(human.turn).toMatchObject({ status: 'error', error: 'boom' })
+    expect(human.err.filter((l) => l === 'ERROR: boom')).toHaveLength(1)
+    const jsonl = await run(true, text, new Error('boom'))
+    expect(jsonl.out.join('\n')).toContain('"turn.failed"')
+    expect(jsonl.out.join('\n')).toContain('boom')
+  })
+
+  it('test_a_processor_that_throws_fails_the_run_with_its_message', async () => {
+    const { turn } = await run(false, text, undefined, (io) => ({
+      ...createHumanProcessor(io, 's1'),
+      event: () => {
+        throw new Error('processor broke')
+      },
+    }))
+    expect(turn).toMatchObject({ status: 'error', error: 'processor broke' })
+  })
+
+  it('test_an_error_event_is_printed_once_in_human_mode', async () => {
+    const { turn, err } = await run(false, [{ type: 'error', errorText: 'denied' }])
+    expect(turn).toMatchObject({ status: 'error', error: undefined })
+    expect(err.filter((l) => l.includes('denied'))).toEqual(['ERROR: denied'])
+  })
+
+  it('test_an_error_event_keeps_the_jsonl_failure_text', async () => {
+    const { turn, out } = await run(true, [{ type: 'error', errorText: 'denied' }])
+    expect(turn.error).toBeUndefined()
+    const failed = out.map((l) => JSON.parse(l)).find((o) => o.type === 'turn.failed')
+    expect(failed.error).toEqual({ message: 'denied' })
   })
 })

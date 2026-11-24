@@ -259,7 +259,7 @@ interface DrivenTurn {
  * turn; `format` hands each canonical event to the processor, which is what writes to stdout and
  * stderr, so this product's output formats are untouched.
  */
-async function driveTurn(
+export async function driveTurn(
   sessionId: string,
   openStream: ReturnType<typeof openTurnStream>,
   processor: ExecProcessor,
@@ -270,18 +270,22 @@ async function driveTurn(
         `[exec] session ${from} is being written by another process — forking to ${to}\n`,
       ),
   })
+  // An `error` event is already printed by the processor; passing its message to `finish` too
+  // would print it twice and change the JSONL `turn.failed` text.
+  let errorEventSeen = false
   const turn = await runHeadlessTurn(forked.chunks, {
     io: { out: () => {}, err: () => {} },
     // A processor that throws is a failed run.
     onFormatError: 'fail',
     format: (event) => {
+      if (event.type === 'error') errorEventSeen = true
       processor.event(event)
       return undefined
     },
   })
   return {
     status: turn.outcome === 'error' ? 'error' : 'finished',
-    error: turn.errorMessage,
+    error: errorEventSeen ? undefined : turn.errorMessage,
     finish: {
       finalText: turn.finalText,
       ...(turn.stopReason === undefined ? {} : { stopReason: turn.stopReason }),
