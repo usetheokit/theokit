@@ -15,11 +15,20 @@ const CREDENTIAL = 'Bearer s3cret-credential-value'
 const open: Array<{ close(): Promise<void> }> = []
 const servers: Server[] = []
 
-async function start(authorize: (header: string | undefined) => boolean): Promise<string> {
+async function start(
+  authorize: (header: string | undefined) => boolean,
+  gate?: Promise<void>,
+): Promise<string> {
   const agent = {
     agentId: 'a',
     dispose: async () => {},
-    send: async () => ({ cancel: async () => {}, wait: async () => ({ status: 'finished' }) }),
+    send: async () => ({
+      cancel: async () => {},
+      wait: async () => {
+        await gate
+        return { status: 'finished' }
+      },
+    }),
   } as unknown as SdkAgentHandle<SdkMessage>
   const server = createServer()
   servers.push(server)
@@ -79,24 +88,34 @@ describe('createControlClient', () => {
     }).toThrow(ControlConnectionError)
   })
 
-  it('yields acknowledgements unless dropAcknowledgements is set', async () => {
-    const url = await start((h) => h === CREDENTIAL)
-    for (const drop of [false, true]) {
-      const client = await createControlClient({
-        url,
-        authorization: CREDENTIAL,
-        dropAcknowledgements: drop,
+  it('yields an acknowledgement by default and drops it with dropAcknowledgements', async () => {
+    const acks = ['interrupt_ok', 'steer_ok', 'no_turn']
+    const seenBy = async (options: { dropAcknowledgements?: boolean }): Promise<string[]> => {
+      let release!: () => void
+      const gate = new Promise<void>((r) => {
+        release = r
       })
+      const url = await start((h) => h === CREDENTIAL, gate)
+      const client = await createControlClient({ url, authorization: CREDENTIAL, ...options })
+      const iterator = client.chat('hi', 's1')[Symbol.asyncIterator]()
+      const first = iterator.next()
+      // answered with steer_ok or no_turn, either way an acknowledgement, while the turn is held open
+      client.steer('s1', 'x')
+      await new Promise((r) => setTimeout(r, 150))
+      release()
       const seen: string[] = []
-      for await (const frame of client.chat('hi', 's1')) {
-        if (frame.type !== 'done') client.interrupt('s1')
-        seen.push(frame.type)
-      }
-      expect(seen.at(-1)).toBe('done')
-      if (drop)
-        expect(seen.filter((t) => ['interrupt_ok', 'steer_ok', 'no_turn'].includes(t))).toEqual([])
+      for (let r = await first; r.done !== true; r = await iterator.next()) seen.push(r.value.type)
       await client.close()
+      return seen
     }
+    const kept = await seenBy({})
+    expect(kept.filter((t) => acks.includes(t))).toHaveLength(1)
+    expect(kept.at(-1)).toBe('done')
+    const explicit = await seenBy({ dropAcknowledgements: false })
+    expect(explicit.filter((t) => acks.includes(t))).toHaveLength(1)
+    const dropped = await seenBy({ dropAcknowledgements: true })
+    expect(dropped.filter((t) => acks.includes(t))).toEqual([])
+    expect(dropped.at(-1)).toBe('done')
   })
 
   it('a 1009 close rejects the iteration with the frame limit message', async () => {

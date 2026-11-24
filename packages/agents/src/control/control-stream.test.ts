@@ -117,18 +117,22 @@ describe('createControlStreamInbox', () => {
     let clock = 0
     const stamp = () => ++clock
     const inbox = createControlStreamInbox({ stamp })
-    const frame = (text: string): ControlStreamFrame => ({
+    const frame = (content: string): ControlStreamFrame => ({
       type: 'event',
-      event: { type: 'text', text } as never,
+      event: { type: 'text_delta', content } as never,
       arrivedAt: stamp(),
     })
     const first = frame('a')
     inbox.post({ variant: 'warning', text: 'between' })
     const second = frame('b')
-    const client = clientOf([first, second])
+    const done: ControlStreamFrame = { type: 'done', arrivedAt: stamp() }
+    const client = clientOf([first, second, done])
     const events = await collect(createControlStreamSource(client, 's', 'hi', { inbox })())
-    const kinds = events.map((e) => (e as { type: string }).type)
-    expect(kinds.indexOf('notice')).toBeGreaterThan(-1)
+    expect(events).toEqual([
+      { type: 'text-delta', text: 'a' },
+      { type: 'notice', variant: 'warning', text: 'between' },
+      { type: 'text-delta', text: 'b' },
+    ])
     expect(inbox.take()).toEqual([])
   })
 
