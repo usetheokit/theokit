@@ -2,7 +2,6 @@ import { createA2ATool } from '@theokit/agents/a2a'
 import type { A2AToolConfig } from '@theokit/agents/a2a'
 import type { CustomTool } from '@theokit/sdk'
 
-import { describeError } from '../control-plane/errors.js'
 import type { A2APeer } from './a2a-settings.js'
 
 /**
@@ -21,28 +20,9 @@ export interface PeerToolSeams {
   readonly fetchImpl?: A2AToolConfig['fetchImpl']
 }
 
-/**
- * The framework names the peer on a timeout and on a bad answer, but a refused connection reaches
- * the model as the bare `fetch failed`: name the peer there, keeping the original as `cause`. A
- * cancelled caller keeps its own abort reason.
- */
-function namingPeer(name: string, handler: CustomTool['handler']): CustomTool['handler'] {
-  return async (input, context) => {
-    try {
-      return await handler(input, context)
-    } catch (error) {
-      if (context?.signal?.aborted === true) throw error
-      const message = describeError(error)
-      if (message.startsWith('A2A call to')) throw error
-      throw new Error(`A2A call to "${name}" failed: ${message}`, { cause: error })
-    }
-  }
-}
-
 function peerTool(peer: A2APeer, seams: PeerToolSeams): CustomTool {
-  const name = `peer_${peer.name}`
-  const tool = createA2ATool({
-    name,
+  return createA2ATool({
+    name: `peer_${peer.name}`,
     description: `Send a task to the TheoClaw peer "${peer.name}" over A2A and return its answer.`,
     url: `${peer.baseUrl}/a2a`,
     auth: { bearer: peer.token },
@@ -50,7 +30,6 @@ function peerTool(peer: A2APeer, seams: PeerToolSeams): CustomTool {
     timeoutMs: seams.timeoutMs ?? PEER_TIMEOUT_MS,
     ...(seams.fetchImpl === undefined ? {} : { fetchImpl: seams.fetchImpl }),
   })
-  return { ...tool, handler: namingPeer(name, tool.handler) }
 }
 
 /** One tool per peer, in the order `THEOCLAW_A2A_PEERS` names them. */
