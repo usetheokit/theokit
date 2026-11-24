@@ -35,6 +35,10 @@ export function start(
   const child: ChildProcessWithoutNullStreams = spawn(config.command, [...(config.args ?? [])], {
     env: { ...process.env, ...env },
   })
+  let stderr = ''
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString()
+  })
   const replies = new Map<unknown, (r: Reply) => void>()
   createInterface({ input: child.stdout }).on('line', (line) => {
     const r = JSON.parse(line) as Reply
@@ -50,6 +54,8 @@ export function start(
       }),
     raw: (text: string) => child.stdin.write(`${text}\n`),
     onNull: (cb: (r: Reply) => void) => replies.set(null, cb),
+    stderr: () => stderr,
+    pid: child.pid,
     close: () => child.kill(),
   }
 }

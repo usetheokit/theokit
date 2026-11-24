@@ -554,14 +554,14 @@ and the others the server lists), so the agent can read what a page renders with
 `web_fetch` cannot. Chat agents never get it. The browser can open any URL the process can reach,
 loopback services included, which is why it is off unless set.
 
-The server runs under `tools/browser-proxy.mjs`, which leaves `browser_run_code_unsafe` out:
+The server runs under the proxy of `@theokit/host/browser`, which leaves `browser_run_code_unsafe` out:
 that tool runs model-written JavaScript in the server process, outside every sandbox, so a page
 carrying a prompt injection could have asked for host code execution. A call to it is refused
 before it reaches the server. The server's working directory, which is also where its tools
 write a `filename` and their automatic output, is a fresh directory under the system temp
 directory, removed when the server exits after the agent is disposed or the wrapper gets SIGTERM,
 SIGINT or SIGHUP. A wrapper killed with SIGKILL (the SDK does so to a server that answers no
-request within its 30-second budget) cannot remove it, and a `theoclaw-browser-*` directory stays
+request within its 30-second budget) cannot remove it, and a `theokit-browser-*` directory stays
 under the temp directory. The workspace, `.theokit` and `.theoclaw` are outside it, and the path
 veto refuses a `filename` into the state directories as well.
 `PLAYWRIGHT_MCP_*` variables do not reach the server. What stays is what a browser does: it

@@ -293,3 +293,25 @@ describe('the refusal is per scope', () => {
     expect(cfg.model).toBe('openai/user')
   })
 })
+
+describe('the framework reader behind the loader', () => {
+  it('test_a_permission_list_with_a_non_string_entry_is_dropped_whole', () => {
+    write(project, '.claude', 'settings.json', { permissions: { allow: [1, 'Read'], deny: ['Bash'] } })
+    const [report] = settingsReport({ projectDir: project, userDir: home, managedPaths: [] })
+    expect(report?.permissionRules.map((r) => r.action)).toEqual(['deny'])
+  })
+
+  it('test_a_known_claude_key_in_the_foreign_file_is_ignored_not_unrecognised', () => {
+    write(project, '.claude', 'settings.json', { sandbox: {}, madeUpKey: 1 })
+    const [report] = settingsReport({ projectDir: project, userDir: home, managedPaths: [] })
+    expect(report?.ignored).toContain('sandbox')
+    expect(report?.unrecognised).toEqual(['madeUpKey'])
+  })
+
+  it('test_a_settings_file_that_is_not_an_object_is_an_empty_layer_that_still_wins', () => {
+    write(project, '.theocode', 'settings.json', [])
+    write(project, '.claude', 'settings.json', { model: 'later' })
+    const [report] = settingsReport({ projectDir: project, userDir: home, managedPaths: [] })
+    expect(report?.path).toContain('.theocode')
+  })
+})
