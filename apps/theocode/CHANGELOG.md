@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `discoverRoles` reads both roots through `discoverSubagentsAcrossRoots` from `@theokit/agents/config` and applies memory by each definition's origin; it no longer passes the home directory to `discoverSubagents` as a project (#2925).
 - `buildChatAgent` reads its required options object directly instead of through optional chaining, which brings its complexity back under the lint limit (#3044).
 - `delegate_to_team` tests: the cap test waits for the member to be in flight before advancing the clock, and the harness builds the team in a temporary directory of its own (#3035).
 - `skillsOnDisk` reads the declared-versus-disk comparison through `checks.skillsInventory`, and an unreadable skills root now throws instead of reading as empty; `theocode doctor` reports it as a failed `skills-on-disk` line (#2923).

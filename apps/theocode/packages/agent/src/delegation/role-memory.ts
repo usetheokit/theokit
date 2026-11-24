@@ -3,7 +3,7 @@
  *
  * ## It is wired, and the delay is the part worth keeping
  *
- * `delegation/role-discovery.ts:84-85` applies this to both role sets. That took one line, and the
+ * `delegation/role-discovery.ts` applies this per definition origin. That took one line, and the
  * line could not be written for weeks: `applySubagentMemory` lives in `@theokit/agents/config` and
  * was not in the published `14.4.0` this project pinned, so committing it would have left the tree
  * red for a reason that had nothing to do with the code. The join was written, tested, and held
@@ -22,7 +22,7 @@
  * named it. The workspace removed both edges; `the-sdk-version-that-parses-memory.test.ts` in
  * `@theokit/agents` now pins the SDK half, which was the one that stayed dangerous.
  *
- * The ROOT travels with each half on purpose: `project` and `local` resolve against the root the
+ * The ROOT travels with each definition (its `origin`) on purpose: `project` and `local` resolve against the root the
  * agent came FROM, `user` against home. Applying after the merge loses that — by then both halves
  * share a key space and the origin is gone. Flip `agent-memory` to `read` in
  * `foreign-surfaces-on-disk.ts` in the SAME commit, and not before.

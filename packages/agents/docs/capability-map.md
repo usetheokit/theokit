@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1658 export(s) across 30 entry point(s).
+1664 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -1096,6 +1096,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
 | `defineAppBootstrap` | value |
 | `defineLayeredConfig` | value |
+| `discoverSubagentsAcrossRoots` | value |
 | `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
 | `envKnob` | value |
@@ -1158,6 +1159,8 @@ Measured against `@theokit/sdk@13.0.0`.
 | `CustomCommand` | type |
 | `CustomCommandsResult` | type |
 | `DeclaredLayer` | type |
+| `DiscoverSubagentsAcrossRootsOptions` | type |
+| `DiscoverSubagentsAcrossRootsResult` | type |
 | `EnvKnob` | type |
 | `EnvKnobKind` | type |
 | `EnvOptOut` | type |
@@ -1200,6 +1203,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
 | `ResolvedFileMentions` | type |
+| `RootedAgentDefinition` | type |
 | `SdkHomeStepOptions` | type |
 | `SecurityFloorSpec` | type |
 | `Settings` | type |
@@ -1209,6 +1213,8 @@ Measured against `@theokit/sdk@13.0.0`.
 | `SettingsLayer` | type |
 | `ShellResult` | type |
 | `SkippedDefinition` | type |
+| `SubagentCompatSource` | type |
+| `SubagentRootOrigin` | type |
 | `TemplateDeps` | type |
 | `TrustRecord` | type |
 | `UnsupportedPermissionEntry` | type |
