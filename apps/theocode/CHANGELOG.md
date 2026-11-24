@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `ask-bridge.ts` reads the open question from `AskBridge.pending` and observes changes with `AskBridge.onChange`; its own thread → id and thread → text maps are gone. `setListener` now accepts any number of observers instead of throwing `ConcurrentListenerError` on a second (#2920).
 - `readPointerId` is removed; session delete, fork, backtrack and `sessions gc` rely on the framework protection set, which now refuses with `SessionPointerUnreadableError` when the `last-session` pointer cannot be read (#2896).
 - `driveTurn` passes `onFormatError: 'fail'` and reads `turn.errorMessage` from `runHeadlessTurn`; `keepStreamError` and `processorFailed` are gone (#2918).
 - `delegate_to_team` runs the squad with `ownsMembers`, `onDisposeError` and `timeoutMs` instead of racing it against `withClockCap` and disposing the members by hand: on the 15 minute cap the member in flight is now cancelled through its run's `cancel()`, and the tool still reports `delegation_timeout`; a member that fails to dispose is reported with its role. `runTeamWithCap` is removed (#2907).
