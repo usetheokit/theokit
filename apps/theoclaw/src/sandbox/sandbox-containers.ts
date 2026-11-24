@@ -1,4 +1,4 @@
-import type { DockerRunner } from '@theokit/agents/sandbox'
+import { listSandboxContainers as listLabelled, removeSandboxContainers as removeLabelled, type DockerRunner } from '@theokit/agents/sandbox'
 
 import { SANDBOX_LABEL, SESSION_LABEL } from './sandbox-mode.js'
 
@@ -11,27 +11,10 @@ export interface SandboxContainer {
   readonly session: string
 }
 
-const LIMITS = { timeoutMs: 30_000, maxOutputBytes: 1 << 20 }
-
-async function docker(runner: DockerRunner, args: readonly string[]): Promise<string> {
-  const result = await runner(args, LIMITS)
-  if (result.timedOut || result.code !== 0) {
-    throw new Error(`docker ${args[0] ?? ''} failed${result.timedOut ? ' (timed out)' : ''}: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
-  }
-  return result.stdout
-}
-
 /** The containers carrying theoclaw's label, running or not; containers without it are never returned. */
 export async function listSandboxContainers(runner: DockerRunner): Promise<SandboxContainer[]> {
-  const format = `{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Label "${SESSION_LABEL}"}}`
-  const out = await docker(runner, ['ps', '-a', '--filter', `label=${SANDBOX_LABEL}=1`, '--format', format])
-  return out
-    .split('\n')
-    .filter((line) => line.trim() !== '')
-    .map((line) => {
-      const [id = '', name = '', status = '', image = '', session = ''] = line.split('\t')
-      return { id, name, status, image, session }
-    })
+  const found = await listLabelled({ [SANDBOX_LABEL]: '1' }, { runner })
+  return found.map(({ id, name, state, image, labels }) => ({ id, name, status: state, image, session: labels[SESSION_LABEL] ?? '' }))
 }
 
 export interface RecreateOptions {
@@ -55,6 +38,7 @@ export async function recreateSandboxContainers(runner: DockerRunner, options: R
   if (matching.length === 0) return { removed: [], declined: false }
   const running = matching.filter((container) => container.status === 'running')
   if (running.length > 0 && !options.force && !(await options.confirm(running))) return { removed: [], declined: true }
-  await docker(runner, ['rm', '-f', ...matching.map((container) => container.id)])
+  const labels = { [SANDBOX_LABEL]: '1', ...(options.session === undefined ? {} : { [SESSION_LABEL]: options.session }) }
+  await removeLabelled(labels, { runner, includeRunning: true })
   return { removed: matching, declined: false }
 }
