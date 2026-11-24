@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `daemon install|uninstall|status|restart` run on `daemonCommands` from `@theokit/host/service`; the app's own linger check (`loginctl`) is gone, and the output and exit codes are the same (#2914).
 - The stored import (`writeImport`, `readImport`, `import-store.ts`) lives in `@theokit/agents/foreign-setup` as `writeForeignImport` and `readForeignImport`; the on-disk layout is unchanged, and `ForeignImportError` maps to `TheoClawConfigError` in `import-start.ts` (#2928).
 - `startComposed` registers its subsystems (browser, app, ACP sessions, schedule store, scheduler, MCP events, MCP relay) as `createAppHost` services where they start: the nine-step `teardown` and the two hand-written rollback blocks are gone, and a failed start, a signal and `close()` share one reverse-order, once-only stop (#2911).
 - The MCP server (`theoclaw mcp` and `/mcp`) passes `pathVetoPlugin` to `serveMcpToolsStdio` and `handleMcpToolsHttp` as `plugins`; `vetoedTools` is gone. A refused call answers a tool result with `isError: true` (#2927).
