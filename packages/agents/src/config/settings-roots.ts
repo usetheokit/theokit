@@ -244,10 +244,10 @@ function asPermissionsBlock(value: unknown): PermissionsBlock | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
   const block = value as Record<string, unknown>
   const strings = (v: unknown): string[] | undefined =>
-    Array.isArray(v) && v.every((e) => typeof e === 'string') ? [...(v as string[])] : undefined
-  const allow = strings(block['allow'])
-  const deny = strings(block['deny'])
-  const ask = strings(block['ask'])
+    Array.isArray(v) && v.every((e) => typeof e === 'string') ? [...v] : undefined
+  const allow = strings(block.allow)
+  const deny = strings(block.deny)
+  const ask = strings(block.ask)
   return {
     ...(allow === undefined ? {} : { allow }),
     ...(deny === undefined ? {} : { deny }),
