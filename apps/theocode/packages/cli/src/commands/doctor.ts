@@ -10,7 +10,7 @@
  */
 import process from 'node:process'
 import { exitAfterDrain } from '@theokit/agents/commands'
-import { credentialState } from '@theokit/agents/doctor'
+import { credentialState, type Check } from '@theokit/agents/doctor'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -112,6 +112,8 @@ export async function doctorCommand(opts: {
   // that throws becomes a failed check instead of an unhandled rejection.
   const buildFailures = await buildFailureOf(agent, cwd, (w) => (wired = w))
 
+  const skills = readSkillsOnDisk(skillsOnDisk, cwd, cfg.skills)
+
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
     cwd,
@@ -135,7 +137,7 @@ export async function doctorCommand(opts: {
     strayCredentials: strayCredentialFiles(homedir(), process.env),
     // #67 — the skills row is the DECLARED list, so it ticked green for a name with no SKILL.md and
     // said nothing about a file no configuration named. This holds the two against each other.
-    skillsOnDisk: skillsOnDisk(cwd, cfg.skills),
+    ...(skills.found !== undefined ? { skillsOnDisk: skills.found } : {}),
     // B-175 — the four foreign surfaces no check named. Measured here rather than inside
     // `collectChecks`, which does no I/O by design, exactly like `skillsOnDisk` above it.
     foreignSurfaces: agent.foreignSurfacesOnDisk(cwd),
@@ -162,7 +164,7 @@ export async function doctorCommand(opts: {
       : {}),
     wired,
   })
-  const result = agent.diagnose([...checks, ...buildFailures])
+  const result = agent.diagnose([...checks, ...buildFailures, ...skills.failures])
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)
   else process.stderr.write(`${agent.renderDiagnosis(result)}\n`)
@@ -170,4 +172,30 @@ export async function doctorCommand(opts: {
   // carries a case the local version could not express: an EMPTY check list exits non-zero, because
   // "no checks ran" is a different fact from "everything passed" — and the boolean collapsed them.
   exitAfterDrain(result.exitCode)
+}
+
+/**
+ * `skillsOnDisk` throws when a skills root cannot be read. That becomes a failed line saying the
+ * comparison did not run, so the rest of the diagnosis still completes.
+ */
+function readSkillsOnDisk<T>(
+  read: (cwd: string, declared: readonly string[]) => T,
+  cwd: string,
+  declared: readonly string[],
+): { found: T | undefined; failures: Check[] } {
+  try {
+    return { found: read(cwd, declared), failures: [] }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return {
+      found: undefined,
+      failures: [
+        {
+          name: 'skills-on-disk',
+          status: 'fail',
+          detail: `cannot read a skills root, so the declared-versus-disk comparison was skipped: ${reason}`,
+        },
+      ],
+    }
+  }
 }

@@ -45,6 +45,8 @@ function describeAddress(url: URL): string {
   return `${url.protocol}//${url.host}${url.pathname}`
 }
 
+const ACKNOWLEDGEMENTS = new Set(['interrupt_ok', 'steer_ok', 'no_turn'])
+
 function isFinal(frame: ControlServerFrame): boolean {
   return frame.type === 'done' || frame.type === 'interrupted' || frame.type === 'error'
 }
@@ -54,6 +56,8 @@ export async function createControlClient(options: {
   authorization: string
   /** Stamps each frame's `arrivedAt` as it comes off the socket, so a caller can order frames against its own events. */
   stamp?: () => number
+  /** Drop interrupt_ok, steer_ok and no_turn from chat(). Default false. */
+  dropAcknowledgements?: boolean
 }): Promise<ControlClient> {
   let url: URL
   try {
@@ -143,6 +147,7 @@ export async function createControlClient(options: {
         const frame = queue.shift()
         if (frame !== undefined) {
           if (frame.session !== undefined && frame.session !== session) continue
+          if (options.dropAcknowledgements === true && ACKNOWLEDGEMENTS.has(frame.type)) continue
           yield frame
           if (isFinal(frame)) return
           continue
