@@ -2,7 +2,6 @@ export {
   archiveSession,
   deleteSession,
   compactSession,
-  legacyRootHint,
   forkSession,
   listSessions,
   readPointerId,
