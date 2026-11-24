@@ -27,6 +27,12 @@ export default defineConfig({
     // Preserve explicit factory exclusions when it supplies repository-relative paths.
     exclude: [...configDefaults.exclude, ...projectRelativeExcludes(process.argv)],
     environment: 'node',
+    // Without this block `expectTypeOf` in tests/*.test-d.ts asserts nothing: no project claimed it.
+    typecheck: {
+      enabled: true,
+      include: ['tests/**/*.test-d.ts'],
+      tsconfig: './tsconfig.test.json',
+    },
     // Routes the CI live and container model through OpenRouter before any test reads it.
     setupFiles: [fileURLToPath(new URL('./tests/support/live-model-setup.ts', import.meta.url))],
     // Read only by a `--coverage` run, so the plain suite is unchanged. The control plane is the
