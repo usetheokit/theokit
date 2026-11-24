@@ -101,3 +101,9 @@ const rootTool = ContextualTool.of(
   // @ts-expect-error — sendDefaults rejects an unknown key
   AgentBuilder.create().sendDefaults({ nope: true })
 }
+
+// ── `.capability()` keeps the type state, including the model requirement ────────────────────
+declare const someCapability: import('../../src/capability/capability.js').Capability
+// @ts-expect-error — `.model()` was never called, so `.build()` still refuses
+AgentBuilder.create().capability(someCapability).build()
+expectTypeOf(AgentBuilder.create().model('m').capability(someCapability).build).toBeFunction()
