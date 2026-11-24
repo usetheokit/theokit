@@ -1,9 +1,8 @@
 import type { BasePlatformAdapter, GatewayHook, PlatformName } from '@theokit/gateway'
 
-import type { TurnAgent } from '../agent-port.js'
-import { maskSecrets } from '@theokit/gateway'
-import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
-import { describeError } from '../control-plane/errors.js'
+import type { EventWithAgent } from './event-agent.js'
+import { createEventRun } from '@theokit/gateway-agent'
+import { leaseFrom } from './event-agent.js'
 import type { EmailTriggerSettings } from './trigger-settings.js'
 
 const HOOK_NAME = 'theoclaw-email-trigger'
@@ -18,7 +17,7 @@ export interface EmailTriggerOptions {
   readonly settings: EmailTriggerSettings
   readonly adapterFor: (platform: PlatformName) => BasePlatformAdapter | undefined
   /** One request boundary per mail, on a tool-less agent that is disposed when the run ends. */
-  readonly withAgent: <R>(work: (agent: TurnAgent) => R | Promise<R>) => Promise<R>
+  readonly withAgent: EventWithAgent
   readonly write: (line: string) => void
   readonly secrets?: readonly string[]
 }
@@ -29,13 +28,6 @@ export interface EmailTrigger {
   idle(): Promise<void>
 }
 
-/** The prompt of one mail; a forged closing tag in the body is defused. */
-function promptOf(settings: EmailTriggerSettings, sender: string, body: string): string {
-  return [settings.instructions, FRAMING, frameUntrusted('email', body, { from: sender })]
-    .filter((part): part is string => part !== undefined)
-    .join('\n\n')
-}
-
 /**
  * The first gateway hook: an e-mail event never reaches the owner policy or the chat session. It
  * starts one isolated run on a tool-less agent, then blocks the event; the summary is sent to the
@@ -44,30 +36,24 @@ function promptOf(settings: EmailTriggerSettings, sender: string, body: string):
 export function createEmailTrigger(options: EmailTriggerOptions): EmailTrigger {
   const { settings, adapterFor, withAgent, write } = options
   const { platform, channelId } = settings.replyTo
-  const pending = new Set<Promise<void>>()
-
-  const run = async (sender: string, body: string): Promise<void> => {
-    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(settings, sender, body)))
-    if (!outcome.ok) {
-      write(`email trigger: run failed (${outcome.failure})`)
-      return
-    }
-    const adapter = adapterFor(platform)
-    const text = maskSecrets(`E-mail from ${sender}:\n${outcome.text}`, options.secrets ?? [])
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, channelId, text)
-    if (failure !== undefined) write(`email trigger: the summary was not delivered (${failure})`)
-  }
+  const mail = createEventRun({
+    name: 'email',
+    frameTag: 'email',
+    instructions: [settings.instructions, FRAMING].filter((part): part is string => part !== undefined).join('\n\n'),
+    agent: leaseFrom(withAgent),
+    deliverTo: () => ({ adapter: adapterFor(platform), channelId }),
+    formatReply: (answer, attributes) => `E-mail from ${attributes?.from ?? 'unknown'}:\n${answer}`,
+    secrets: options.secrets ?? [],
+    write,
+  })
 
   const hook: GatewayHook = {
     name: HOOK_NAME,
     pre_inbound({ event }) {
       if ((event.platform as string) !== 'email') return undefined
-      const task = run(event.sender.id, event.text)
-        .catch((error: unknown) => write(`email trigger: run failed (${describeError(error)})`))
-        .finally(() => pending.delete(task))
-      pending.add(task)
+      void mail.run(event.text, { from: event.sender.id })
       return { block: true }
     },
   }
-  return { hook, idle: async () => void (await Promise.all([...pending])) }
+  return { hook, idle: () => mail.idle() }
 }

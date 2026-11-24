@@ -1,10 +1,11 @@
 import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { createMcpEventSubscriber } from '@theokit/sdk/mcp-events'
-import type { McpEventDelivery, McpEventSubscriber } from '@theokit/sdk/mcp-events'
+import type { McpEventSubscriber } from '@theokit/sdk/mcp-events'
 
-import type { TurnAgent } from '../agent-port.js'
-import { maskSecrets } from '@theokit/gateway'
-import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
+import { leaseFrom } from './event-agent.js'
+import type { EventWithAgent } from './event-agent.js'
+import { createEventRun } from '@theokit/gateway-agent'
+import type { EventRun } from '@theokit/gateway-agent'
 import { describeError } from '../control-plane/errors.js'
 import type { McpEventsSettings } from './mcp-events-settings.js'
 
@@ -21,7 +22,7 @@ export interface McpEventsOptions {
   readonly settings: McpEventsSettings
   readonly adapterFor: (platform: PlatformName) => BasePlatformAdapter | undefined
   /** One request boundary per event, on a tool-less agent disposed when the run ends. */
-  readonly withAgent: <R>(work: (agent: TurnAgent) => R | Promise<R>) => Promise<R>
+  readonly withAgent: EventWithAgent
   readonly write: (line: string) => void
   readonly secrets?: readonly string[]
   /** Tests inject a subscriber factory; the process uses the SDK's. */
@@ -34,13 +35,6 @@ export interface McpEvents {
   stop(): Promise<void>
 }
 
-function promptOf(settings: McpEventsSettings, server: string, event: Record<string, unknown>): string {
-  const body = JSON.stringify(event).slice(0, MAX_EVENT_CHARS)
-  return [settings.instructions, FRAMING, frameUntrusted('mcp-event', body, { server })]
-    .filter((part): part is string => part !== undefined)
-    .join('\n\n')
-}
-
 /**
  * Subscribe to the events of each configured MCP server. A delivery the SDK authenticated posts
  * "event received" to the owner's chat, then starts one tool-less run with the event as untrusted
@@ -49,24 +43,26 @@ function promptOf(settings: McpEventsSettings, server: string, event: Record<str
 export async function startMcpEvents(options: McpEventsOptions): Promise<McpEvents> {
   const { settings, adapterFor, write } = options
   const { platform, channelId } = settings.replyTo
-  const pending = new Set<Promise<void>>()
   const subscribers: McpEventSubscriber[] = []
   const create = options.createSubscriber ?? createMcpEventSubscriber
 
-  const post = async (text: string): Promise<void> => {
-    const adapter = adapterFor(platform)
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, channelId, maskSecrets(text, options.secrets ?? []))
-    if (failure !== undefined) write(`mcp events: the message was not delivered (${failure})`)
-  }
-
-  const handle = async (server: string, delivery: McpEventDelivery): Promise<void> => {
-    await post(`event received from ${server}`)
-    const outcome = await options.withAgent((agent) => runAgentText(agent, promptOf(settings, server, delivery.event)))
-    if (!outcome.ok) {
-      write(`mcp events: ${server}: run failed (${outcome.failure})`)
-      return
-    }
-    await post(`${server}:\n${outcome.text}`)
+  const runs = new Map<string, EventRun>()
+  const runFor = (name: string): EventRun => {
+    const existing = runs.get(name)
+    if (existing !== undefined) return existing
+    const created = createEventRun({
+      name: `mcp events: ${name}`,
+      frameTag: 'mcp-event',
+      instructions: [settings.instructions, FRAMING].filter((part): part is string => part !== undefined).join('\n\n'),
+      agent: leaseFrom(options.withAgent),
+      deliverTo: () => ({ adapter: adapterFor(platform), channelId }),
+      announce: (attributes) => `event received from ${attributes?.server ?? name}`,
+      formatReply: (answer, attributes) => `${attributes?.server ?? name}:\n${answer}`,
+      secrets: options.secrets ?? [],
+      write,
+    })
+    runs.set(name, created)
+    return created
   }
 
   for (const { name, server } of settings.servers) {
@@ -81,10 +77,7 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
       await subscriber.subscribe({
         ...(settings.events === undefined ? {} : { events: [...settings.events] }),
         onEvent: (delivery) => {
-          const task = handle(name, delivery)
-            .catch((error: unknown) => write(`mcp events: ${name}: run failed (${describeError(error)})`))
-            .finally(() => pending.delete(task))
-          pending.add(task)
+          void runFor(name).run(JSON.stringify(delivery.event).slice(0, MAX_EVENT_CHARS), { server: name })
         },
       })
       subscribers.push(subscriber)
@@ -96,7 +89,7 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
   }
 
   return {
-    idle: async () => void (await Promise.all([...pending])),
+    idle: async () => void (await Promise.all([...runs.values()].map((run) => run.idle()))),
     stop: async () => {
       await Promise.all(subscribers.map((subscriber) => subscriber.close().catch(() => undefined)))
     },
