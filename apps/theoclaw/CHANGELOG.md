@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Voice replies read the note with the gateway's `event.audio.read()` and send the spoken reply as an `audio` attachment through `ctx.reply`, so the Telegram adapter's own Bot API root is used; the app's `getFile`, file download and `sendVoice` calls are gone. The attachment is `audio/mpeg`, because plugin-voice 0.12.0 always synthesizes MP3. A failed attachment still falls back to text once (#2934).
 - The sessionless turn builds its usage record from the `usage` of `runAgentTurn`'s outcome and no longer wraps the agent to catch `wait()`; the record is the same. A run that reports neither token count is `in=0 out=0`, unpriced, even if it reported a cost (#2952).
 - `installPlugin` calls the SDK's `installWorkspacePlugin` (with `replace`), and `plugins/manifest.ts` is gone in favour of the SDK's `parsePluginManifest`; the `trustFile` input is removed because the SDK resolves its own trust record. A trust record that cannot be parsed now fails the install instead of being replaced (#2940).
 - The computer live test tells the model the code is the six capital characters in the large heading, and renders the typed text small and monospace, so the describer no longer reports the typed word as the code (#2882).
