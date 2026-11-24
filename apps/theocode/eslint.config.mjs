@@ -66,8 +66,8 @@ export default tseslint.config(
   // What this buys, stated precisely so nobody "finishes the job" by accident: `tools/` now gets
   // `js.configs.recommended` and the fail-fast rule below. It does NOT get the complexity caps in
   // the `**/*.{ts,tsx}` block, and that is deliberate. Running them over `tools/` reports 20
-  // pre-existing violations (`check-sdk-pin.mjs` `disagreement` at complexity 20,
-  // `report-theokit-staleness.mjs` `main` at 17, four files past `max-lines-per-function`). The
+  // pre-existing violations (`check-sdk-pin.mjs` `disagreement` at complexity 20, four files past
+  // `max-lines-per-function`). The
   // header of this file states the bar every cap here was set to meet: measured zero on this tree,
   // so it freezes a good state instead of announcing debt. Widening those caps to `tools/` would
   // announce debt, which is a refactor decision and not a lint decision.

@@ -96,11 +96,8 @@ function build(): TuiRoot {
 
   const transport = createChatTransport({
     onHookVeto: vetoRelay.emit,
-    getEffort: () => session.effort(),
     getSessionId: () => session.session(),
     getSessionPty: () => ptyOwner,
-    takePendingImages: () => session.takeImages(),
-    takePendingModel: () => session.takeModel(),
     credential,
   })
 

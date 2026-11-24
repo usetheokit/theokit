@@ -1,4 +1,4 @@
-/** The patched `createThemeController` (see patches/@theokit__tui@0.83.4.patch), tested directly. */
+/** The toolkit's `createThemeController` (object signature), tested directly as TheoCode uses it. */
 import { describe, expect, it, vi } from 'vitest'
 
 import { createThemeController } from '@theokit/tui'
@@ -14,12 +14,12 @@ describe('createThemeController', () => {
       { base: 'dark', override: { accent: '#123456' } } as TheoThemeProp,
     ],
   ])('holds %s', (_n, initial) => {
-    expect(createThemeController(initial).get()).toBe(initial)
+    expect(createThemeController({ initial }).get()).toBe(initial)
   })
 
   it('notifies listeners on set, and not for the same object', () => {
     const first = { base: 'dark', override: {} } as TheoThemeProp
-    const c = createThemeController(first)
+    const c = createThemeController({ initial: first })
     const listener = vi.fn()
     c.subscribe(listener)
     c.set(first)
@@ -31,7 +31,7 @@ describe('createThemeController', () => {
   })
 
   it('stops notifying after unsubscribe', () => {
-    const c = createThemeController('dark')
+    const c = createThemeController({ initial: 'dark' })
     const listener = vi.fn()
     const off = c.subscribe(listener)
     off()
@@ -40,8 +40,8 @@ describe('createThemeController', () => {
   })
 
   it('rejects an invalid theme prop', () => {
-    expect(() => createThemeController('nope' as TheoThemeProp)).toThrow(/unknown theme "nope"/)
-    const c = createThemeController('dark')
+    expect(() => createThemeController({ initial: 'nope' as TheoThemeProp })).toThrow(/unknown theme "nope"/)
+    const c = createThemeController({ initial: 'dark' })
     expect(() => c.set('nope' as TheoThemeProp)).toThrow(/unknown theme "nope"/)
     expect(c.get()).toBe('dark')
   })

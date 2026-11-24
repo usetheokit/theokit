@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import type { CustomTool } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mcpRelaySecrets, readMcpRelaySettings, startMcpRelayConnector, type McpRelayConnector, type McpRelayJob } from '../src/mcp-relay/connector.js'
+import { startMcpRelayConnector, type McpRelayConnector } from '@theokit/agents/mcp-relay'
+import { mcpRelayDispatch, mcpRelaySecrets, readMcpRelaySettings } from '../src/mcp-relay/command.js'
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
@@ -20,6 +21,13 @@ afterEach(async () => {
 
 const call = (name: string, args: unknown) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
 
+interface RelayJob {
+  id: string
+  client: string
+  scopes: string[]
+  body: unknown
+}
+
 interface RelayReply {
   error?: unknown
   result: { isError?: boolean; tools: Array<{ name: string }> }
@@ -30,13 +38,13 @@ interface FakeRelay {
   readonly responses: Array<{ id: string; response: RelayReply }>
   readonly auth: string[]
   readonly polls: () => number
-  readonly queue: (job: McpRelayJob) => void
+  readonly queue: (job: RelayJob) => void
   readonly failNext: (mode: 500 | 'drop', times?: number) => void
   readonly answered: (id: string) => Promise<RelayReply>
 }
 
 async function fakeRelay(): Promise<FakeRelay> {
-  const jobs: McpRelayJob[] = []
+  const jobs: RelayJob[] = []
   const responses: FakeRelay['responses'] = []
   const auth: string[] = []
   const failures: Array<500 | 'drop'> = []
@@ -86,9 +94,10 @@ function connect(relay: FakeRelay, tools?: () => readonly CustomTool[]) {
   mkdirSync(join(h.io.cwd, '.theoclaw'), { recursive: true })
   const logs: string[] = []
   const connector: McpRelayConnector = startMcpRelayConnector({
-    settings: { url: relay.url, token: TOKEN },
-    controlTools: tools ?? (() => buildTools(toolSettings)),
-    toolSettings,
+    url: relay.url,
+    token: TOKEN,
+    tools: tools ?? (() => buildTools(toolSettings)),
+    dispatch: mcpRelayDispatch(toolSettings),
     log: (l) => logs.push(l),
     backoffMs: { min: 5, max: 20 },
   })
@@ -100,28 +109,28 @@ describe('MCP relay connector', () => {
   it('answers an allowed tools/call through /instance/respond', async () => {
     const relay = await fakeRelay()
     const { logs } = connect(relay)
-    relay.queue({ id: 'a', client: 'c', allowedTools: ['list_dir'], body: call('list_dir', { path: '.' }) })
+    relay.queue({ id: 'a', client: 'c', scopes: ['list_dir'], body: call('list_dir', { path: '.' }) })
     expect(JSON.stringify(await relay.answered('a'))).toContain('hello.txt')
     expect(new Set(relay.auth)).toEqual(new Set([`Bearer ${TOKEN}`]))
     expect(logs).toEqual(['mcp-relay: connected'])
   })
 
-  it('refuses a tool outside allowedTools without running its handler', async () => {
+  it('refuses a tool outside scopes without running its handler', async () => {
     const relay = await fakeRelay()
     let ran = 0
     connect(relay, () => buildTools(resolveToolSettings({}, process.cwd())).map((t) => (t.name === 'list_dir' ? ({ ...t, handler: () => (ran++, 'x') } as CustomTool) : t)))
-    relay.queue({ id: 'b', client: 'c', allowedTools: ['read_file'], body: call('list_dir', { path: '.' }) })
+    relay.queue({ id: 'b', client: 'c', scopes: ['read_file'], body: call('list_dir', { path: '.' }) })
     const response = await relay.answered('b')
     expect(response.error ?? response.result.isError).toBeTruthy()
     expect(ran).toBe(0)
   })
 
-  it('lists only the allowed tools, and all of them for null', async () => {
+  it('lists only the allowed tools, and every tool when every scope is granted', async () => {
     const relay = await fakeRelay()
     connect(relay)
     const list = { jsonrpc: '2.0', id: 2, method: 'tools/list' }
-    relay.queue({ id: 'l1', client: 'c', allowedTools: ['list_dir'], body: list })
-    relay.queue({ id: 'l2', client: 'c', allowedTools: null, body: list })
+    relay.queue({ id: 'l1', client: 'c', scopes: ['list_dir'], body: list })
+    relay.queue({ id: 'l2', client: 'c', scopes: buildTools(resolveToolSettings({}, process.cwd())).map((t) => t.name), body: list })
     const names = (r: RelayReply) => r.result.tools.map((t: { name: string }) => t.name)
     expect(names(await relay.answered('l1'))).toEqual(['list_dir'])
     expect(names(await relay.answered('l2')).length).toBeGreaterThan(1)
@@ -130,7 +139,7 @@ describe('MCP relay connector', () => {
   it('vetoes a path inside the state directory', async () => {
     const relay = await fakeRelay()
     connect(relay)
-    relay.queue({ id: 'v', client: 'c', allowedTools: null, body: call('list_dir', { path: '../.theoclaw' }) })
+    relay.queue({ id: 'v', client: 'c', scopes: buildTools(resolveToolSettings({}, process.cwd())).map((t) => t.name), body: call('list_dir', { path: '../.theoclaw' }) })
     expect(JSON.stringify(await relay.answered('v'))).toContain('.theoclaw directory')
   })
 
@@ -140,7 +149,7 @@ describe('MCP relay connector', () => {
     relay.failNext('drop')
     const { logs } = connect(relay)
     await new Promise((r) => setTimeout(r, 100))
-    relay.queue({ id: 'late', client: 'c', allowedTools: ['list_dir'], body: call('list_dir', { path: '.' }) })
+    relay.queue({ id: 'late', client: 'c', scopes: ['list_dir'], body: call('list_dir', { path: '.' }) })
     expect(JSON.stringify(await relay.answered('late'))).toContain('hello.txt')
     expect(logs.join('\n')).not.toContain(TOKEN)
   })
