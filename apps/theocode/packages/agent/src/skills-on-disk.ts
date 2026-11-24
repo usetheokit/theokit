@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -156,11 +156,27 @@ export function skillsOnDisk(
  * loaded. An absent directory is the common case, not an error.
  */
 function bundleSkillRoots(pluginsDir: string): string[] {
-  if (!existsSync(pluginsDir)) return []
-  // Stray files (README, JSON) beside the bundles are not bundles; only directories count.
-  return readdirSync(pluginsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(pluginsDir, entry.name, 'skills'))
+  let names: string[]
+  try {
+    names = readdirSync(pluginsDir)
+  } catch (error) {
+    if (isMissing(error)) return []
+    throw error
+  }
+  // Stray files (README, JSON) beside the bundles are not bundles. statSync follows symlinks, so a
+  // symlinked bundle still counts and a dangling link does not.
+  return names
+    .filter((name) => isDirectory(join(pluginsDir, name)))
+    .map((name) => join(pluginsDir, name, 'skills'))
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory()
+  } catch (error) {
+    if (isMissing(error)) return false
+    throw error
+  }
 }
 
 /**
