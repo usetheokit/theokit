@@ -9,7 +9,7 @@ import { turnDiff } from '../../src/presets-entry.js'
 
 describe('turnDiff', () => {
   let dir: string
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' })
+  const git = (...args: string[]) => execFileSync('/usr/bin/git', args, { cwd: dir, stdio: 'pipe' })
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'turn-diff-'))
     git('init', '-q')
