@@ -26,7 +26,7 @@ import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { z } from 'zod'
 
 import type { ProjectDocParts } from '../context/agents-md.js'
-import { MAX_AGGREGATE, agentsMdChain, composeInstructions, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
+import { MAX_AGGREGATE, agentsMdChain, composeTheoCodePrompt, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
 import type { InlineSkill } from '@theokit/sdk'
 import {
@@ -649,7 +649,7 @@ function baseAgent(ctx: {
   // reported by `bothRuleRoots` upstream, this one acts on the rendered persona and used to be
   // announced in a `warn` string nothing could read, so `/status` reported the rules as fully
   // loaded over a corpus this call had already trimmed.
-  const composed = composeInstructions(
+  const composed = composeTheoCodePrompt(
     // M?? — an output style REPLACES the built-in instructions unless its frontmatter says
     // `keep-coding-instructions: true`. `overrides.baseInstructions` still wins over both: it
     // is a caller passing an explicit persona, which is a stronger statement than a file.
