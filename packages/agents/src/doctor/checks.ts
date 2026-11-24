@@ -104,24 +104,36 @@ function skillNamesIn(root: string): string[] {
 /**
  * Compare the skills a config declares with the ones on disk. `roots` are skills directories; a
  * skill is a subdirectory holding a `SKILL.md`. A missing root is ordinary; other read errors throw.
- * Which roots count as foreign or bundled stays the caller's.
+ * Which roots count as foreign or bundled stays the caller's. `undeclared` and `missing` carry the
+ * names themselves, so a caller never has to parse `detail`.
  */
 function skillsInventory(options: {
   declared: readonly string[]
   roots: readonly string[]
-}): Check {
+}): Check & {
+  /** Names on disk and not declared, sorted. */
+  readonly undeclared: readonly string[]
+  /** Names declared and not on disk, sorted. */
+  readonly missing: readonly string[]
+} {
   const name = 'skills'
   const onDisk = new Set(options.roots.flatMap(skillNamesIn))
   const declared = new Set(options.declared)
   const undeclared = [...onDisk].filter((n) => !declared.has(n)).sort((a, b) => a.localeCompare(b))
   const missing = [...declared].filter((n) => !onDisk.has(n)).sort((a, b) => a.localeCompare(b))
   if (undeclared.length === 0 && missing.length === 0) {
-    return { name, status: 'ok', detail: `${String(declared.size)} declared, all on disk` }
+    return {
+      name,
+      status: 'ok',
+      detail: `${String(declared.size)} declared, all on disk`,
+      undeclared,
+      missing,
+    }
   }
   const parts: string[] = []
   if (undeclared.length > 0) parts.push(`on disk, not declared: ${undeclared.join(', ')}`)
   if (missing.length > 0) parts.push(`declared, not on disk: ${missing.join(', ')}`)
-  return { name, status: 'warn', detail: parts.join('; ') }
+  return { name, status: 'warn', detail: parts.join('; '), undeclared, missing }
 }
 
 export const checks = { credential, capability, settingsReport, leftovers, skillsInventory }

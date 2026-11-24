@@ -239,6 +239,36 @@ describe('#67 — declared against what is on disk', () => {
     expect(skillsOnDisk(cwd, []).bundledSkills).toEqual([])
   })
 
+  it('test_a_file_under_plugins_is_not_a_bundle_and_does_not_hide_one', () => {
+    const plugins = join(cwd, '.claude', 'plugins')
+    mkdirSync(join(plugins, 'demo', 'skills', 'bundled'), { recursive: true })
+    writeFileSync(join(plugins, 'demo', 'skills', 'bundled', 'SKILL.md'), 'x\n')
+    writeFileSync(join(plugins, 'README.md'), 'not a bundle\n')
+    writeFileSync(join(plugins, 'skills'), 'a file named like a skills dir\n')
+
+    expect(skillsOnDisk(cwd, []).bundledSkills).toEqual(['bundled'])
+  })
+
+  it('test_a_symlinked_bundle_directory_still_contributes_and_a_dangling_link_is_ignored', () => {
+    const plugins = join(cwd, '.claude', 'plugins')
+    const real = join(cwd, 'elsewhere')
+    mkdirSync(join(real, 'skills', 'linked'), { recursive: true })
+    writeFileSync(join(real, 'skills', 'linked', 'SKILL.md'), 'x\n')
+    mkdirSync(plugins, { recursive: true })
+    symlinkSync(real, join(plugins, 'viaLink'))
+    symlinkSync(join(cwd, 'nowhere'), join(plugins, 'dangling'))
+
+    expect(skillsOnDisk(cwd, []).bundledSkills).toEqual(['linked'])
+  })
+
+  it('test_a_plugins_path_that_is_a_file_is_no_bundle_and_does_not_throw', () => {
+    mkdirSync(join(cwd, '.claude'), { recursive: true })
+    writeFileSync(join(cwd, '.claude', 'plugins'), 'a file where the directory goes\n')
+
+    expect(skillsOnDisk(cwd, ['x']).bundledSkills).toEqual([])
+    expect(skillsOnDisk(cwd, ['x']).declaredButAbsent).toEqual(['x'])
+  })
+
   it('test_no_skills_anywhere_is_not_an_error', () => {
     expect(skillsOnDisk(cwd, [])).toEqual({
       declaredButAbsent: [],
