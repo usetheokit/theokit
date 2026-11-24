@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -123,7 +123,7 @@ export function skillsOnDisk(
   const inForeignRoot = skillNamesIn(join(cwd, FOREIGN_ROOT, 'skills'))
   return {
     foreignRootSkills: [...new Set(inForeignRoot)].sort(),
-      bundledSkills: [...inBundles].sort(),
+    bundledSkills: [...inBundles].sort(),
     declaredButAbsent: [...named]
       .filter((name) => !inProject.has(name) && !inUserRoot.has(name) && !inBundles.has(name))
       .sort(),
@@ -152,7 +152,9 @@ function bundledSkillNames(pluginsDir: string): string[] {
   } catch {
     return []
   }
-  return bundles.flatMap((bundle) => skillNamesIn(join(pluginsDir, bundle, 'skills')))
+  return bundles
+    .filter((bundle) => isDirectory(join(pluginsDir, bundle)))
+    .flatMap((bundle) => skillNamesIn(join(pluginsDir, bundle, 'skills')))
 }
 
 /**
@@ -170,4 +172,13 @@ function skillNamesIn(dir: string): string[] {
     return []
   }
   return entries.filter((name) => existsSync(join(dir, name, 'SKILL.md')))
+}
+
+/** A directory, following symlinks. A plugin file is not a bundle, and a dangling link is nothing. */
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
 }
