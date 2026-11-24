@@ -6,7 +6,7 @@
  * `✓ credential: present`. A diagnostic whose whole job is to say whether the product is ready to
  * run reported a green tick on the one thing that was going to fail first.
  */
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -47,9 +47,7 @@ function credentialFile(contents: string): string {
 
 describe('credentialState', () => {
   it('test_a_missing_file_is_absent', () => {
-    expect(stateAt(join(tmpdir(), 'theocode-does-not-exist', 'auth.json'), NOW)).toBe(
-      'absent',
-    )
+    expect(stateAt(join(tmpdir(), 'theocode-does-not-exist', 'auth.json'), NOW)).toBe('absent')
   })
 
   it('test_a_file_that_does_not_parse_is_unreadable', () => {
@@ -59,9 +57,7 @@ describe('credentialState', () => {
   it('test_a_credential_with_no_expiry_is_present', () => {
     // An API key has no expiry at all. Treating a missing field as expired would warn every key
     // user about a problem they cannot have.
-    expect(stateAt(credentialFile('{"type":"api","provider":"openai"}'), NOW)).toBe(
-      'present',
-    )
+    expect(stateAt(credentialFile('{"type":"api","provider":"openai"}'), NOW)).toBe('present')
   })
 
   // The three fixtures below gained `provider` when #823 landed. They describe credentials, and a
@@ -110,9 +106,9 @@ describe('credentialState', () => {
   it('test_a_non_numeric_expiry_is_not_read_as_expired', () => {
     // A string date would be `<= now` under no comparison that means anything. Refusing to guess
     // is the difference between a diagnostic and a rumour.
-    expect(
-      stateAt(credentialFile('{"provider":"openai","expires":"2020-01-01"}'), NOW),
-    ).toBe('present')
+    expect(stateAt(credentialFile('{"provider":"openai","expires":"2020-01-01"}'), NOW)).toBe(
+      'present',
+    )
   })
 })
 
@@ -229,6 +225,28 @@ describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
     const mcp = JSON.parse(out).checks.find((c: { name: string }) => c.name === 'mcp')
     expect(mcp.detail).toContain('zebra1894')
   })
+
+  it.skipIf(process.getuid?.() === 0)(
+    'test_an_unreadable_skills_root_is_a_failed_line_and_a_nonzero_exit',
+    async () => {
+      const project = mkdtempSync(join(tmpdir(), 'theocode-doctor-skills-'))
+      roots.push(project)
+      const dir = join(project, '.theokit', 'skills')
+      mkdirSync(dir, { recursive: true })
+      chmodSync(dir, 0o000)
+      try {
+        const { out, code } = await runDoctor(project)
+        const row = JSON.parse(out).checks.find(
+          (c: { name: string }) => c.name === 'skills-on-disk',
+        )
+        expect(row.status).toBe('fail')
+        expect(row.detail).toContain('EACCES')
+        expect(code).not.toBe(0)
+      } finally {
+        chmodSync(dir, 0o755)
+      }
+    },
+  )
 
   it('test_a_build_failure_is_a_failed_check_not_an_unhandled_rejection', async () => {
     const actual = await vi.importActual<typeof import('@theocode/agent')>('@theocode/agent')

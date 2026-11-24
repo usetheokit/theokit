@@ -2,6 +2,8 @@ import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { checks } from '@theokit/agents/doctor'
+
 import { DEFAULT_HOME_DIR } from './config/home-dir.js'
 
 /** The project roots a skill may live under, in the order `#72` established for the other surfaces. */
@@ -110,6 +112,16 @@ export function skillsOnDisk(
   declared: readonly string[],
   home: string = homedir(),
 ): SkillsOnDisk {
+  // The framework's inventory reads every root that can satisfy a declaration and throws on any
+  // error but ENOENT, so an unreadable root surfaces here instead of reading as empty. Its result is
+  // not parsed: the lists below keep the app's own root classification.
+  checks.skillsInventory({
+    declared,
+    roots: [
+      ...ROOTS.map((root) => join(cwd, root, 'skills')),
+      join(home, DEFAULT_HOME_DIR, 'skills'),
+    ],
+  })
   const inProject = new Set(ROOTS.flatMap((root) => skillNamesIn(join(cwd, root, 'skills'))))
   // A root can NEST bundles, and a bundle carries skills of its own. Measured 2026-09-06: a skill at
   // `.claude/plugins/<bundle>/skills/<name>/SKILL.md` answers on the built binary, and this row still
@@ -123,7 +135,7 @@ export function skillsOnDisk(
   const inForeignRoot = skillNamesIn(join(cwd, FOREIGN_ROOT, 'skills'))
   return {
     foreignRootSkills: [...new Set(inForeignRoot)].sort(),
-      bundledSkills: [...inBundles].sort(),
+    bundledSkills: [...inBundles].sort(),
     declaredButAbsent: [...named]
       .filter((name) => !inProject.has(name) && !inUserRoot.has(name) && !inBundles.has(name))
       .sort(),
@@ -149,8 +161,9 @@ function bundledSkillNames(pluginsDir: string): string[] {
   let bundles: string[]
   try {
     bundles = readdirSync(pluginsDir)
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissing(error)) return []
+    throw error
   }
   return bundles.flatMap((bundle) => skillNamesIn(join(pluginsDir, bundle, 'skills')))
 }
@@ -166,8 +179,14 @@ function skillNamesIn(dir: string): string[] {
   let entries: string[]
   try {
     entries = readdirSync(dir)
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissing(error)) return []
+    throw error
   }
   return entries.filter((name) => existsSync(join(dir, name, 'SKILL.md')))
+}
+
+function isMissing(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'ENOENT' || code === 'ENOTDIR'
 }

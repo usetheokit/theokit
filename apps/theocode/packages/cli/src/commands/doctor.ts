@@ -112,6 +112,19 @@ export async function doctorCommand(opts: {
   // that throws becomes a failed check instead of an unhandled rejection.
   const buildFailures = await buildFailureOf(agent, cwd, (w) => (wired = w))
 
+  // An unreadable skills root throws from `skillsOnDisk`; it becomes a failed line, not a crash.
+  let skillsFound: ReturnType<typeof skillsOnDisk> | undefined
+  const skillsFailures: { name: string; status: 'fail'; detail: string }[] = []
+  try {
+    skillsFound = skillsOnDisk(cwd, cfg.skills)
+  } catch (error) {
+    skillsFailures.push({
+      name: 'skills-on-disk',
+      status: 'fail',
+      detail: `cannot read a skills root: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
+
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
     cwd,
@@ -135,7 +148,7 @@ export async function doctorCommand(opts: {
     strayCredentials: strayCredentialFiles(homedir(), process.env),
     // #67 — the skills row is the DECLARED list, so it ticked green for a name with no SKILL.md and
     // said nothing about a file no configuration named. This holds the two against each other.
-    skillsOnDisk: skillsOnDisk(cwd, cfg.skills),
+    ...(skillsFound !== undefined ? { skillsOnDisk: skillsFound } : {}),
     // B-175 — the four foreign surfaces no check named. Measured here rather than inside
     // `collectChecks`, which does no I/O by design, exactly like `skillsOnDisk` above it.
     foreignSurfaces: agent.foreignSurfacesOnDisk(cwd),
@@ -162,7 +175,7 @@ export async function doctorCommand(opts: {
       : {}),
     wired,
   })
-  const result = agent.diagnose([...checks, ...buildFailures])
+  const result = agent.diagnose([...checks, ...buildFailures, ...skillsFailures])
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)
   else process.stderr.write(`${agent.renderDiagnosis(result)}\n`)
