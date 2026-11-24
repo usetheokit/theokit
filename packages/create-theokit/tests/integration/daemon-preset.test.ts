@@ -1,6 +1,16 @@
 /* eslint-disable sonarjs/no-os-command-from-path -- the test drives the docker CLI */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, mkdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  mkdirSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -93,14 +103,45 @@ describe('--preset=daemon scaffold', () => {
     ).toThrow(/standalone/)
   })
 
-  it.skipIf(!dockerUp)(
+  it.skipIf(!dockerUp || !hostBuilt)(
     'the image keeps config and state on the /data volume',
     () => {
       const tag = `ctk-daemon-test:${String(process.pid)}`
       const volume = `ctk-daemon-vol-${String(process.pid)}`
       const docker = (...a: string[]): string => execFileSync('docker', a, { encoding: 'utf-8' })
+      // The template names a host version this release publishes; pack the workspace host and
+      // install that tarball in the image instead of asking the registry for it.
+      const packDir = mkdtempSync(join(root, 'pack-'))
+      execFileSync('pnpm', ['pack', '--pack-destination', packDir], { cwd: HOST_DIR })
+      const tgz = readdirSync(packDir).find((f) => f.endsWith('.tgz'))!
+      renameSync(join(packDir, tgz), join(dir, 'theokit-host.tgz'))
+      const pkgPath = join(dir, 'package.json')
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+        dependencies: Record<string, string>
+      }
+      pkg.dependencies['@theokit/host'] = 'file:./theokit-host.tgz'
+      writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+      const dockerfile = join(dir, 'Dockerfile')
+      const original = readFileSync(dockerfile, 'utf-8')
+      const adapted = original
+        .replace('COPY package.json ./', 'COPY package.json theokit-host.tgz ./')
+        .replace('RUN npm install', 'RUN npm install --legacy-peer-deps')
+      expect(adapted).not.toBe(original)
+      writeFileSync(dockerfile, adapted)
       try {
         docker('build', '-t', tag, dir)
+        expect(
+          docker(
+            'run',
+            '--rm',
+            '--entrypoint',
+            'cat',
+            tag,
+            'node_modules/@theokit/host/package.json',
+          ),
+        ).toContain(
+          `"version": "${(JSON.parse(readFileSync(join(HOST_DIR, 'package.json'), 'utf-8')) as { version: string }).version}"`,
+        )
         docker('run', '--rm', '-v', `${volume}:/data`, tag, 'onboard', '--yes')
         const id = docker('run', '-d', '-v', `${volume}:/data`, tag).trim()
         try {
