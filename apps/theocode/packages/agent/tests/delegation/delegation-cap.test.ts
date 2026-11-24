@@ -23,15 +23,18 @@ describe('a delegated run is cancelled when its cap elapses', () => {
   it('test_the_member_in_flight_is_cancelled_and_the_tool_reports_delegation_timeout', async () => {
     vi.useFakeTimers()
     const cancelled: string[] = []
-    members.list = [
-      fakeMember({ name: 'explorer', never: true, cancelled }),
-      fakeMember({ name: 'worker', cancelled }),
-    ]
+    const explorer = fakeMember({ name: 'explorer', never: true, cancelled })
+    members.list = [explorer, fakeMember({ name: 'worker', cancelled })]
 
     const outcome = runTool().then(
       () => undefined,
       (e: unknown) => e as Error & { code?: string },
     )
+    // The cap clock starts when the squad runs; let the explorer be in flight before advancing it.
+    for (let i = 0; i < 50 && explorer.send.mock.calls.length === 0; i += 1) {
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    expect(explorer.send).toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(DELEGATION_CAP_MS)
     const error = await outcome
 

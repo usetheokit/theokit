@@ -41,10 +41,14 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describeCommandFailure, runWithOneRetry } from './describe-command-failure.mjs'
+import {
+  describeCommandFailure,
+  missingPackage,
+  peerSpecs,
+  runWithOneRetry,
+  specForMissing,
+} from './describe-command-failure.mjs'
 
-const SDK_NAME = '@theokit/sdk'
-const PROBE_SDK_VERSION = '12'
 const only = process.argv[2]
 const pkgs = readdirSync('packages', { withFileTypes: true })
   .filter((e) => e.isDirectory())
@@ -108,20 +112,7 @@ for (const dir of pkgs) {
     // PEERS TOO. `@theokit/agents/client/react` declares `react: >=18` as a peer, and without it
     // the import fails for something the CONSUMER owes, not the package. Probing without peers
     // reports the package broken for honouring the contract it declared.
-    const peers = Object.entries(manifest.peerDependencies ?? {})
-      .filter(([n]) => !n.startsWith('@theokit/'))
-      .map(([n, r]) => `${n}@${String(r).replace(/^>=/, '')}`)
-    // The SDK is installed at 12, the lowest version every tarball admits: the host's peer is
-    // `>=12.0.0 <14` (the rest are `>=5.32.0 <14`), so an SDK below 12 is refused with ERESOLVE.
-    // Optional `@theokit/*` peers that are not packed here (the gateway packages the host's
-    // channel assistant imports) come from the registry, at the range the manifest declares.
-    const registryPeers = Object.entries(manifest.peerDependencies ?? {})
-      .filter(([n]) => n.startsWith('@theokit/') && n !== SDK_NAME && !siblingTarballs.has(n))
-      .map(([n, r]) => `${n}@${String(r)}`)
-    const sdk =
-      SDK_NAME in { ...manifest.peerDependencies, ...manifest.dependencies }
-        ? [`${SDK_NAME}@${PROBE_SDK_VERSION}`]
-        : []
+    const peers = peerSpecs(manifest, new Set(siblingTarballs.keys()))
     // Args built first so the CALL fits one line. `eslint-disable-next-line` binds to the next
     // LINE, and prettier — which lint-staged runs before eslint, for exactly this reason — breaks a
     // long call across lines, leaving the directive on `execFileSync(` and the rule firing on
@@ -137,12 +128,6 @@ for (const dir of pkgs) {
       join(out, tgz),
       ...siblings,
       ...peers,
-      ...sdk,
-      ...registryPeers,
-      // The published gateway packages cap their own `@theokit/sdk` peer at <10, below the host's
-      // floor of 12, so npm cannot reconcile them. The host's range is checked on the tarball's
-      // own peer; the gateway's cap is not this gate's to enforce.
-      ...(registryPeers.length > 0 ? ['--force'] : []),
       '--no-audit',
       '--no-fund',
       '--ignore-scripts',
@@ -163,12 +148,44 @@ for (const dir of pkgs) {
     for (const e of entries) {
       const spec = e === '.' ? manifest.name : `${manifest.name}/${e.slice(2)}`
       checked += 1
-      try {
+      const importOnce = () =>
         execFileSync(
           process.execPath,
           ['--input-type=module', '-e', `import(${JSON.stringify(spec)})`],
           { cwd: out, stdio: ['ignore', 'ignore', 'pipe'], timeout: 60000 },
         )
+      try {
+        // An entry may import an OPTIONAL peer or a peer of that peer. Install what is nobody's
+        // fault but the consumer's and import again; `--legacy-peer-deps` because the specs are
+        // chosen here and the registry's `@theokit/gateway` caps sdk below the host's floor.
+        const installed = new Set()
+        for (;;) {
+          try {
+            importOnce()
+            break
+          } catch (err) {
+            const missing = missingPackage(String(err.stderr ?? ''))
+            const extra =
+              missing === undefined || installed.has(missing)
+                ? undefined
+                : specForMissing(missing, manifest, siblingTarballs)
+            if (extra === undefined) throw err
+            installed.add(missing)
+            execFileSync(
+              // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+              'npm',
+              [
+                'install',
+                extra,
+                '--legacy-peer-deps',
+                '--no-audit',
+                '--no-fund',
+                '--ignore-scripts',
+              ],
+              opts,
+            )
+          }
+        }
       } catch (err) {
         bad += 1
         const msg =
