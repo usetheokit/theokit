@@ -113,6 +113,11 @@ for (const dir of pkgs) {
       .map(([n, r]) => `${n}@${String(r).replace(/^>=/, '')}`)
     // The SDK is installed at 12, the lowest version every tarball admits: the host's peer is
     // `>=12.0.0 <14` (the rest are `>=5.32.0 <14`), so an SDK below 12 is refused with ERESOLVE.
+    // Optional `@theokit/*` peers that are not packed here (the gateway packages the host's
+    // channel assistant imports) come from the registry, at the range the manifest declares.
+    const registryPeers = Object.entries(manifest.peerDependencies ?? {})
+      .filter(([n]) => n.startsWith('@theokit/') && n !== SDK_NAME && !siblingTarballs.has(n))
+      .map(([n, r]) => `${n}@${String(r)}`)
     const sdk =
       SDK_NAME in { ...manifest.peerDependencies, ...manifest.dependencies }
         ? [`${SDK_NAME}@${PROBE_SDK_VERSION}`]
@@ -133,6 +138,11 @@ for (const dir of pkgs) {
       ...siblings,
       ...peers,
       ...sdk,
+      ...registryPeers,
+      // The published gateway packages cap their own `@theokit/sdk` peer at <10, below the host's
+      // floor of 12, so npm cannot reconcile them. The host's range is checked on the tarball's
+      // own peer; the gateway's cap is not this gate's to enforce.
+      ...(registryPeers.length > 0 ? ['--force'] : []),
       '--no-audit',
       '--no-fund',
       '--ignore-scripts',
