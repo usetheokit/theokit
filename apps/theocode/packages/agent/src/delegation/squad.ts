@@ -92,7 +92,7 @@ export function createDelegateToTeamTool(context: TeamContext) {
         },
         (line) => process.stderr.write(line),
       )
-      // The cap cancels the member in flight through the run's signal and resolves `timedOut`.
+      // The cap cancels the member in flight by calling the member run's cancel() and resolves `timedOut`.
       const run = await squad.run(task, { timeoutMs: DELEGATION_CAP_MS })
       if (run.timedOut === true) throw new DelegationExpiredError(DELEGATION_CAP_MS)
       return JSON.stringify({

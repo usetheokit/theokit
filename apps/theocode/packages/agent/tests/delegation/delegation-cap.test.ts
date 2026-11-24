@@ -40,6 +40,36 @@ describe('a delegated run is cancelled when its cap elapses', () => {
     expect((error as { code?: string }).code).toBe('delegation_timeout')
   })
 
+  it('test_cap_expiry_disposes_every_member', async () => {
+    vi.useFakeTimers()
+    const disposed: string[] = []
+    const dispose = (n: string) => async () => {
+      disposed.push(n)
+    }
+    members.list = [
+      fakeMember({ name: 'explorer', never: true, dispose: dispose('explorer') }),
+      fakeMember({ name: 'worker', dispose: dispose('worker') }),
+    ]
+
+    const outcome = runTool().catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(DELEGATION_CAP_MS)
+    await outcome
+
+    expect(disposed.sort()).toEqual(['explorer', 'worker'])
+  })
+
+  it('test_a_member_failing_before_the_cap_is_reported_failed_not_as_a_timeout', async () => {
+    // NEGATIVE CASE: a crash is not a timeout; the operator must not be sent to inspect the tree.
+    members.list = [
+      fakeMember({ name: 'explorer', crash: 'the member agent crashed' }),
+      fakeMember({ name: 'worker' }),
+    ]
+
+    const out = JSON.parse(await runTool()) as { status: string }
+
+    expect(out.status).toBe('failed')
+  })
+
   it('test_work_completing_before_the_cap_returns_its_value', async () => {
     // ANTI-VACUITY FLOOR: timing everything out would satisfy the test above.
     members.list = [fakeMember({ name: 'explorer' }), fakeMember({ name: 'worker' })]

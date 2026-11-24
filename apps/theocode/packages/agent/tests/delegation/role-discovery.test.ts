@@ -32,7 +32,12 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true })
 })
 
-function writeRole(root: string, name: string, description = 'a role', memory?: string): void {
+function writeRole(
+  root: string,
+  name: string,
+  description = 'a role',
+  memory?: string,
+): void {
   mkdirSync(join(root, '.theokit', 'agents'), { recursive: true })
   const scope = memory === undefined ? '' : `memory: ${memory}\n`
   writeFileSync(
@@ -60,9 +65,7 @@ describe('#65 — roles are discovered in the operator root as well as the proje
     // Anti-regression: the root that already worked must keep working.
     writeRole(cwd, 'theirs')
 
-    expect(Object.keys(await discoverRoles({ cwd, home, projectAllowed: true }))).toEqual([
-      'theirs',
-    ])
+    expect(Object.keys(await discoverRoles({ cwd, home, projectAllowed: true }))).toEqual(['theirs'])
   })
 
   it('test_the_project_wins_when_both_declare_the_same_name', async () => {

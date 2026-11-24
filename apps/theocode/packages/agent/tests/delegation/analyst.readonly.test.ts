@@ -37,14 +37,8 @@ describe('#80 — the analyst does not carry a builtin it was never granted', ()
     // designed to prevent.
     const catalog = effectiveToolNames(analystSpec('gpt-5.4', registry()))
 
-    expect(
-      catalog.unresolved,
-      'names is only the whole catalog when nothing is unresolved',
-    ).toEqual([])
-    expect(
-      catalog.names,
-      'the analyst says it cannot run commands; the runtime disagreed',
-    ).not.toContain('shell')
+    expect(catalog.unresolved, 'names is only the whole catalog when nothing is unresolved').toEqual([])
+    expect(catalog.names, 'the analyst says it cannot run commands; the runtime disagreed').not.toContain('shell')
     expect([...catalog.names].sort()).toEqual(['Glob', 'Grep', 'Read'])
   })
 

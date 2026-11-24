@@ -5,6 +5,7 @@ import { createDelegateToTeamTool } from '../../src/delegation/squad.js'
 /** A member run whose `wait()` follows `behaviour`, recording every `cancel()`. */
 export function fakeMember(opts: {
   never?: boolean
+  crash?: string
   dispose?: () => Promise<void>
   cancelled?: string[]
   name: string
@@ -15,9 +16,11 @@ export function fakeMember(opts: {
         opts.cancelled?.push(opts.name)
       },
       wait: () =>
-        opts.never === true
-          ? new Promise<never>(() => {})
-          : Promise.resolve({ status: 'finished', result: `${opts.name} done` }),
+        opts.crash !== undefined
+          ? Promise.resolve({ status: 'error', error: new Error(opts.crash) })
+          : opts.never === true
+            ? new Promise<never>(() => {})
+            : Promise.resolve({ status: 'finished', result: `${opts.name} done` }),
     })),
     dispose: opts.dispose ?? (async () => {}),
   }
