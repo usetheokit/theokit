@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - Removed `tools/check-theokit-updates.mjs`, `tools/report-theokit-staleness.mjs` and the `deps:theokit`, `deps:theokit:json` and `deps:theokit:report` scripts; run `pnpm check:app-deps apps/theocode` from the repository root instead (#2938).
+- Removed `npm run blockers` and `tools/check-upstream-blockers.mjs`: the three SDK gaps it checked have landed, and its issue numbers pointed at unrelated issues here (#2939).
 - `protectedSessions` returns the `last-session` pointer's transcript once, under the name of the file on disk, and still blocks deletion when the pointer is unreadable (#2869).
 - `ToolRegistry` builds its tools from `codingAgentTools` in `@theokit/agents/presets` instead of binding each factory itself (#2741).
 - `sessions gc` leaves identity and legacy-name protection to `planTranscriptGC` (`knownIds`, `isProtected`); `assignOwnIdentities` and `withholdLegacyNamed` are gone (#2746).

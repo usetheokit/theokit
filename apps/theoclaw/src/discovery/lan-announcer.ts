@@ -1,5 +1,7 @@
 import { hostname as osHostname } from 'node:os'
 
+import { DiscoveryError } from '@theokit/host/discovery'
+
 import { isLoopback } from '../control-plane/bind.js'
 import type { ControlPlaneHandle } from '../control-plane/listener.js'
 import { type DiscoveryMode, type PublisherFactory, type ServicePublisher, TheoClawDiscoveryError } from './publisher.js'
@@ -37,7 +39,9 @@ export function serviceName(hostname: string, port: number): string {
 }
 
 function discoveryErrorOf(error: unknown, route: TheoClawDiscoveryError['route']): TheoClawDiscoveryError {
-  return error instanceof TheoClawDiscoveryError ? error : new TheoClawDiscoveryError(error, route)
+  if (error instanceof TheoClawDiscoveryError) return error
+  if (error instanceof DiscoveryError) return new TheoClawDiscoveryError(error.cause, error.route)
+  return new TheoClawDiscoveryError(error, route)
 }
 
 /** Run one withdrawal step, resolving once it settles or once the bound passes, whichever is first. */

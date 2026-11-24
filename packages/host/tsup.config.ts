@@ -8,6 +8,7 @@ export default defineConfig({
     'browser/index': 'src/browser/index.ts',
     'browser/proxy-entry': 'src/browser/proxy-entry.ts',
     'discovery/index': 'src/discovery/index.ts',
+    'discovery-bonjour/index': 'src/discovery-bonjour/index.ts',
     'instance-config/index': 'src/instance-config/index.ts',
     service: 'src/service-entry.ts',
   },
