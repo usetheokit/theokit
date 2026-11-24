@@ -46,6 +46,8 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
   const subscribers: McpEventSubscriber[] = []
   const create = options.createSubscriber ?? createMcpEventSubscriber
 
+  const instructions = [settings.instructions, FRAMING].filter((part): part is string => part !== undefined).join('\n\n')
+  const agent = leaseFrom(options.withAgent)
   const runs = new Map<string, EventRun>()
   const runFor = (name: string): EventRun => {
     const existing = runs.get(name)
@@ -53,11 +55,11 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
     const created = createEventRun({
       name: `mcp events: ${name}`,
       frameTag: 'mcp-event',
-      instructions: [settings.instructions, FRAMING].filter((part): part is string => part !== undefined).join('\n\n'),
-      agent: leaseFrom(options.withAgent),
+      instructions,
+      agent,
       deliverTo: () => ({ adapter: adapterFor(platform), channelId }),
-      announce: (attributes) => `event received from ${attributes?.server ?? name}`,
-      formatReply: (answer, attributes) => `${attributes?.server ?? name}:\n${answer}`,
+      announce: (attributes) => `event received from ${attributes?.server}`,
+      formatReply: (answer, attributes) => `${attributes?.server}:\n${answer}`,
       secrets: options.secrets ?? [],
       write,
     })

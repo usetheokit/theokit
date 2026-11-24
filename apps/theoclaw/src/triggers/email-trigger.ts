@@ -42,7 +42,7 @@ export function createEmailTrigger(options: EmailTriggerOptions): EmailTrigger {
     instructions: [settings.instructions, FRAMING].filter((part): part is string => part !== undefined).join('\n\n'),
     agent: leaseFrom(withAgent),
     deliverTo: () => ({ adapter: adapterFor(platform), channelId }),
-    formatReply: (answer, attributes) => `E-mail from ${attributes?.from ?? 'unknown'}:\n${answer}`,
+    formatReply: (answer, attributes) => `E-mail from ${attributes?.from}:\n${answer}`,
     secrets: options.secrets ?? [],
     write,
   })
