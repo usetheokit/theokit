@@ -61,7 +61,7 @@ export interface WiredCapabilities {
     /**
      * B-173 — what the AGGREGATE ceiling cut from the rules, in RENDERED chars.
      *
-     * A second ceiling acts after the loader's: `composeInstructions` trims the whole persona to
+     * A second ceiling acts after the loader's: `composeTheoCodePrompt` trims the whole persona to
      * `MAX_AGGREGATE`, and it can take ~30,000 chars of rules that the first ceiling passed
      * untouched. Until this field existed the record said "N loaded" over that corpus.
      *

@@ -16,6 +16,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `resolveFreshCredential` passes `requestTimeoutMs` and `onTransientFailure: 'use-stored'` to `AuthProvider` instead of wrapping `fetch` and catching transient errors itself; on a transient failure it now returns the credential re-read under the lock (#2924).
+- `composeInstructions` in `context/agents-md.ts` is now `composeTheoCodePrompt`, so it no longer shares a name with the framework's; the docblock lists the three differences (base never cut, one summed `rules` cut, group headers). No behaviour change (#2922).
 - `web_search` is chosen by `resolveWebSearchAdapter` from `@theokit/agents/tools`: `BRAVE_API_KEY`, `TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` now enable it, and `THEOKIT_SEARCH=off` disables it. A generic endpoint now needs `THEOKIT_SEARCH_API_KEY` as well as `THEOKIT_SEARCH_API_URL`, so a key-less endpoint stops working, and an unknown `THEOKIT_SEARCH` value fails agent construction (#2926).
 - `settings.json` and `managed-settings.json` are read through `readSettingsFile`, `readManagedSettings` and `translateSettingsDocument` from `@theokit/agents/config`; only the `hooks` delivery policy stays here. A key in `FOREIGN_KEY_DECISIONS` is now reported as `ignored` rather than `unrecognised`, and a managed file that is not a JSON object is warned about and skipped (#2906).
 - The `ask` verdict of the `permissions` plugin is answered by `onAskForPolicy` from `@theokit/agents`; `askGateFor` is removed and the refusal wording stays here as `refusalMessage` (#2905).

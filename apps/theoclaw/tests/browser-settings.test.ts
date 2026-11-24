@@ -12,7 +12,7 @@ import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 import type { BrowserDeps } from '../src/tools/browser-server.js'
-import type { ImportedSetup } from '../src/migration/import-store.js'
+import type { StoredForeignImport } from '@theokit/agents/foreign-setup'
 import type { TurnAgent } from '../src/agent-port.js'
 import { agentToolOptions, controlAgentToolOptions } from '../src/tools/tool-registry.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
@@ -329,7 +329,7 @@ describe('THEOCLAW_BROWSER', () => {
   })
 
   it('keeps the browser server beside the servers of an import whose MCP is on', () => {
-    const imported: ImportedSetup = {
+    const imported: StoredForeignImport = {
       kind: 'claude-code',
       instructions: '',
       memory: '',
