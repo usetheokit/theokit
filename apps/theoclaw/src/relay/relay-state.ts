@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 
 import {
   generateA2AIdentity,
@@ -10,9 +10,8 @@ import {
   type SequenceStore,
   type TrustedPeers,
 } from '@theokit/sdk/a2a'
-import { replaceFileAtomic } from '@theokit/sdk/persistence'
+import { replaceFileAtomic, withFileLock } from '@theokit/sdk/persistence'
 
-import { serializedPerFile } from '../serial-queue.js'
 
 /**
  * B-694 (OC-14) — one instance's relay state: its identity and the peers it trusts (named by the
@@ -45,8 +44,8 @@ export class RelayState {
   /** Loads the identity file or creates an identity on first use. */
   static async load(file: string, trusted: TrustedPeers): Promise<RelayState> {
     // Queued per file: two first loads of a missing file must not each make an identity.
-    return serializedPerFile(file, async () => {
-      mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+    return withFileLock(resolve(file), async () => {
       const data: Persisted = existsSync(file)
         ? (JSON.parse(readFileSync(file, 'utf8')) as Persisted)
         : { identity: generateA2AIdentity() }

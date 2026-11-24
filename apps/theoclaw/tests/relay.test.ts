@@ -355,3 +355,16 @@ describe('relay settings', () => {
     expect(s.peers.get('bob')).toBe(key)
   })
 })
+
+describe('relay state files', () => {
+  it('creates a fresh parent directory and makes one identity for two spellings of the path', async () => {
+    const root = dir()
+    const file = join(root, 'fresh', 'relay.json')
+    const [a, b] = await Promise.all([
+      RelayState.load(file, new Map()),
+      RelayState.load(join(root, 'fresh', '.', 'relay.json'), new Map()),
+    ])
+    expect(a.publicKey).toBe(b.publicKey)
+    expect(readdirSync(join(root, 'fresh')).filter((n) => n.endsWith('.lock'))).toEqual([])
+  })
+})

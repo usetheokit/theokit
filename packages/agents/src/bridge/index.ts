@@ -315,6 +315,7 @@ export type { CompiledWiring } from './compiled-wiring.js'
 export {
   runAgentTurn,
   completeFromTurn,
+  type CompleteFromTurnOptions,
   type AgentTurnAgent,
   type AgentTurnMessage,
   type AgentTurnOutcome,
