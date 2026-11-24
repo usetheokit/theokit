@@ -23147,6 +23147,24 @@
     },
     "./presets": {
       "names": {
+        "ChangedPathsOptions": {
+          "tier": "stable",
+          "declaration": "interface ChangedPathsOptions {\n    readonly aliases?: Readonly<Record<string, ChangedPathsTool>>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/presets.d.ts#ChangedPathsTool"],
+          "internals": {
+            "dist/presets.d.ts#ChangedPathsTool": "type ChangedPathsTool = 'write_file' | 'edit_file' | 'apply_patch';"
+          }
+        },
+        "ChangedPathsTool": {
+          "tier": "stable",
+          "declaration": "type ChangedPathsTool = 'write_file' | 'edit_file' | 'apply_patch';",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CodingAgentPresetOptions": {
           "tier": "stable",
           "declaration": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n}",
@@ -23225,6 +23243,38 @@
           "references": ["dist/registry-<hash>.d.ts#OffTool"],
           "internals": {
             "dist/registry-<hash>.d.ts#OffTool": "interface OffTool {\n    readonly name: string;\n    readonly reason: string;\n}"
+          }
+        },
+        "GitRun": {
+          "tier": "stable",
+          "declaration": "type GitRun = (args: string[]) => {\n    ok: boolean;\n    stdout: string;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "TurnDiffOptions": {
+          "tier": "stable",
+          "declaration": "interface TurnDiffOptions {\n    readonly cwd: string;\n    readonly run?: GitRun;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/presets.d.ts#GitRun"],
+          "internals": {
+            "dist/presets.d.ts#GitRun": "type GitRun = (args: string[]) => {\n    ok: boolean;\n    stdout: string;\n};"
+          }
+        },
+        "changedPathsOf": {
+          "tier": "stable",
+          "declaration": "declare function changedPathsOf(calls: Iterable<{\n    toolName: string;\n    input: unknown;\n}>, options?: ChangedPathsOptions): string[];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/presets.d.ts#ChangedPathsOptions",
+            "dist/presets.d.ts#ChangedPathsTool"
+          ],
+          "internals": {
+            "dist/presets.d.ts#ChangedPathsOptions": "interface ChangedPathsOptions {\n    readonly aliases?: Readonly<Record<string, ChangedPathsTool>>;\n}",
+            "dist/presets.d.ts#ChangedPathsTool": "type ChangedPathsTool = 'write_file' | 'edit_file' | 'apply_patch';"
           }
         },
         "codingAgentPreset": {
@@ -23375,6 +23425,17 @@
             "dist/types-<hash>.d.ts#ReasoningEffort": "type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | (string & {});",
             "dist/types-<hash>.d.ts#RelevanceStrategy": "type RelevanceStrategy = 'git-history' | 'import-graph' | 'semantic' | 'manual';",
             "dist/types-<hash>.d.ts#TimeoutAction": "type TimeoutAction = 'abort' | 'proceed' | 'retry';"
+          }
+        },
+        "turnDiff": {
+          "tier": "stable",
+          "declaration": "declare function turnDiff(paths: readonly string[], options: TurnDiffOptions): string | undefined;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/presets.d.ts#GitRun", "dist/presets.d.ts#TurnDiffOptions"],
+          "internals": {
+            "dist/presets.d.ts#GitRun": "type GitRun = (args: string[]) => {\n    ok: boolean;\n    stdout: string;\n};",
+            "dist/presets.d.ts#TurnDiffOptions": "interface TurnDiffOptions {\n    readonly cwd: string;\n    readonly run?: GitRun;\n}"
           }
         }
       }

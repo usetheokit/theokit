@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1624 export(s) across 30 entry point(s).
+1630 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -1634,10 +1634,16 @@ Measured against `@theokit/sdk@13.0.0`.
 
 | Symbol | Kind |
 |---|---|
+| `changedPathsOf` | value |
 | `codingAgentPreset` | value |
 | `codingAgentTools` | value |
+| `turnDiff` | value |
+| `ChangedPathsOptions` | type |
+| `ChangedPathsTool` | type |
 | `CodingAgentPresetOptions` | type |
 | `CodingAgentTools` | type |
+| `GitRun` | type |
+| `TurnDiffOptions` | type |
 
 ## `@theokit/agents/evals`
 
