@@ -216,6 +216,37 @@ describe('refreshing an expiring sign-in', () => {
       before,
     )
   }, 20_000)
+
+  it('test_a_fetch_that_never_settles_keeps_the_stored_token', async () => {
+    const { env } = storeExpiredOAuth()
+    const hang = ((_url: unknown, init?: RequestInit) =>
+      new Promise((_res, rej) => {
+        init?.signal?.addEventListener('abort', () => rej(init.signal?.reason))
+      })) as unknown as typeof fetch
+
+    const got = await resolveFreshCredential({
+      env,
+      home,
+      fetch: hang,
+      now: () => 10_000_000,
+      timeoutMs: 20,
+    })
+
+    expect(got.apiKey).toBe('stored-access')
+  }, 20_000)
+
+  it('test_an_invalid_grant_refresh_rejects', async () => {
+    const { env } = storeExpiredOAuth()
+    const rejected = (async () =>
+      new Response(JSON.stringify({ error: 'invalid_grant' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      })) as unknown as typeof fetch
+
+    await expect(
+      resolveFreshCredential({ env, home, fetch: rejected, now: () => 10_000_000 }),
+    ).rejects.toThrow()
+  }, 20_000)
 })
 
 describe('the credential source stays typed', () => {
