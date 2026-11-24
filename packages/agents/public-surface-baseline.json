@@ -20889,7 +20889,7 @@
         },
         "createControlClient": {
           "tier": "stable",
-          "declaration": "declare function createControlClient(options: {\n    url: string;\n    authorization: string;\n    stamp?: () => number;\n}): Promise<ControlClient>;",
+          "declaration": "declare function createControlClient(options: {\n    url: string;\n    authorization: string;\n    stamp?: () => number;\n    dropAcknowledgements?: boolean;\n}): Promise<ControlClient>;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
@@ -20943,6 +20943,20 @@
             "dist/control.d.ts#ControlClient": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
             "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+          }
+        },
+        "createControlStreamInbox": {
+          "tier": "stable",
+          "declaration": "declare function createControlStreamInbox(options?: {\n    readonly stamp?: () => number;\n}): ControlStreamInbox & {\n    post(notice: ControlStreamNotice): void;\n};",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#ControlStreamInbox",
+            "dist/control.d.ts#ControlStreamNotice"
+          ],
+          "internals": {
+            "dist/control.d.ts#ControlStreamInbox": "interface ControlStreamInbox {\n    take(before?: number): ControlStreamNotice[];\n    wait(): Promise<void>;\n    stamp(): number;\n}",
+            "dist/control.d.ts#ControlStreamNotice": "interface ControlStreamNotice {\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n}"
           }
         },
         "createControlStreamSource": {

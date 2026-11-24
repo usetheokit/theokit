@@ -79,6 +79,21 @@ describe('createControlClient', () => {
     }).toThrow(ControlConnectionError)
   })
 
+  it('yields acknowledgements unless dropAcknowledgements is set', async () => {
+    const url = await start((h) => h === CREDENTIAL)
+    for (const drop of [false, true]) {
+      const client = await createControlClient({ url, authorization: CREDENTIAL, dropAcknowledgements: drop })
+      const seen: string[] = []
+      for await (const frame of client.chat('hi', 's1')) {
+        if (frame.type !== 'done') client.interrupt('s1')
+        seen.push(frame.type)
+      }
+      expect(seen.at(-1)).toBe('done')
+      if (drop) expect(seen.filter((t) => ['interrupt_ok', 'steer_ok', 'no_turn'].includes(t))).toEqual([])
+      await client.close()
+    }
+  })
+
   it('a 1009 close rejects the iteration with the frame limit message', async () => {
     const url = await start(() => true)
     const client = await createControlClient({ url, authorization: CREDENTIAL })

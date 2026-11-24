@@ -10,18 +10,13 @@ import {
   ToolCallCard,
   useAgentStream,
 } from '@theokit/tui'
-import { createControlStreamSource, type ControlStreamSource } from '@theokit/agents/control'
+import { createControlStreamInbox, createControlStreamSource, type ControlStreamSource } from '@theokit/agents/control'
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
-import type { ControlClient } from '../control-client/control-client.js'
-import {
-  createTurnInbox,
-  nextSessionId,
-  type TurnInbox,
-  type TuiNotice,
-} from './frames.js'
+import { type ControlClient, nextArrival } from '../control-client/control-client.js'
+import { nextSessionId, type TuiNotice } from './frames.js'
 
 export interface TheoClawTuiProps {
   /** The connection to the running instance; the TUI builds no agent (plan D1). */
@@ -113,7 +108,7 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
 
   const turns = useRef(0)
   const current = useRef<ControlStreamSource | undefined>(undefined)
-  const inbox = useRef<TurnInbox | undefined>(undefined)
+  const inbox = useRef<ReturnType<typeof createControlStreamInbox> | undefined>(undefined)
   // While a turn runs a notice goes to its stream, which places it where the turn has reached, so later output stays below it.
   const notice = (n: TuiNotice): void => {
     if (running.current && inbox.current !== undefined) inbox.current.post(n)
@@ -125,7 +120,7 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     const id = turns.current
     running.current = true
     setBusy(true)
-    const mine = createTurnInbox()
+    const mine = createControlStreamInbox({ stamp: nextArrival })
     inbox.current = mine
     // What is left once the framework ended the fold (a notice posted after the interruption) goes below the turn.
     const inTurn = (n: TuiNotice): void => setItems((current) => [...current, { kind: 'notice', ...n }])

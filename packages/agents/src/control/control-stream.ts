@@ -46,6 +46,40 @@ export interface ControlStreamInbox {
   stamp(): number
 }
 
+let defaultClock = 0
+
+/**
+ * A `ControlStreamInbox` a surface posts notices to. Pass the same `stamp` the control client uses, so
+ * notices and frames share one arrival clock; without one it counts on its own.
+ */
+export function createControlStreamInbox(options?: { readonly stamp?: () => number }): ControlStreamInbox & {
+  post(notice: ControlStreamNotice): void
+} {
+  const stamp = options?.stamp ?? ((): number => ++defaultClock)
+  let queue: { notice: ControlStreamNotice; at: number }[] = []
+  let wake: (() => void) | undefined
+  return {
+    post(notice) {
+      queue.push({ notice, at: stamp() })
+      const w = wake
+      wake = undefined
+      w?.()
+    },
+    take(before = Number.POSITIVE_INFINITY) {
+      const taken = queue.filter((item) => item.at < before)
+      queue = queue.filter((item) => item.at >= before)
+      return taken.map((item) => item.notice)
+    },
+    wait() {
+      if (queue.length > 0) return Promise.resolve()
+      return new Promise<void>((resolve) => {
+        wake = resolve
+      })
+    },
+    stamp,
+  }
+}
+
 export interface ControlStreamOptions {
   /** Notices from the surface, placed in the stream by arrival order. Without one, the stream has only its own notices. */
   readonly inbox?: ControlStreamInbox
