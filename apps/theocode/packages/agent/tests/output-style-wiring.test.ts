@@ -3,7 +3,7 @@
  *
  * The loader and the composition are unit-tested next door; this asserts the WIRING — that
  * `buildChatAgent` resolves `output_style` from the effective config, finds the file, and hands the
- * result to `composeInstructions` as the base. Without this arm every other test in this feature
+ * result to `composeTheoCodePrompt` as the base. Without this arm every other test in this feature
  * could pass against a product where nothing ever calls them.
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

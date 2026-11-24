@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { type StoredForeignImport, readForeignImport as readImport, writeForeignImport as writeImport } from '@theokit/agents/foreign-setup'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, SDKAgent } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +11,6 @@ import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-a
 import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { createAgentFactory, createChannelAgentFactory } from '../src/control-plane/agent-factory.js'
 import type { TurnAgent } from '../src/control-plane/turn.js'
-import { type ImportedSetup, readImport, writeImport } from '../src/migration/import-store.js'
 import { readImportAtStart } from '../src/migration/import-start.js'
 import { copyFixture, readClaudeCodeSetup, readHermesSetup } from './migration-fixtures.js'
 
@@ -46,7 +46,7 @@ const CUSTODIAN = new Set(['git-helper', 'summarize-text', 'diagnose-gateway', '
 
 describe('an import reaching the agents', () => {
   let dir = ''
-  const imports: Record<string, { setup: ImportedSetup; expected: Expected }> = {}
+  const imports: Record<string, { setup: StoredForeignImport; expected: Expected }> = {}
 
   beforeEach(() => {
     dir = realpathSync(mkdtempSync(join(tmpdir(), 'theoclaw-migration-')))
@@ -147,7 +147,7 @@ describe('an import reaching the agents', () => {
   })
 
   it('an import with no instruction, memory, skill or server adds nothing to the control agent', async () => {
-    const empty: ImportedSetup = {
+    const empty: StoredForeignImport = {
       kind: 'hermes',
       instructions: '',
       memory: '',

@@ -5,6 +5,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { codingAgentTools } from '@theokit/agents/presets'
+import {
+  createGenericHttpSearchAdapter,
+  createWebFetchTool,
+  createWebSearchTool,
+} from '@theokit/agents/tools'
+
 import { tempRoot } from '../helpers/temp-root.js'
 
 const TRUSTED = {
@@ -58,7 +65,7 @@ vi.mock('../../src/composition/agent-spec.js', async (orig) => {
   }
 })
 
-/** Today's `approvalGates` output, written out literally. */
+/** The gate set per mode, written out literally. */
 const WRITE_GATES = {
   ApplyPatch: { question: 'Apply this file patch?' },
   Edit: { question: 'Apply this edit?' },
@@ -72,8 +79,14 @@ const ALWAYS_GATES = {
 }
 const SEARCH_GATE = { web_search: { question: 'Search the web for this?' } }
 
+const delegateTool = {
+  name: 'delegate_to_team',
+  description: 'x',
+  inputSchema: {},
+  handler: async () => '',
+}
+
 const realHome = process.env.HOME
-const realSearch = process.env['THEOKIT_SEARCH_API_URL']
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -83,16 +96,15 @@ beforeEach(() => {
 afterEach(() => {
   if (realHome === undefined) delete process.env.HOME
   else process.env.HOME = realHome
-  if (realSearch === undefined) delete process.env['THEOKIT_SEARCH_API_URL']
-  else process.env['THEOKIT_SEARCH_API_URL'] = realSearch
 })
 
-async function compile(writes: boolean, searchConfigured: boolean) {
+async function compile(writes: boolean, searchConfigured: boolean, env: NodeJS.ProcessEnv = searchConfigured ? { BRAVE_API_KEY: 'test-key' } : {}) {
   resolveEffectiveConfig.mockReturnValue(config(writes ? 'workspace-write' : 'read-only'))
-  if (searchConfigured) process.env['THEOKIT_SEARCH_API_URL'] = 'http://search.invalid'
-  else delete process.env['THEOKIT_SEARCH_API_URL']
   const { buildChatAgent } = await import('../../src/chat/chat.js')
-  return (await buildChatAgent({ surface: 'headless', cwd: tempRoot('chat-approvals-cwd-') } as never)) as unknown as {
+  const { withCapabilities } = await import('../helpers/with-capabilities.js')
+  return withCapabilities(
+    await buildChatAgent({ surface: 'headless', cwd: tempRoot('chat-approvals-cwd-'), env } as never),
+  ) as unknown as {
     approvals: Record<string, { question: string }>
     tools: { name: string }[]
   }
@@ -108,15 +120,39 @@ describe('the compiled approvals map', () => {
           ...ALWAYS_GATES,
           ...(searchConfigured ? SEARCH_GATE : {}),
         }
-        const { approvalGates } = await import('../../src/chat/chat.js')
 
         expect(agent.approvals).toEqual(expected)
-        expect(approvalGates({ writes, searchConfigured })).toEqual(expected)
+        // The gate set the preset declares for this mode is the same map, so the card and the set the
+        // permissions plugin receives cannot drift apart (the check `approvalGates` used to carry).
+        const declared = codingAgentTools({
+          cwd: '/tmp/proj',
+          sandboxMode: writes ? 'workspace-write' : 'read-only',
+          shellInReadOnly: true,
+          interactive: { start: () => undefined } as never,
+          webFetch: createWebFetchTool(),
+          ...(searchConfigured && {
+            webSearch: createWebSearchTool({ search: createGenericHttpSearchAdapter() }),
+          }),
+          ...(writes && { delegateToTeam: delegateTool as never }),
+        })
+        expect(Object.fromEntries(declared.gates)).toEqual(expected)
         const tools = new Set(agent.tools.map((t) => t.name))
         for (const name of Object.keys(agent.approvals)) expect(tools.has(name)).toBe(true)
       })
     }
   }
+})
+
+describe('an explicit off switch', () => {
+  it('test_declares_no_web_search_when_THEOKIT_SEARCH_is_off_even_with_a_url', async () => {
+    const agent = await compile(false, false, {
+      THEOKIT_SEARCH: 'off',
+      THEOKIT_SEARCH_API_URL: 'http://search.invalid',
+      THEOKIT_SEARCH_API_KEY: 'k',
+    })
+    expect(agent.tools.some((t) => t.name === 'web_search')).toBe(false)
+    expect(agent.approvals).not.toHaveProperty('web_search')
+  })
 })
 
 describe('the permissions plugin', () => {
@@ -126,7 +162,11 @@ describe('the permissions plugin', () => {
     expect(permissionsSpy).toHaveBeenCalledTimes(1)
     const gated = permissionsSpy.mock.calls[0]?.[3] as ReadonlySet<string>
     expect([...gated].sort()).toEqual(
-      [...Object.keys(WRITE_GATES), ...Object.keys(ALWAYS_GATES), ...Object.keys(SEARCH_GATE)].sort(),
+      [
+        ...Object.keys(WRITE_GATES),
+        ...Object.keys(ALWAYS_GATES),
+        ...Object.keys(SEARCH_GATE),
+      ].sort(),
     )
   })
 })

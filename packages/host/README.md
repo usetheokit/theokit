@@ -104,6 +104,8 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 
 `serviceBackend('win32')` registers a logon-triggered scheduled task named by `label` (least privilege, no time limit, restart after failure every minute) from a UTF-16 XML file kept in a fresh private temporary directory and removed afterwards. `scheduledTaskXml(spec, { user })` returns the definition.
 
+`daemonCommands(backend, { stdout, stderr, env, runner?, prefix? })` gives `install`, `uninstall`, `status`, `restart` and `logs` over a backend, for values the app already parsed (argv parsing stays in the app). `install(target)` takes `{ label, command, args, env?, workingDirectory?, description?, entryArgs? }`; on Windows the task carries no environment, so `entryArgs()` (such as `instanceConfig.entryArgs`) is appended to `args` and `env` is not passed (a non-empty `env` without `entryArgs` throws `ServiceDefinitionError`). On Linux `install` prints a `loginctl enable-linger` notice when `lingerEnabled(user, runner?)` answers `false`. `status` resolves 0 when running and 3 otherwise. Backend failures throw; the commands resolve the exit code.
+
 - **A task carries no environment.** `install` with a non-empty `spec.env` throws `ServiceDefinitionError`: pass the values as `args` instead. Every argument is quoted per the `CommandLineToArgvW` rules.
 - The task runs as `USERDOMAIN\USERNAME` from `options.env`; without `USERNAME`, `install` throws `ServiceDefinitionError`. `command` and `workingDirectory` must be Windows absolute paths.
 - A failing `/Create` or `/Run` deletes the task and throws `ServiceCommandError`.

@@ -6,17 +6,23 @@
  * and what each one carried that the schema never saw.
  */
 import { dirname } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import process from 'node:process'
 
 import { CONFIG_SCHEMA_KEYS, ConfigError } from './config-contract.js'
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from './home-dir.js'
 import { readManagedSettingsTranslated } from './managed-settings.js'
-import { translateSettings } from './settings-json.js'
-import { settingsCandidates } from '@theokit/agents/config'
+import { settingsReadFrom, settingsReadOptions } from './settings-json.js'
+import {
+  SettingsFileError,
+  readSettingsFile,
+  settingsCandidates,
+  translateSettingsDocument,
+} from '@theokit/agents/config'
 import type {
   PermissionRule,
+  SettingsFileRead,
   SettingsCandidate as FrameworkCandidate,
 } from '@theokit/agents/config'
 
@@ -27,26 +33,28 @@ import type {
  * setting is read when it is not.
  */
 function readSettingsIfPresent(candidate: SettingsCandidate): unknown | null {
-  const path = candidate.path
-  let text: string
+  const read = readCandidate(candidate)
+  return read === null ? null : settingsReadFrom(read, candidate.hooksDelivery).values
+}
+
+/**
+ * One candidate through the framework reader, or `null` when the file is absent. A file that cannot
+ * be read or parsed is a `ConfigError`; one that parses to something other than an object is an
+ * empty layer (the framework skips it, and the file still counts as the scope's first).
+ */
+function readCandidate(candidate: SettingsCandidate): SettingsFileRead | null {
   try {
-    text = readFileSync(path, 'utf8')
+    const read = readSettingsFile(candidate, {
+      ...settingsReadOptions(CONFIG_SCHEMA_KEYS, dirname(candidate.path)),
+      throwOnMalformed: true,
+    })
+    if (read !== undefined) return read
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw new ConfigError(`cannot read ${path}: ${(err as Error).message}`)
+    if (err instanceof SettingsFileError) throw new ConfigError(err.message)
+    throw err
   }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (err) {
-    throw new ConfigError(`malformed JSON at ${path}: ${(err as Error).message}`)
-  }
-  return translateSettings(parsed, {
-    ownKeys: CONFIG_SCHEMA_KEYS,
-    foreignRoot: candidate.foreignRoot,
-    hooksDelivery: candidate.hooksDelivery,
-    baseDir: dirname(candidate.path),
-  }).values
+  if (!existsSync(candidate.path)) return null
+  return translateSettingsDocument({}, candidate, settingsReadOptions(CONFIG_SCHEMA_KEYS))
 }
 
 /**
@@ -200,20 +208,15 @@ export interface SettingsFileReport {
  */
 function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 'stop' {
   const path = candidate.path
-  if (!existsSync(path)) return 'skip'
-  let parsed: unknown
+  let raw: SettingsFileRead | null
   try {
-    parsed = JSON.parse(readFileSync(path, 'utf8'))
+    raw = readCandidate(candidate)
   } catch {
     return 'stop'
   }
+  if (raw === null) return 'skip'
   try {
-    const read = translateSettings(parsed, {
-      ownKeys: CONFIG_SCHEMA_KEYS,
-      foreignRoot: candidate.foreignRoot,
-      hooksDelivery: candidate.hooksDelivery,
-      baseDir: dirname(candidate.path),
-    })
+    const read = settingsReadFrom(raw, candidate.hooksDelivery)
     return {
       path,
       ignored: read.ignored,

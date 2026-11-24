@@ -129,7 +129,7 @@ describe('theoclaw update', () => {
 
     const h = harness(w, { platform: 'darwin', uid: 501, restartExit: [1] })
     expect(await update({}, h.io, h.runner)).toBe(1)
-    expect(h.stderr()).toContain('launchctl kickstart -k gui/501/theoclaw failed: kickstart failed')
+    expect(h.stderr()).toContain('restart of theoclaw failed: launchctl kickstart failed with exit code 1: kickstart failed')
     const retry = harness(w, { platform: 'darwin', uid: 501 })
     expect(await update({}, retry.io, retry.runner)).toBe(0)
     expect(retry.restarts()).toEqual(['gui/501/theoclaw'])
@@ -141,6 +141,19 @@ describe('theoclaw update', () => {
     git(w.upstream, 'push', '-q', 'origin', 'main')
     expect(await update({}, bare.io, bare.runner)).toBe(0)
     expect(bare.restarts()).toEqual([])
+  })
+
+  it('update_restarts_an_installed_windows_task_through_the_backend', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    writeFileSync(join(w.dist, '.restarted-commit-theoclaw'), `${w.c0}\n`)
+    const c1 = commit(w.upstream, 'next', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+
+    const h = harness(w, { platform: 'win32', env: { USERNAME: 'dev' }, taskInstalled: true })
+    expect(await update({}, h.io, h.runner)).toBe(0)
+    expect(h.restarts()).toEqual(['theoclaw'])
+    expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw'), 'utf8').trim()).toBe(c1)
   })
 
   it('a retry after a failed restart restarts', async () => {

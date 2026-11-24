@@ -9,7 +9,6 @@ import {
   CredentialError,
   credentialHome as storeCredentialHome,
 } from '@theokit/agents/auth'
-import { isTransientError } from '@theokit/agents'
 import {
   CredentialNotFoundError,
   DEFAULT_PROVIDERS,
@@ -218,13 +217,6 @@ export function resolveCredential(opts: {
   }
 }
 
-function classifyRefreshFailure(err: unknown): {
-  readonly transient: boolean
-  readonly cause: unknown
-} {
-  return { transient: isTransientError(err), cause: err }
-}
-
 export async function resolveFreshCredential(opts: {
   env: Record<string, string | undefined>
   home: string | undefined
@@ -237,24 +229,14 @@ export async function resolveFreshCredential(opts: {
   if (resolved.kind !== 'oauth' || opts.home === undefined) return resolved
   if (resolved.provider !== 'openai') return resolved
   const baseFetch = opts.fetch ?? fetch
-  const timeoutMs = opts.timeoutMs ?? 30_000
-  const boundedFetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
-    baseFetch(input, {
-      ...init,
-      signal: init?.signal ?? AbortSignal.timeout(timeoutMs),
-    })) as typeof fetch
-  let fresh: Awaited<ReturnType<AuthProvider['ensureFresh']>>
-  try {
-    fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home)).ensureFresh(
-      { ...resolved, source: toSdkSource(resolved.source) },
-      { fetch: boundedFetch, now: opts.now ?? Date.now },
-      opts.env,
-    )
-  } catch (err) {
-    const { transient } = classifyRefreshFailure(err)
-    if (!transient) throw err
-    return resolved
-  }
+  const fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home), {
+    requestTimeoutMs: opts.timeoutMs ?? 30_000,
+    onTransientFailure: 'use-stored',
+  }).ensureFresh(
+    { ...resolved, source: toSdkSource(resolved.source) },
+    { fetch: baseFetch, now: opts.now ?? Date.now },
+    opts.env,
+  )
   return { ...fresh, provider: resolved.provider, source: resolved.source }
 }
 
