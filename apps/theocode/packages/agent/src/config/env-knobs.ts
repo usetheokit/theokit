@@ -107,13 +107,13 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
     effect:
       'Whether the session collector runs on its own, at most once a day, applying the SAME 30-day window, 1-day floor and operation budget `sessions gc` uses. `0`/`false` keeps collection manual.',
   },
-    {
-      name: ENV_SESSION_GC_MAX_AGE_DAYS,
-      reader: CONFIG,
-      default: 'the collector\'s own 30-day window',
-      effect:
-        'How many days of session transcripts the collector keeps. `.claude/settings.json` spells it `cleanupPeriodDays`. Unset leaves the collector\'s own window, so this knob and that file cannot disagree about a default neither of them owns.',
-    },
+  {
+    name: ENV_SESSION_GC_MAX_AGE_DAYS,
+    reader: CONFIG,
+    default: "the collector's own 30-day window",
+    effect:
+      "How many days of session transcripts the collector keeps. `.claude/settings.json` spells it `cleanupPeriodDays`. Unset leaves the collector's own window, so this knob and that file cannot disagree about a default neither of them owns.",
+  },
   {
     name: ENV_PROVIDER,
     reader: CREDENTIALS,
@@ -129,7 +129,7 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   },
   {
     name: ENV_THEOKIT_HOME,
-    reader: 'packages/tui/src/backtrack/backtrack.ts, packages/tui/src/commands/session-commands.ts (transcriptRootHint from @theokit/agents/session)',
+    reader: 'packages/tui/src/backtrack/backtrack.ts:transcriptRootHint',
     default: '~/.theokit',
     effect:
       'Root of the runtime state, including session transcripts. Changing it moves `/sessions`, `/backtrack` and `sessions gc` along with it.',
