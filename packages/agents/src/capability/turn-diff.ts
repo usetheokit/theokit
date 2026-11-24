@@ -44,7 +44,7 @@ export function turnDiff(paths: readonly string[], options: TurnDiffOptions): st
     if (entry.startsWith('??')) {
       const p = entry.slice(3)
       if (p.length > 0) untracked.add(p)
-    } else if (entry[0] === 'R' || entry[0] === 'C') {
+    } else if (entry.startsWith('R') || entry.startsWith('C')) {
       i++ // a rename carries the old name as a further field
     }
   }
