@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createSharedBrowser } from '../src/tools/shared-browser.js'
+import { createSharedBrowser } from '@theokit/host/browser'
 
 const dirs: string[] = []
 afterEach(() => {

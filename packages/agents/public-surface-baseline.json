@@ -19859,7 +19859,7 @@
         },
         "InstructionTree": {
           "tier": "stable",
-          "declaration": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n}",
+          "declaration": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n    readonly found: number;\n    readonly chars: number;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": ["dist/config.d.ts#InstructionBlock"],
@@ -19867,9 +19867,17 @@
             "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}"
           }
         },
+        "InstructionTreeBase": {
+          "tier": "stable",
+          "declaration": "interface InstructionTreeBase {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "InstructionTreeBudget": {
           "tier": "stable",
-          "declaration": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n}",
+          "declaration": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly omissionNotice?: (omitted: number, found: number) => string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -19976,12 +19984,18 @@
         },
         "LoadInstructionTreeInput": {
           "tier": "stable",
-          "declaration": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n}",
+          "declaration": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n    readonly also?: readonly InstructionTreeBase[];\n    readonly render?: (block: InstructionBlock) => string;\n    readonly separator?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/config.d.ts#InstructionTreeBudget"],
+          "references": [
+            "dist/config.d.ts#InstructionBlock",
+            "dist/config.d.ts#InstructionTreeBase",
+            "dist/config.d.ts#InstructionTreeBudget"
+          ],
           "internals": {
-            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n}"
+            "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}",
+            "dist/config.d.ts#InstructionTreeBase": "interface InstructionTreeBase {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n}",
+            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly omissionNotice?: (omitted: number, found: number) => string;\n}"
           }
         },
         "LoadInstructionWalkInput": {
@@ -20303,6 +20317,14 @@
           "internals": {
             "dist/config.d.ts#SettingsCandidate": "interface SettingsCandidate {\n    readonly path: string;\n    readonly foreignRoot: boolean;\n}"
           }
+        },
+        "SettingsFileError": {
+          "tier": "stable",
+          "declaration": "declare class SettingsFileError extends Error {\n    readonly path: string;\n    readonly kind: 'unreadable' | 'malformed';\n    readonly detail: string;\n    readonly name = \"SettingsFileError\";\n    constructor(path: string, kind: 'unreadable' | 'malformed', detail: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         },
         "SettingsFileRead": {
           "tier": "stable",
@@ -20656,14 +20678,16 @@
           "references": [
             "dist/config.d.ts#InstructionBlock",
             "dist/config.d.ts#InstructionTree",
+            "dist/config.d.ts#InstructionTreeBase",
             "dist/config.d.ts#InstructionTreeBudget",
             "dist/config.d.ts#LoadInstructionTreeInput"
           ],
           "internals": {
             "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}",
-            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n}",
-            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n}",
-            "dist/config.d.ts#LoadInstructionTreeInput": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n}"
+            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n    readonly found: number;\n    readonly chars: number;\n}",
+            "dist/config.d.ts#InstructionTreeBase": "interface InstructionTreeBase {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n}",
+            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly omissionNotice?: (omitted: number, found: number) => string;\n}",
+            "dist/config.d.ts#LoadInstructionTreeInput": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n    readonly also?: readonly InstructionTreeBase[];\n    readonly render?: (block: InstructionBlock) => string;\n    readonly separator?: string;\n}"
           }
         },
         "loadInstructionWalk": {
@@ -20678,7 +20702,7 @@
           ],
           "internals": {
             "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}",
-            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n}",
+            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n    readonly found: number;\n    readonly chars: number;\n}",
             "dist/config.d.ts#LoadInstructionWalkInput": "interface LoadInstructionWalkInput {\n    readonly cwd: string;\n    readonly alternatives?: readonly string[];\n    readonly local?: readonly string[];\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly onWarn?: (message: string) => void;\n    readonly operator?: readonly string[];\n}"
           }
         },
@@ -20960,6 +20984,22 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "translateSettingsDocument": {
+          "tier": "stable",
+          "declaration": "declare function translateSettingsDocument(raw: Record<string, unknown>, candidate: SettingsCandidate, options: ReadSettingsFileOptions): SettingsFileRead;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/config.d.ts#ReadSettingsFileOptions",
+            "dist/config.d.ts#SettingsCandidate",
+            "dist/config.d.ts#SettingsFileRead"
+          ],
+          "internals": {
+            "dist/config.d.ts#ReadSettingsFileOptions": "interface ReadSettingsFileOptions {\n    readonly ownKeys: readonly string[];\n    readonly renames?: Readonly<Record<string, string>>;\n    readonly baseDir?: string;\n    readonly specifierArg?: Readonly<Record<string, string>>;\n    readonly toolAliases?: Readonly<Record<string, string>>;\n    readonly onWarn?: (message: string) => void;\n    readonly throwOnMalformed?: boolean;\n}",
+            "dist/config.d.ts#SettingsCandidate": "interface SettingsCandidate {\n    readonly path: string;\n    readonly foreignRoot: boolean;\n}",
+            "dist/config.d.ts#SettingsFileRead": "interface SettingsFileRead {\n    readonly path: string;\n    readonly values: Record<string, unknown>;\n    readonly ignored: readonly string[];\n    readonly unrecognised: readonly string[];\n    readonly permissionRules: readonly PermissionRule[];\n    readonly unsupportedPermissions: readonly {\n        readonly entry: string;\n        readonly reason: string;\n    }[];\n    readonly hooks?: unknown;\n}"
+          }
         }
       }
     },
@@ -24063,7 +24103,7 @@
         },
         "CodingAgentPresetOptions": {
           "tier": "stable",
-          "declaration": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n}",
+          "declaration": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n    readonly shellInReadOnly?: boolean;\n    readonly bashDescription?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -24234,7 +24274,7 @@
             "dist/agent-compiler-<hash>.d.ts#SkillsRequestContext": "type SkillsRequestContext = Record<string, unknown>;",
             "dist/agent-compiler-<hash>.d.ts#SkillsSelection": "type SkillsSelection = readonly (string | InlineSkill)[] | SkillsSettings | ((ctx: SkillsRequestContext) => readonly string[] | SkillsSettings | Promise<readonly string[] | SkillsSettings>);",
             "dist/agent-compiler-<hash>.d.ts#SubagentAgentDefinition": "interface SubagentAgentDefinition {\n    readonly description: string;\n    readonly prompt: string;\n    readonly tools?: readonly string[];\n    readonly model?: ModelSelection | 'inherit';\n    readonly mcpServers?: readonly (string | Record<string, McpServerConfig>)[];\n}",
-            "dist/presets.d.ts#CodingAgentPresetOptions": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n}",
+            "dist/presets.d.ts#CodingAgentPresetOptions": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n    readonly shellInReadOnly?: boolean;\n    readonly bashDescription?: string;\n}",
             "dist/presets.d.ts#McpServers": "type McpServers = NonNullable<CompiledAgentOptionsDraft['mcpServers']>;",
             "dist/registry-<hash>.d.ts#CapabilityPreset": "declare class CapabilityPreset implements Capability {\n    #private;\n    readonly name: string;\n    constructor(name: string, members: readonly Capability[]);\n    apply(draft: CompiledAgentOptionsDraft): void;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
@@ -24308,7 +24348,7 @@
             "dist/agent-compiler-<hash>.d.ts#SkillsRequestContext": "type SkillsRequestContext = Record<string, unknown>;",
             "dist/agent-compiler-<hash>.d.ts#SkillsSelection": "type SkillsSelection = readonly (string | InlineSkill)[] | SkillsSettings | ((ctx: SkillsRequestContext) => readonly string[] | SkillsSettings | Promise<readonly string[] | SkillsSettings>);",
             "dist/agent-compiler-<hash>.d.ts#SubagentAgentDefinition": "interface SubagentAgentDefinition {\n    readonly description: string;\n    readonly prompt: string;\n    readonly tools?: readonly string[];\n    readonly model?: ModelSelection | 'inherit';\n    readonly mcpServers?: readonly (string | Record<string, McpServerConfig>)[];\n}",
-            "dist/presets.d.ts#CodingAgentPresetOptions": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n}",
+            "dist/presets.d.ts#CodingAgentPresetOptions": "interface CodingAgentPresetOptions {\n    readonly cwd: string;\n    readonly sandboxMode: SandboxMode;\n    readonly posture: TrustPosture<'projectSettings'>;\n    readonly approvals?: Readonly<Record<string, HumanInTheLoopOptions>>;\n    readonly interactive?: InteractiveBackend;\n    readonly sandbox?: SandboxProvider;\n    readonly mcpServers?: McpServers;\n    readonly skills?: readonly string[];\n    readonly subagents?: Readonly<Record<string, SubagentAgentDefinition>>;\n    readonly claudeCode?: {\n        readonly import: readonly CompatSurface[];\n    };\n    readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>;\n    readonly writeRoot?: string;\n    readonly allowAbsolute?: boolean;\n    readonly defaultTimeoutMs?: number;\n    readonly webFetch?: CustomTool;\n    readonly webSearch?: CustomTool;\n    readonly delegateToTeam?: CustomTool;\n    readonly shellInReadOnly?: boolean;\n    readonly bashDescription?: string;\n}",
             "dist/presets.d.ts#CodingAgentTools": "interface CodingAgentTools {\n    readonly tools: CustomTool[];\n    readonly off: OffTool[];\n    readonly gates: ReadonlyMap<string, HumanInTheLoopOptions>;\n}",
             "dist/presets.d.ts#McpServers": "type McpServers = NonNullable<CompiledAgentOptionsDraft['mcpServers']>;",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",

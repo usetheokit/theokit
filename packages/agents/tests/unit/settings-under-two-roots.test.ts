@@ -8,7 +8,9 @@ import {
   firstSettingsFile,
   readManagedSettings,
   readSettingsFile,
+  SettingsFileError,
   settingsCandidates,
+  translateSettingsDocument,
 } from '../../src/config-entry.js'
 
 function setup(files: Record<string, string>): string {
@@ -104,6 +106,37 @@ describe('settings under two roots', () => {
     const c = cands(cwd).project[0]!
     expect(readSettingsFile(c, opts)).toBeUndefined()
     expect(() => readSettingsFile(c, { ...opts, throwOnMalformed: true })).toThrow(/malformed JSON/)
+  })
+
+  it('throwOnMalformed throws a SettingsFileError carrying the path', () => {
+    const cwd = setup({ '.myapp/settings.json': '{nope' })
+    const c = cands(cwd).project[0]!
+    try {
+      readSettingsFile(c, { ...opts, throwOnMalformed: true })
+      expect.unreachable()
+    } catch (error) {
+      expect(error).toBeInstanceOf(SettingsFileError)
+      expect((error as SettingsFileError).path).toBe(c.path)
+      expect((error as SettingsFileError).kind).toBe('malformed')
+    }
+  })
+
+  it('a permissions list with a non-string entry is dropped whole', () => {
+    const cwd = setup({
+      '.myapp/settings.json': '{"permissions":{"allow":[1,"Read"],"deny":["Bash"]}}',
+    })
+    const read = readSettingsFile(cands(cwd).project[0]!, opts)
+    expect(read?.permissionRules.map((r) => r.action)).toEqual(['deny'])
+  })
+
+  it('translateSettingsDocument splits an in-memory document like a file', () => {
+    const read = translateSettingsDocument(
+      { model: 'm', sandbox: {}, odd: 1 },
+      { path: 'x', foreignRoot: true },
+      opts,
+    )
+    expect(read.ignored).toEqual(['sandbox'])
+    expect(read.unrecognised).toEqual(['odd'])
   })
 
   it('a non-object permissions block is treated as absent', () => {

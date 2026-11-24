@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseEntryArguments } from '../src/entry-arguments.js'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
+import { InstanceConfigError } from '@theokit/host/instance-config'
+
+import { theoclawConfig } from '../src/config-file.js'
+
+// The shared parser, as `main.ts` and `main-acp.ts` call it: a refusal throws, and the entries exit 2.
+type Result = { ok: true } | { ok: false; error: string }
+function parseEntryArguments(argv: string[], env: NodeJS.ProcessEnv): Result {
+  try {
+    theoclawConfig.applyEntryArgs(argv, env)
+    return { ok: true }
+  } catch (error) {
+    if (!(error instanceof InstanceConfigError)) throw error
+    return { ok: false, error: error.message }
+  }
+}
 
 describe('the process entry arguments', () => {
   it('the_entry_takes_config_and_profile_and_refuses_an_undefined_argument_with_exit_2', () => {
@@ -59,5 +76,19 @@ describe('the process entry arguments', () => {
       ok: false,
       error: '--config needs a value',
     })
+  })
+})
+
+// The process entries map the shared parser's refusal to exit 2 (run from source: `dist` may not be built).
+describe.each(['main.ts', 'main-acp.ts'])('the process entry %s', (entry) => {
+  it.each([
+    [['--profile'], '--profile needs a value'],
+    [['--bogus'], 'unexpected argument --bogus'],
+    [['--config', 'a', '--config', 'b'], '--config was given twice'],
+  ])('exits_2_for_%j', (argv, message) => {
+    const path = fileURLToPath(new URL(`../src/${entry}`, import.meta.url))
+    const run = spawnSync(process.execPath, ['--import', 'tsx', path, ...argv], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, THEOCLAW_CONFIG: '', THEOCLAW_PROFILE: '' } })
+    expect(run.status).toBe(2)
+    expect(run.stderr).toContain(`theoclaw: ${message}`)
   })
 })

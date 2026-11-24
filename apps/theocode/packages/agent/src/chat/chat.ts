@@ -9,15 +9,13 @@ import { memoryEnabledForSession } from '../memory/memory-switch.js'
 import { sandboxModeForSession } from '../sandbox-switch.js'
 import { withSandboxMode } from '../config/effective-config.js'
 import {
-  createInteractiveShellTool,
   createQuestionTool,
-  createUpdatePlanTool,
   createWebFetchTool,
+  createGenericHttpSearchAdapter,
   createWebSearchTool,
-  createWriteStdinTool,
   resolveWebSearchAdapter,
-  withDescription,
 } from '@theokit/agents/tools'
+import { codingAgentPreset, codingAgentTools } from '@theokit/agents/presets'
 import type { CustomTool } from '@theokit/agents'
 import { Provider } from '@theokit/agents'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
@@ -49,7 +47,8 @@ import type { AgentDefinitionLike } from '../delegation/named-subagents.js'
 import { diskEntities } from './disk-entities.js'
 import { permissionsPluginsFor } from '../composition/agent-spec.js'
 import { refuseForeignHook } from '../hooks/foreign-hook-gate.js'
-import { settingSourcesFor } from '../setting-sources.js'
+import { FOREIGN_SURFACES } from '../setting-sources.js'
+import { projectSettingsPosture } from '../config/project-source.js'
 
 /** B-055 — told when a PreToolUse hook blocks a tool call, so a surface can render it. */
 export type HookVetoListener = (veto: { tool: string; reason: string }) => void
@@ -154,19 +153,10 @@ export async function buildChatAgent(overrides: {
   const searchConfigured = webSearch.adapter !== undefined
   const rules = bothRuleRoots(cwd, operatorHome)
   const projectDoc = await projectDocument(posture, cwd, rules, operatorHome)
-  const baseCtx = { cfg, modelId, posture, providerPlugins, registry, overrides, cwd, rules, operatorHome, projectDoc, instructionFiles: await agentsMdChain(cwd) }
-  const { agent: base, cuts: aggregateCuts } = baseAgent({ ...baseCtx, searchConfigured, searchAdapter: webSearch.adapter })
-
-  const withWrites = withWriteTools(base, {
-    writePolicy,
-    registry,
-    modelId,
-    cfg,
-    posture,
-    lifecycleHooks,
-    cwd,
-    reasoning_effort: overrides?.reasoning_effort,
-  })
+  const reasoning_effort = overrides?.reasoning_effort
+  const coding = codingPreset({ cfg, modelId, posture, cwd, interactiveBackend, lifecycleHooks, writePolicy, searchAdapter: webSearch.adapter, reasoning_effort })
+  const baseCtx = { cfg, modelId, posture, providerPlugins, coding, overrides, cwd, rules, operatorHome, projectDoc, instructionFiles: await agentsMdChain(cwd) }
+  const { agent: base, cuts: aggregateCuts } = baseAgent(baseCtx)
 
   // B-069/B-070/B-071 — loaded ONCE, here, and handed to both the builder and the record. It used
   // to be loaded inside the chain, where the result was passed to `.mcp()` and then unreachable —
@@ -174,7 +164,7 @@ export async function buildChatAgent(overrides: {
   // actually ran.
   const mcp = mcpScopes(posture, cwd, overrides?.onMcpWarn)
     const disk = await diskEntities(cwd, operatorHome, posture)
-  const chain = withShellAndProjectEntities(withWrites, {
+  const chain = withShellAndProjectEntities(base, {
     registry,
     interactiveBackend,
     posture,
@@ -326,50 +316,6 @@ function chatHookChain(
   )
 }
 
-function withWriteTools(
-  base: ReturnType<typeof baseAgent>['agent'],
-  ctx: {
-    writePolicy: ReturnType<typeof sandboxWritePolicy>
-    registry: ToolRegistry
-    modelId: string
-    cfg: EffectiveConfig
-    posture: TrustPosture
-    lifecycleHooks: ReturnType<typeof chatHookChain>
-    /** B-032 — threaded through so the delegated team is confined to the same tree as the root. */
-    cwd: string
-    reasoning_effort?: ReasoningEffort
-  },
-) {
-  const { writePolicy, registry, modelId, cfg, posture, lifecycleHooks, cwd } = ctx
-  const overrides = { reasoning_effort: ctx.reasoning_effort }
-  return base.when(writePolicy.writes, (b) =>
-    b
-        .tool(registry.get('ApplyPatch'))
-        .approval('ApplyPatch', GATE_QUESTIONS.ApplyPatch)
-        .tool(registry.get('Edit'))
-        .approval('Edit', GATE_QUESTIONS.Edit)
-        // M36 — a SEQUENTIAL team (explorer → worker) built from the SDK's `Squad.create` (no bespoke
-        // orchestration — Rule 9). Write-gated with the other write tools: the worker member needs write
-        // authority, so gating here keeps a team from widening a member's authority beyond the parent's
-        // current sandbox posture (read-only ⇒ no team; the read-only `analyst` delegation remains).
-        // M70 — the team receives what the ROOT resolved (including the runtime `--model` and
-        // `/effort`), instead of the handler re-reading config from disk and delegating with whatever
-        // was written there.
-        .tool(
-          createDelegateToTeamTool({
-            model: modelId,
-            reasoning_effort: overrides?.reasoning_effort ?? cfg.reasoning_effort,
-            sandbox_mode: cfg.sandbox_mode,
-            posture,
-            // B-032 — the same directory every other resolution in this builder uses.
-            cwd,
-            hooks: lifecycleHooks,
-          }),
-        )
-        .approval('delegate_to_team', GATE_QUESTIONS.delegate_to_team),
-  )
-}
-
 /**
  * Composition point. Split 2026-09-10: this was one 177-line function doing the two jobs its own
  * name announces. `rules/testing.md` § 3 applies the "and in the name is a smell" test to test
@@ -413,117 +359,90 @@ type ShellAndProjectCtx = {
   }
 
 function withShellAndProjectEntities(
-  withWrites: ReturnType<typeof withWriteTools>,
+  withBase: ReturnType<typeof baseAgent>['agent'],
   ctx: ShellAndProjectCtx,
 ) {
-  return withProjectEntities(withShellTools(withWrites, ctx), ctx)
+  return withProjectEntities(withBase, ctx)
 }
 
 /**
- * The tools this process provides, and the approvals that gate them.
+ * The coding agent's tools, approvals, setting sources, hook approval and withheld shell: one
+ * `codingAgentPreset`, so this product keeps no second copy of that policy.
  *
- * A chain hand-off rather than a `.tools([...])` array, for the reason recorded at the call site
- * of `profileTools`: the builder is fluent and a link cannot be skipped mid-chain.
- * `withWriteTools` already takes and returns the builder; this follows the same seam.
+ * What stays here is what the preset cannot know: the resolved sandbox and its roots, this product's
+ * own web, search and team tools, the `Bash` steer that names `interactive_shell`, and the shell in
+ * `read-only` (the kernel sandbox confines it, and the approval card gates it).
  */
-function withShellTools(
-  withWrites: ReturnType<typeof withWriteTools>,
-  ctx: ShellAndProjectCtx,
-) {
-  const { registry, interactiveBackend, modelId } = ctx
-  return (
-    withWrites
-      // M2 — the write side: atomic multi-file edits, gated behind approval below. M18: now the Codex-faithful
-      // V4A `createApplyPatchTool` built-in (`*** Begin Patch` grammar, context-tolerant matcher, strict
-      // atomic apply). Retired the bespoke JSON apply-patch.ts + apply-patch-core.ts.
-      // M13 — single-string edit as a BUILT-IN consumed straight from `@theokit/agents/tools`, aliased to a
-      // Codex name via the `withName` mechanism we upstreamed. It carries the context-tolerant matcher we
-      // also upstreamed (edit_file Strategy 3). Full circle: theocode reuses the ecosystem it enriched.
-      // M3 — shell execution, gated behind approval below. M16: now the surface-agnostic `createShellTool`
-      // built-in (catastrophic-command guard + optional SandboxProvider injection), aliased back to the
-      // Named `Bash` — Claude Code's name for it — so a `permissions` block pasted from a
-      // `.claude/settings.json` addresses this tool instead of nothing. The name used to be the
-      // Codex-ish `run_shell`, and the approval gate, the TUI header and the tool contract are all
-      // unchanged by the rename: they key off the registry, not off the spelling.
-      // The description is overridden to this agent's actual tool set (the built-in's default names
-      // write_file/glob_files/search_text — which we don't register — and drops the interactive_shell steer).
-      // M68 — `Bash`'s AUTHORITY (projectRoot + kernel sandbox) comes from the single registry;
-      // what stays here is the parent's own STEER. The distinction is deliberate: the description
-      // cites `interactive_shell`/`write_stdin`, which a squad member does NOT receive, so inheriting
-      // it would point them at tools they do not have. The registry rules what a tool CAN do; the
-      // consumer may refine what it SAYS to the model.
-      .tool(
-        withDescription(
-          registry.get('Bash'),
-          'Run a shell command in the project (tests, build, git). Returns { ok, stdout, stderr, exit_code } ' +
-            '— READ exit_code, non-zero means it failed; report what failed, never claim success unless 0. ' +
-            'One-shot and non-interactive (no stdin): for a REPL or a command that PROMPTS for input ' +
-            '(python3, git rebase -i, a read prompt) use interactive_shell + write_stdin instead. Do NOT use ' +
-            'it for file ops — prefer Read/Glob/Grep/apply_patch. timeout_ms defaults to 30000 ' +
-            '(max 300000). Requires human approval before running.',
-        ),
-      )
-      .approval('Bash', GATE_QUESTIONS.Bash)
-      // M14 — interactive session as a surface-agnostic built-in from @theokit/agents/tools, backed by the
-      // injected @theokit/agents-pty (local node-pty). `interactive_shell` starts a REPL/prompting session;
-      // `write_stdin` drives it. Both gated below. Replaces the bespoke run_shell-interactive + write_stdin.
-      // M101 #188 — OUR `interactive_shell`: the SDK's collapses `MaxSessionsError` into
-      // `{"ok":false,"error":"interactive_unavailable"}`, so `max`/`liveSessionIds` — the only
-      // information the model can act on — never reach it. See
-      // `agents/ask/interactive-shell-tool.ts` (which carries the mechanised exit criterion).
-      .tool(createInteractiveShellTool({ interactive: interactiveBackend }))
-      .approval('interactive_shell', GATE_QUESTIONS.interactive_shell)
-      .tool(createWriteStdinTool({ interactive: interactiveBackend }))
-      .approval('write_stdin', GATE_QUESTIONS.write_stdin)
-      // M4 — the visible plan/step affordance for the iterate-to-green loop (no side effect, not gated).
-      // M17: now the Codex-faithful `createUpdatePlanTool` built-in (declarative plan; structured result
-      // rendered as a □/▶/✔ checklist by the TUI's formatToolResult). Retired the bespoke local tool.
-      .tool(createUpdatePlanTool())
-      // A2A — delegate focused, read-only analysis to an isolated child agent. `SubAgent.create` returns a
-      // `CustomTool`, so it wires through the same `.tool()` seam. Needs `@theokit/agents@>=7.3.1` (#142+#143).
-      .tool(createAnalystSubagent(modelId, registry))
-      // Human-in-the-loop: gate every side-effecting / disk-mutating / command-executing tool behind an
-      // approval. The run pauses and the surface shows an approval card — allow or reject — before it runs.
-      // M23 — the approval map must reference ONLY registered tools (the framework fail-fasts otherwise),
-      // so the write-tool gates appear exactly when the sandbox mode granted those tools.
+function codingPreset(ctx: {
+  cfg: EffectiveConfig
+  modelId: string
+  posture: TrustPosture
+  cwd: string
+  interactiveBackend: InteractiveBackend
+  lifecycleHooks: ReturnType<typeof chatHookChain>
+  writePolicy: ReturnType<typeof sandboxWritePolicy>
+  /** The adapter `resolveWebSearchAdapter` chose; `web_search` is declared only when it is set. */
+  searchAdapter: ReturnType<typeof resolveWebSearchAdapter>['adapter']
+  reasoning_effort?: ReasoningEffort
+}) {
+  const { cfg, cwd, writePolicy, searchAdapter } = ctx
+  const scope = resolveToolScope(cfg, cwd)
+  // A placeholder adapter is enough for the gate names; the real one is attached below when configured.
+  const webSearch = createWebSearchTool({ search: searchAdapter ?? createGenericHttpSearchAdapter() })
+  // M36 — a SEQUENTIAL team (explorer → worker) from `Squad.create`, write-gated: the worker needs
+  // write authority, so no team in `read-only`. M70 — it receives what the ROOT resolved (including
+  // the runtime `--model` and `/effort`); B-032 — and is confined to the same tree.
+  const delegateToTeam = createDelegateToTeamTool({
+    model: ctx.modelId,
+    reasoning_effort: ctx.reasoning_effort ?? cfg.reasoning_effort,
+    sandbox_mode: cfg.sandbox_mode,
+    posture: ctx.posture,
+    cwd,
+    hooks: ctx.lifecycleHooks,
+  })
+  const shared = {
+    cwd,
+    sandboxMode: cfg.sandbox_mode,
+    sandbox: scope.sandbox,
+    writeRoot: scope.writeRoot,
+    allowAbsolute: true,
+    ...(scope.defaultTimeoutMs !== undefined && { defaultTimeoutMs: scope.defaultTimeoutMs }),
+    interactive: ctx.interactiveBackend,
+    shellInReadOnly: true,
+    webFetch: createWebFetchTool(),
+  } as const
+  // Every name the product can gate, whatever this build registered: a superset on purpose, since an
+  // ungranted tool is never registered (#945). Derived from the preset, not written out again.
+  const gated: ReadonlySet<string> = new Set(
+    codingAgentTools({
+      ...shared,
+      sandboxMode: 'workspace-write',
+      webSearch,
+      delegateToTeam,
+    }).gates.keys(),
   )
+  const preset = codingAgentPreset({
+    ...shared,
+    posture: projectSettingsPosture(ctx.posture),
+    // `web_search` is declared ONLY when a provider is configured — see `webSearchConfigured`.
+    ...(searchAdapter !== undefined && { webSearch }),
+    ...(writePolicy.writes && { delegateToTeam }),
+    // #130 — the framework's compatibility loader spawns hooks it finds without passing through
+    // `buildHookHandlers`; `refuseForeignHook` is the decision point it consults before every spawn.
+    hookApproval: { approve: refuseForeignHook },
+    claudeCode: { import: FOREIGN_SURFACES },
+    // `Bash`'s AUTHORITY comes from the scope; what stays here is this agent's own STEER, which cites
+    // `interactive_shell`/`write_stdin`, tools a squad member does not receive.
+    bashDescription:
+      'Run a shell command in the project (tests, build, git). Returns { ok, stdout, stderr, exit_code } ' +
+      '— READ exit_code, non-zero means it failed; report what failed, never claim success unless 0. ' +
+      'One-shot and non-interactive (no stdin): for a REPL or a command that PROMPTS for input ' +
+      '(python3, git rebase -i, a read prompt) use interactive_shell + write_stdin instead. Do NOT use ' +
+      'it for file ops — prefer Read/Glob/Grep/apply_patch. timeout_ms defaults to 30000 ' +
+      '(max 300000). Requires human approval before running.',
+  })
+  return { preset, gated }
 }
-
-/**
- * The question on each approval card: the one source for both the `.approval(...)` registered beside
- * each tool and the set of gated names the permissions plugin receives (#945).
- */
-const GATE_QUESTIONS = {
-  ApplyPatch: { question: 'Apply this file patch?' },
-  Edit: { question: 'Apply this edit?' },
-  delegate_to_team: { question: 'Delegate this task to the team (the worker may edit/run files)?' },
-  Bash: { question: 'Run this shell command?' },
-  interactive_shell: { question: 'Start this interactive session?' },
-  write_stdin: { question: 'Send this input to the interactive session?' },
-  web_fetch: { question: 'Fetch this URL?' },
-  web_search: { question: 'Search the web for this?' },
-} as const
-
-/**
- * The human-in-the-loop gates, one per side-effecting tool this process registers. Also the set an
- * unmatched `permissions` verdict is handed to (#945), so the card and that set cannot drift apart.
- */
-export function approvalGates(opts: { writes: boolean; searchConfigured: boolean }) {
-  const q = GATE_QUESTIONS
-  return {
-    ...(opts.writes
-      ? { ApplyPatch: q.ApplyPatch, Edit: q.Edit, delegate_to_team: q.delegate_to_team }
-      : {}),
-    Bash: q.Bash,
-    interactive_shell: q.interactive_shell,
-    write_stdin: q.write_stdin,
-    web_fetch: q.web_fetch,
-    ...(opts.searchConfigured ? { web_search: q.web_search } : {}),
-  }
-}
-
-/** Every gated name. `writes: true` is a superset, not a claim: an ungranted write tool is never registered. */
-const ALL_GATED: ReadonlySet<string> = new Set(Object.keys(GATE_QUESTIONS))
 
 /**
  * The entities read from the project's own disk: MCP servers, skills, setting sources, hooks.
@@ -533,12 +452,20 @@ const ALL_GATED: ReadonlySet<string> = new Set(Object.keys(GATE_QUESTIONS))
  * per-tool approval; a SKILL.md steers the model. An untrusted repository gets none of them.
  */
 function withProjectEntities(
-  withShell: ReturnType<typeof withShellTools>,
+  withShell: ReturnType<typeof baseAgent>['agent'],
   ctx: ShellAndProjectCtx,
 ) {
   const { posture, cfg, lifecycleHooks } = ctx
   return (
     withShell
+      // Operator skills stay a product link, not a preset option (#2954): the preset drops `skills`
+      // when the directory is untrusted, and `~/.theokit/skills/` is the operator's own, so it loads
+      // whatever the trust state. Project skills, MCP servers and named subagents are gated one by
+      // one below because the preset has one `projectSettings` posture for all three.
+      // A2A — the product's own delegation: a read-only analyst child. `SubAgent.create` returns a
+      // `CustomTool`, so it wires through the same `.tool()` seam. The coding tools and their
+      // approvals come from `codingAgentPreset`, applied in `baseAgent`.
+      .tool(createAnalystSubagent(ctx.modelId, ctx.registry))
       // M8 — MCP tools (Codex parity): wire external Model Context Protocol servers declared in the
       // project's `.mcp.json`. The SDK owns MCP execution (spawn + tools/list + tools/call); their tools
       // appear alongside the built-in ones. Absent `.mcp.json` ⇒ empty map ⇒ no-op (MCP is opt-in).
@@ -564,45 +491,10 @@ function withProjectEntities(
         read: 'advertised',
       })
         .subagents(ctx.namedSubagents)
-      // M20 — opt into theokit's `.theokit/` file-based config (project + user): skills, subagents, hooks,
-      // context, mcp are discovered from disk. The enabler for M24 (disk skills), M25 (subagent roles), M26
-      // (lifecycle hooks) — those milestones populate `.theokit/`; here we just turn discovery on. The
-      // hand-rolled AGENTS.md + `.mcp.json` loaders stay for back-compat (Codex `.codex` + AGENTS.md parity).
-      // M33 — TRUST-GATE the `project` source. The SDK loads `.theokit/agents/*.md` (and now honors their
-      // per-agent `model`/`reasoning_effort`/`sandbox`) whenever `project` is enabled, and the loader runs
-      // inside the SDK before theocode sees the roles — so the ONLY seam we control to stop an untrusted
-      // repo from redirecting a subagent's model/sandbox is this toggle. Untrusted ⇒ `user` only, mirroring
-      // how `.skills()` and AGENTS.md are already gated (subagents were the one disk entity that was not).
-      // B-008 — the `project` source enables repository hooks too, not just subagent discovery, and
-      // those bypass TheoCode's per-hook fingerprint gate. It now requires both capabilities.
-      // M86 — `@theokit/agents@8.0.0` asks for the evidence instead of a string list. `user` stays a
-      // boolean (`~/.theokit/` is the operator's own machine); `project` now carries the posture that
-      // authorized it, so a refusal inside the framework can say WHERE the decision came from. The
-      // gate itself is unchanged — `projectSettingsPosture` projects the same B-008 conjunction.
-      //
-      // `project` is OMITTED rather than passed with a denying posture. The framework REFUSES a
-      // requested-but-ungranted `project` by throwing — right for a caller that asked for it, and
-      // TheoCode is not asking. An untrusted directory here has always degraded to user-only and
-      // kept working; passing the grant unconditionally would turn that into a hard failure on every
-      // untrusted repo. Omitting a root is not enabling it.
-      .settingSources(settingSourcesFor(posture))
-      // #130 — the framework's compatibility loader reads `.claude/settings.json` and
-      // `.theokit/hooks.json` itself and spawns what it finds, never passing through
-      // `buildHookHandlers` and therefore never through this product's fingerprint gate. Measured
-      // before this existed: such a hook fired once, ungated, against a control arm at zero where
-      // the same tool still ran. This is the decision point the framework consults before every one
-      // of those spawns; `refuseForeignHook` explains why the answer is always no.
-      //
-      // This product's OWN hooks do not arrive here — they are translated by `buildHookHandlers`,
-      // which carries its own `fingerprint` callback into the framework. That separation is what
-      // the bench measures on both sides, because a gate that also refused ours would silently
-      // disable a working feature and look exactly like a fix.
-      .hookApproval({ approve: refuseForeignHook })
+      // Setting sources and hook approval come from `codingAgentPreset` (see `codingPreset`).
       .hooks(lifecycleHooks)
   )
 }
-
-import { readTool } from './read-tools.js'
 
 /**
  * MEASURED AND DELIBERATELY NOT SPLIT (2026-09-10).
@@ -629,11 +521,8 @@ function baseAgent(ctx: {
   posture: TrustPosture
   cwd: string
   providerPlugins: ReturnType<typeof Provider.builtins>
-  registry: ToolRegistry
-  /** See `resolveWebSearchAdapter`. Decided by the caller so the tool and its approval agree. */
-  searchConfigured: boolean
-  /** The adapter `resolveWebSearchAdapter` chose; set exactly when `searchConfigured` is. */
-  searchAdapter: ReturnType<typeof resolveWebSearchAdapter>['adapter']
+  /** The coding preset and the names it can gate, built by the caller from the resolved sandbox. */
+  coding: ReturnType<typeof codingPreset>
   /** #91 — the single rules load, so the prompt and `/status` cannot disagree. */
   rules: { project: RulesLoad; user: RulesLoad }
   /** The project document and the files it came from, loaded once by the caller. */
@@ -647,7 +536,7 @@ function baseAgent(ctx: {
     reasoning_effort?: ReasoningEffort
   }
 }) {
-  const { cfg, modelId, posture, providerPlugins, registry, overrides } = ctx
+  const { cfg, modelId, posture, providerPlugins, overrides } = ctx
 
   // B-173 — composed HERE rather than inline in `.system()`, because what the aggregate ceiling
   // cut has to leave this function. It is the only place that knows: the loader's ceiling is
@@ -695,7 +584,7 @@ function baseAgent(ctx: {
       // The DECISION remains the product's: each headless surface declares its posture at the composition
       // point (`exec/main.ts`), derived from `headlessApprovalPosture` — including the F-arch-3 refusal
       // ("no bwrap means no confinement") that M70 added.
-      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome, ctx.cfg.approval_policy, ALL_GATED)])
+      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome, ctx.cfg.approval_policy, ctx.coding.gated)])
       // M20 — reasoning budget from config (default "medium" matches Codex's own default, so the harness
       // comparison still isolates harness behavior when no config overrides it).
       .reasoningEffort(overrides?.reasoning_effort ?? cfg.reasoning_effort)
@@ -725,75 +614,12 @@ function baseAgent(ctx: {
       // config object without the key made the whole expression `undefined` — which reads as "off"
       // to the SDK and as a type error to nobody, because the field is optional upstream. It cost a
       // test that asserted `false` and got `undefined`.
-      // #1913 — the SDK builtin `shell` is withheld from the declared set, so its schema is not re-sent
-      // on every round and the model cannot pick it. `withBuiltinShellVeto` stays as the backstop.
-      .withholdBuiltinTools(['shell'])
       .memory({
         enabled: posture.allows.memory && cfg.memory === true && memoryEnabledForSession(),
       })
-      // B-059 — WHICH registry tools this agent holds is decided by the shared composition entry
-      // (`composition/agent-spec.ts`), the same one the reviewer and the delegated roles go
-      // through. The fluent chain is untouched: the entry returns a SHAPE and the tools are fed in
-      // here, so this is a declaration change and not a behaviour change. The per-tool comments
-      // below record why each is in the set and stay with the declaration.
-      //
-      // M16 — CurrentTime is now a surface-agnostic built-in consumed from `@theokit/agents/tools`
-      // (Codex-faithful UTC + optional IANA timezone); the bespoke local tool was retired.
-      .tool(readTool(registry, 'CurrentTime'))
-      // M1 — read-only filesystem access (path-safe; see tools/*.ts + lib/*-core.ts).
-      // M17: read_file is now the Codex-grade `createReadFileTool` built-in — lineNumbers (cat -n view the
-      // model cites/edits by), offset/limit paging, and allowAbsolute (Codex reads-anywhere; the secret guard
-      // blocks .env/.git/… at any depth). Retired the bespoke read-file.ts + read-file-core.ts.
-      .tool(readTool(registry, 'Read'))
-      // B-082 registered `ViewImage` and never handed it to an agent. Measured 2026-08-25: the
-      // registry built it, `image-root.test.ts` asserted it was resolvable BY THE REGISTRY under a
-      // describe block named "ViewImage is wired", and no agent held it — the compiled chat agent
-      // declared 16 tools and this was not among them. So the model could not look at a screenshot
-      // it had just produced, which is the entire capability the item exists for, and the test
-      // that would have caught it was checking the wrong end of the wire.
-      //
-      // Ungated, like every other read. It reads a file under the SAME root through the SAME
-      // containment rule as `Read`, which is ungated; `Read` can already hand the model
-      // the bytes of any file in the workspace. Gating this one would gate the RENDERING, not the
-      // ACCESS, and would train the user to click through cards that protect nothing — which is
-      // what makes the cards on `Bash` and `ApplyPatch` worth reading.
-      .tool(readTool(registry, 'ViewImage'))
-      .tool(readTool(registry, 'Glob'))
-      // M17: grep is now the `createSearchTextTool` built-in in regex mode (grep semantics) + allowAbsolute
-      // (Codex reads-anywhere), aliased to the `Grep` name. Retired the bespoke grep.ts + grep-core.ts.
-      .tool(readTool(registry, 'Grep'))
-      // M6 — repo-aware context (read-only, ungated).
-      // M76 — the framework's tool. The local one parsed `git status --porcelain=v1 -b` in 62 LoC;
-      // `createGitStatusTool` produces the SAME output, branch line included (parity verified BEFORE
-      // deleting — without that check, migrating would have silently cost the "am I on the right branch?").
-      // M99 — it comes from the registry. Built inline here until then, carrying `projectRoot` outside the
-      // single source: one of the two sites the manual survey at `ROADMAP.md:2412` did not enumerate, in
-      // the very file M68 refactored. The name (`RepoStatus`) is preserved — it is a contract with the
-      // model, with the approval map, and with the TUI's rendering.
-      .tool(readTool(registry, 'RepoStatus'))
-      // M38 — the working-tree diff, so the model can review pending changes. `createGitDiffTool` is a
-      // `@theokit/agents/tools` built-in (`git diff --no-color`, detached, 30s/5MB caps) — read-only, so ungated
-      // (same posture as `RepoStatus`, which also shells out to git). LLM name: `GitDiff`.
-      // M99 — same as above: from the registry, keeping the name `GitDiff`.
-      .tool(readTool(registry, 'GitDiff'))
-      // M38 — `request_user_input`: the agent pauses mid-turn to ask the user a question, resolved through the
-      // TUI's EXISTING inline input slot via the ask-bridge (no second prompt channel). `createQuestionTool`
-      // returns a literal object named `question` with an `unknown` inputSchema, so we spread-adapt it to the
-      // Codex-faithful name + the `CustomTool` shape, REUSING its handler + 5-min timeout (Rule 9). Ungated:
-      // its only effect is to ask the human, so a boolean approval card on top would be a redundant gate.
-      // M34 — web tools (Codex `web_search` parity), both approval-gated below. `web_fetch` needs no key and
-      // keeps the built-in's SSRF guard ON by default (a model-chosen URL is untrusted). `web_search` uses the
-      // adapter `resolveWebSearchAdapter` picks from the environment (Brave, Tavily, SearXNG or generic HTTP). Both are `@theokit/agents/tools` built-ins — wired, not reinvented (Rule 9).
-      .tool(createWebFetchTool())
-      .approval('web_fetch', GATE_QUESTIONS.web_fetch)
-      // `web_search` is declared ONLY when a provider is configured — see `resolveWebSearchAdapter`.
-      // `.when` (M69) is the seam for exactly this: a conditional link in the MIDDLE of a fluent
-      // chain, which is what `chat.ts:320` records as impossible without it.
-      .when(ctx.searchAdapter !== undefined, (b) =>
-        b
-          .tool(createWebSearchTool({ search: ctx.searchAdapter! }))
-          .approval('web_search', GATE_QUESTIONS.web_search),
-      )
+      // The coding tools, their approvals, setting sources, hook approval and the withheld builtin
+      // `shell` are one capability — see `codingPreset`. The reads are ungated, like every other read.
+      .capability(ctx.coding.preset)
 
   return { agent, cuts: composed.cuts }
 

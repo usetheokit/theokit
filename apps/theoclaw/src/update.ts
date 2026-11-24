@@ -1,9 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
+import { serviceBackend, type ServiceBackend, UnsupportedPlatformError } from '@theokit/host/service'
+
 import { loadConfiguration } from './config-file.js'
-import { TheoClawConfigError } from './control-plane/errors.js'
-import { definitionPath, type DaemonIo } from './daemon.js'
+import { TheoClawConfigError, describeError } from './control-plane/errors.js'
+import { type DaemonIo } from './daemon.js'
+import { logPath } from './daemon-common.js'
 import type { Runner } from './run-command.js'
 import { resolveInstance } from './instance.js'
 
@@ -15,7 +18,7 @@ import { resolveInstance } from './instance.js'
  *
  * Two markers in `dist/` (gitignored) make a retry finish what a failed run left: `install.sh`
  * writes `.installed-commit` as its last step, and this command writes `.restarted-commit-<label>`
- * once `systemctl --user restart` of that label's unit exits 0. When HEAD did not move, `from` is
+ * once the service backend restarts that label's service. When HEAD did not move, `from` is
  * the commit the stale marker names. `daemon install` writes no restart marker, so the first update
  * after it rebuilds and restarts even when HEAD did not move.
  */
@@ -86,26 +89,35 @@ function position(dist: string, before: string, head: string, restartedMarker: s
   return { head, from: restarted, current: unitCurrent }
 }
 
-/** Whether the platform's login service for this instance is installed: a systemd unit or a LaunchAgent. */
-function serviceInstalled(io: UpdateIo, label: string): boolean {
-  return existsSync(definitionPath(io.platform, label, io.homeDir))
+/** The platform's service backend; undefined where there is none, so the update has no service to restart. */
+function backendFor(io: UpdateIo, runner: Runner, label: string): ServiceBackend | undefined {
+  try {
+    return serviceBackend(io.platform, { runner, homeDir: io.homeDir, env: io.env, ...(io.uid === undefined ? {} : { uid: io.uid }), logFile: logPath(label, io.homeDir) })
+  } catch (error) {
+    if (error instanceof UnsupportedPlatformError) return undefined
+    throw error
+  }
 }
 
-/** The command that restarts the installed service onto the new build. */
-function restartCommand(io: UpdateIo, label: string): { command: string; args: string[] } {
-  if (io.platform === 'darwin') return { command: 'launchctl', args: ['kickstart', '-k', `gui/${io.uid ?? 'unknown'}/${label}`] }
-  return { command: 'systemctl', args: ['--user', 'restart', `${label}.service`] }
+/** Whether the instance's login service is installed; a state the backend cannot tell is no proof of absence. */
+async function serviceInstalled(backend: ServiceBackend | undefined, label: string): Promise<boolean> {
+  if (backend === undefined) return false
+  const state = await backend.status(label)
+  if (state === 'unknown') throw new StepFailed(`the state of ${label} cannot be read; nothing was restarted`)
+  return state !== 'not-installed'
 }
 
-async function rebuild(io: UpdateIo, runner: Runner, dist: string, label: string, unitInstalled: boolean): Promise<void> {
+async function rebuild(runner: Runner, backend: ServiceBackend | undefined, io: UpdateIo, dist: string, label: string, unitInstalled: boolean): Promise<void> {
   const install = await runner(join(dirname(dist), 'install.sh'), [])
   // The build's last line may lack a newline; `updated` must still start a line of its own.
   io.stdout.write(install.stdout === '' || install.stdout.endsWith('\n') ? install.stdout : `${install.stdout}\n`)
   if (install.code !== 0) throw new StepFailed(`install.sh failed (exit ${install.code}): ${install.stderr.trim()}`)
-  if (!unitInstalled) return
-  const { command, args } = restartCommand(io, label)
-  const restart = await runner(command, args)
-  if (restart.code !== 0) throw new StepFailed(`${command} ${args.join(' ')} failed: ${restart.stderr.trim()}`)
+  if (!unitInstalled || backend === undefined) return
+  try {
+    await backend.restart(label)
+  } catch (error) {
+    throw new StepFailed(`restart of ${label} failed: ${describeError(error)}`)
+  }
 }
 
 async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> {
@@ -121,13 +133,14 @@ async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> 
   await advance(runner, root, branch)
   const head = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
   const restartedMarker = join(dist, `.restarted-commit-${label}`)
-  const unitInstalled = serviceInstalled(io, label)
+  const backend = backendFor(io, runner, label)
+  const unitInstalled = await serviceInstalled(backend, label)
   const at = position(dist, before, head, restartedMarker, unitInstalled)
   if (at.current) {
     io.stdout.write(`theoclaw update: already up to date on ${branch} at ${head}\n`)
     return
   }
-  await rebuild(io, runner, dist, label, unitInstalled)
+  await rebuild(runner, backend, io, dist, label, unitInstalled)
   if (unitInstalled) writeFileSync(restartedMarker, `${head}\n`)
   io.stdout.write(`updated ${at.from ?? 'an unrecorded build'} -> ${head}\n`)
 }
