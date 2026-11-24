@@ -52,7 +52,9 @@ let defaultClock = 0
  * A `ControlStreamInbox` a surface posts notices to. Pass the same `stamp` the control client uses, so
  * notices and frames share one arrival clock; without one it counts on its own.
  */
-export function createControlStreamInbox(options?: { readonly stamp?: () => number }): ControlStreamInbox & {
+export function createControlStreamInbox(options?: {
+  readonly stamp?: () => number
+}): ControlStreamInbox & {
   post(notice: ControlStreamNotice): void
 } {
   const stamp = options?.stamp ?? ((): number => ++defaultClock)
