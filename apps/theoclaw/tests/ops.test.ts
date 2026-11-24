@@ -238,6 +238,26 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     expect(h.stdout()).not.toContain(KEY)
   })
 
+  it('logs_on_windows_prints_the_last_lines_of_the_tee_file_masked', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const log = join(h.io.homeDir, 'win.log')
+    writeFileSync(log, `old\nkey ${KEY} leaked\nlast\n`)
+    Object.assign(h.io, { platform: 'win32' })
+    h.useRunner(() => Promise.reject(new Error('no service command may run')))
+    expect(await runCli(['logs', '--lines', '2', '--file', log], h.io)).toBe(0)
+    expect(h.stdout()).toContain('[redacted]')
+    expect(h.stdout()).toContain('last')
+    expect(h.stdout()).not.toContain('old')
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('logs_on_windows_without_a_file_reads_the_default_tee_path_through_the_backend', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\n`)
+    Object.assign(h.io, { platform: 'win32' })
+    expect(await runCli(['logs'], h.io)).toBe(0)
+    expect(h.stdout()).toBe('')
+  })
+
   it('logs falls back to the journal and reports its failure', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     const calls: string[][] = []

@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseEntryArguments } from '../src/entry-arguments.js'
+import { InstanceConfigError } from '@theokit/host/instance-config'
+
+import { theoclawConfig } from '../src/config-file.js'
+
+// The shared parser, as `main.ts` and `main-acp.ts` call it: a refusal throws, and the entries exit 2.
+type Result = { ok: true } | { ok: false; error: string }
+function parseEntryArguments(argv: string[], env: NodeJS.ProcessEnv): Result {
+  try {
+    theoclawConfig.applyEntryArgs(argv, env)
+    return { ok: true }
+  } catch (error) {
+    if (!(error instanceof InstanceConfigError)) throw error
+    return { ok: false, error: error.message }
+  }
+}
 
 describe('the process entry arguments', () => {
   it('the_entry_takes_config_and_profile_and_refuses_an_undefined_argument_with_exit_2', () => {

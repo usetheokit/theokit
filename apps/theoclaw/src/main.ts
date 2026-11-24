@@ -19,9 +19,9 @@ import {
   createAgentFactory,
   createChannelAgentFactory,
 } from './control-plane/agent-factory.js'
-import { loadConfiguration } from './config-file.js'
+import { InstanceConfigError } from '@theokit/host/instance-config'
+import { loadConfiguration, theoclawConfig } from './config-file.js'
 import { watchConfiguration } from './ops/hot-reload.js'
-import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import {
   claimInstance,
@@ -78,9 +78,12 @@ let imported: AgentImport | undefined
 let telemetry: RegisteredTelemetry
 try {
   // The arguments first: a scheduled task passes its configuration as arguments, not as environment.
-  const parsed = parseEntryArguments(process.argv.slice(2), process.env)
-  if (!parsed.ok) {
-    process.stderr.write(`theoclaw: ${parsed.error}\n`)
+  try {
+    theoclawConfig.applyEntryArgs(process.argv.slice(2), process.env)
+  } catch (error) {
+    if (!(error instanceof InstanceConfigError)) throw error
+    process.stderr.write(`theoclaw: ${error.message}
+`)
     process.exit(2)
   }
   // The configuration file next (B-374): it fills only what the environment leaves unset.

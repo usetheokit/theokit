@@ -1,5 +1,6 @@
 import { serviceBackend, type ServiceBackend, type ServiceSpec, UnsupportedPlatformError } from '@theokit/host/service'
 
+import { theoclawConfig } from './config-file.js'
 import { describeError } from './control-plane/errors.js'
 import { type DaemonIo, checkInstallable, logPath, resolveTarget } from './daemon-common.js'
 import type { Runner } from './run-command.js'
@@ -58,15 +59,14 @@ export async function daemonInstall(io: DaemonIo, runner: Runner): Promise<numbe
   const target = checkInstallable(io)
   if (target === undefined) return 1
   return attempt(io, async () => {
-    // A task carries no environment, so on Windows the entry takes the instance as arguments (`entry-arguments.ts`);
-    // the package cannot carry them itself: #2570.
+    // A task carries no environment, so on Windows the entry takes the instance as arguments.
     const windows = io.platform === 'win32'
     const spec: ServiceSpec = {
       label: target.label,
       description: `TheoClaw (${target.label})`,
       command: io.nodePath,
       args: windows
-        ? [io.entry, '--config', target.configPath, ...(target.profile === undefined ? [] : ['--profile', target.profile])]
+        ? [io.entry, ...theoclawConfig.entryArgs({ THEOCLAW_CONFIG: target.configPath, ...(target.profile === undefined ? {} : { THEOCLAW_PROFILE: target.profile }) }, io.homeDir)]
         : [io.entry],
       ...(windows ? {} : { env: { THEOCLAW_CONFIG: target.configPath, ...(target.profile === undefined ? {} : { THEOCLAW_PROFILE: target.profile }) } }),
       workingDirectory: target.workingDirectory,
