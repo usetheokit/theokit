@@ -207,6 +207,19 @@ describe('#67 — declared against what is on disk', () => {
     expect(skillsOnDisk(cwd, []).presentButUndeclared).toEqual([])
   })
 
+  it('test_a_stray_file_inside_plugins_is_not_a_bundle', () => {
+    mkdirSync(join(cwd, '.claude', 'plugins', 'demo', 'skills', 'bundled'), { recursive: true })
+    writeFileSync(
+      join(cwd, '.claude', 'plugins', 'demo', 'skills', 'bundled', 'SKILL.md'),
+      '---\nname: bundled\n---\nbody\n',
+    )
+    writeFileSync(join(cwd, '.claude', 'plugins', 'README.md'), 'notes')
+    writeFileSync(join(cwd, '.claude', 'plugins', 'index.json'), '{}')
+
+    expect(skillsOnDisk(cwd, ['bundled']).declaredButAbsent).toEqual([])
+    expect(skillsOnDisk(cwd, ['bundled']).bundledSkills).toEqual(['bundled'])
+  })
+
   it('test_no_skills_anywhere_is_not_an_error', () => {
     expect(skillsOnDisk(cwd, [])).toEqual({
       declaredButAbsent: [],

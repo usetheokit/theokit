@@ -157,7 +157,10 @@ export function skillsOnDisk(
  */
 function bundleSkillRoots(pluginsDir: string): string[] {
   if (!existsSync(pluginsDir)) return []
-  return readdirSync(pluginsDir).map((bundle) => join(pluginsDir, bundle, 'skills'))
+  // Stray files (README, JSON) beside the bundles are not bundles; only directories count.
+  return readdirSync(pluginsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(pluginsDir, entry.name, 'skills'))
 }
 
 /**
