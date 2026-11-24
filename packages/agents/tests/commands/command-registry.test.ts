@@ -81,3 +81,16 @@ describe('createCommandRegistry', () => {
     })
   })
 })
+
+describe('createCommandRegistry router options', () => {
+  it('rejects names that differ only by case when case-insensitive', () => {
+    const defs = [
+      { name: 'Go', description: 'a', arg: 'optional' as const },
+      { name: 'go', description: 'b', arg: 'optional' as const },
+    ]
+    expect(() => createCommandRegistry(defs)).not.toThrow()
+    expect(() => createCommandRegistry(defs, { caseInsensitive: true })).toThrow(
+      CommandRegistryError,
+    )
+  })
+})
