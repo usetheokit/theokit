@@ -281,8 +281,7 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
     // was declared (761 characters/round, measured), approval-gated, and able to return only
     // nothing. The model paid for it every round and the user was asked to approve a search that
     // had nothing to search.
-    vi.stubEnv('THEOKIT_SEARCH_API_URL', '')
-    const agent = await compile({ surface: 'headless', cwd: '/p' })
+    const agent = await compile({ surface: 'headless', cwd: '/p', env: {} })
     const names = namesOf(agent)
 
     expect(
@@ -305,8 +304,7 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
   it('test_web_search_is_declared_and_gated_when_a_provider_is_configured', async () => {
     // The counter-proof. Without it, withholding the tool unconditionally would pass the test above
     // while silently deleting a capability — the worse outcome of the two.
-    vi.stubEnv('THEOKIT_SEARCH_API_URL', 'https://search.example.invalid/q')
-    const agent = await compile({ surface: 'headless', cwd: '/p' })
+    const agent = await compile({ surface: 'headless', cwd: '/p', env: { BRAVE_API_KEY: 'test-key' } })
 
     expect(
       namesOf(agent),

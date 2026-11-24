@@ -145,7 +145,7 @@ not that every knob is.
 | `THEOCODE_DIAGNOSTICS` | off | `stderr` to see the framework's diagnostics. This is the recovery path when a turn fails and the message does not say why — a rate-limit error has surfaced no other way. Unset and disabled look identical, which is the reason it is listed here. |
 | `THEOCODE_THEME` | — | Forces the colour theme by name. Outranks `/theme` and `NO_COLOR`. A name outside the set is reported by `/status`, not applied. |
 | `NO_COLOR` | — | The [cross-tool convention](https://no-color.org): any value disables colour. `THEOCODE_THEME` deliberately outranks it. |
-| `THEOKIT_SEARCH_API_URL` | — | The web-search provider endpoint. Absent or misspelt, `web_search` is **not declared to the model at all** — the capability disappears in a way that looks exactly like a model choosing not to search. |
+| `THEOKIT_SEARCH_API_URL` | — | The generic web-search provider endpoint (needs `THEOKIT_SEARCH_API_KEY` too; `BRAVE_API_KEY`, `TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` also work, `THEOKIT_SEARCH=off` disables). With no provider, `web_search` is **not declared to the model at all** — the capability disappears in a way that looks exactly like a model choosing not to search. |
 | `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | — | Provider keys, in that precedence order. |
 | `SHELL` | `/bin/sh` | The shell used to expand a custom command in the TUI. |
 | `LIVE_MODEL` | `google/gemini-2.5-flash-lite` | Used by the live test harnesses only. Does not affect the product runtime. |
