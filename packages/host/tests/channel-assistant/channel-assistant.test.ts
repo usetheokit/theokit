@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { BasePlatformAdapter } from '@theokit/gateway'
 import type {
   GatewayHook,
@@ -338,5 +340,15 @@ describe('createChannelAssistant', () => {
     await assistant.ready
     expect(disposed).toEqual(['sessions'])
     await assistant.close()
+  })
+})
+
+describe('the declared @theokit/sdk range', () => {
+  it('starts at the SDK that has Agent.sessionPool({ agent }) and the mask flush()', () => {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8')) as {
+      peerDependencies: Record<string, string>
+    }
+    const floor = /^>=(\d+)\./.exec(pkg.peerDependencies['@theokit/sdk'] ?? '')
+    expect(Number(floor?.[1])).toBeGreaterThanOrEqual(12)
   })
 })
