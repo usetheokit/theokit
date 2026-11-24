@@ -15,9 +15,10 @@ describe('InProcessTransport forwards the send body', () => {
   it('hands the runner the object passed to send, per turn', async () => {
     const seen: InProcessRunInput<TurnBody>[] = []
     const transport = new InProcessTransport({
-      // eslint-disable-next-line require-yield -- an empty turn
       run: async function* (input) {
         seen.push(input as InProcessRunInput<TurnBody>)
+        await Promise.resolve()
+        yield { type: 'finish' }
       },
     })
     const client = new AgentClient<TurnBody>(transport)
