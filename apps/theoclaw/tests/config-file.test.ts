@@ -104,4 +104,23 @@ describe('the configuration file', () => {
     expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
     expect(readFileSync(join(dir, 'theoclaw.env'), 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
   })
+
+  it('treats /a/./b and /a/b as one file, so only the first write without force succeeds', async () => {
+    const dir = scratchDir()
+    const results = await Promise.allSettled([
+      writeConfiguration(join(dir, 'theoclaw.env'), { THEOCLAW_MODEL: 'one' }, { force: false }),
+      writeConfiguration(join(dir, '.', 'theoclaw.env'), { THEOCLAW_MODEL: 'two' }, { force: false }),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    const refused = results.find((r) => r.status === 'rejected')
+    expect((refused as PromiseRejectedResult).reason).toBeInstanceOf(TheoClawConfigError)
+  })
+
+  it('a parent that is a file fails inside the write, leaving no lock file behind', async () => {
+    const dir = scratchDir()
+    const blocker = join(dir, 'blocker')
+    writeFileSync(blocker, 'x')
+    await expect(writeConfiguration(join(blocker, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })).rejects.toThrow()
+    expect(readdirSync(dir)).toEqual(['blocker'])
+  })
 })
