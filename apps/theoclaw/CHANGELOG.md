@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `announceOnLan` publishes and withdraws through `announceService` from `@theokit/host/discovery`; the app's own byte-bounded stop and the `PublishedService`/`ServicePublisher` interfaces are gone (re-exported from the host) (#2930).
 - `installShutdown` hands the process's signals to `createAppHost` (`attachSignalsEarly`, `detachSignals`, the signal named in `onError`); its listener-forwarding and `disarmed` shim is gone (#2929).
 - `TurnRun` streams the bridge's `SdkMessage` and `SdkTimelineEvent` directly: `toSdkMessage`, `toSdkTimelineEvent` and the scheduler's `handleOf` are gone, and `agentRunPort` takes the worker agent as it is. A scheduled run now drains its stream before waiting (#2908).
 - Restore re-homes session transcripts with `rehomeTranscripts` from `@theokit/host/backup`; the app's own `rehomed` is gone (#2932).
