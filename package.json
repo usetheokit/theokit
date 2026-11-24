@@ -150,6 +150,7 @@
       "follow-redirects@<1.16.2": "^1.16.2",
       "katex@<0.18.2": "^0.18.2",
       "mermaid@<11.16.1": "^11.16.1",
+      "@theokit/presenter": "workspace:*",
       "@theokit/sdk": "13.0.0",
       "picomatch@>=4.0.0 <=4.0.7": "file:./vendor/picomatch"
     },

@@ -266,6 +266,14 @@ describe('the declared SDK range delivers the parity the package advertises', ()
       .some((d) => floorsOf(d.range).some((f) => f.major === major && f.minor === minor))
     for (const { pkg, field, range } of declarations) {
       if (atTheFloorLeg && isExact(range) && asNumber(range) > asNumber(installed)) continue
+      // A range whose every floor is above the leg's version (host: >=12 at the 5.32.0 leg) is a
+      // floor only some packages claim; the leg cannot install it and was never meant to.
+      if (
+        atTheFloorLeg &&
+        !isExact(range) &&
+        floorsOf(range).every((f) => f.major > major! || (f.major === major && f.minor > minor!))
+      )
+        continue
       expect(
         admits(range, installed),
         `${pkg} [${field}] declares @theokit/sdk "${range}", which does not admit ${installed}, ` +
