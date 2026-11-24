@@ -200,7 +200,13 @@ export async function runHeadlessTurn(
   options: HeadlessTurnOptions,
 ): Promise<HeadlessTurnResult> {
   const { io } = options
-  const state = await collect(chunks, io, options.json === true, options.format, options.onFormatError === 'fail')
+  const state = await collect(
+    chunks,
+    io,
+    options.json === true,
+    options.format,
+    options.onFormatError === 'fail',
+  )
   const finalText = finalMessageOf(state.events)
   const stopReason = state.meta?.stopReason
   let outcome = classify(state, finalText)
