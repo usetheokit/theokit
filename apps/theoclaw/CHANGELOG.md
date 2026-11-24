@@ -12,6 +12,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 - `buildTools`, `readOnlyTools` and the `minimal` profile are built by `assistantAgentTools` and `assistantWorkerTools` from `@theokit/agents/presets`; the tool set, its order apart from `widget` and the ACP tools now following the preset's, and the `THEOCLAW_*` parsing, `/elevated` wrapper and startup off lines stay here (#2909).
 
+- `profileToolOptions` builds the owner chat's tools once as a `Toolset` with the four profiles and calls `narrow(profile)`; `resolveToolSettings` and `withInteractiveShell` return the tools left off as `offTools` (`OffTool[]`), and the start lines (`offLines`) are formatted from them (#2912).
 - `exitAfterFlush` now comes from `@theokit/agents/commands` and gives up on a stream that never flushes after 3 s, so a closed pipe cannot hold the process (#2944).
 - The inbox target is described to the model through `createScheduleTools`' described platforms; `withInboxGuidance` and its rewrite of the `schedule_job` schema are gone (#2942).
 - `theoclaw sandbox list` and `recreate` list and remove containers with `listSandboxContainers` and `removeSandboxContainers` from `@theokit/agents/sandbox` instead of their own Docker parsing (#2941).
