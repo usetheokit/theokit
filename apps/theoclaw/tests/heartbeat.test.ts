@@ -15,7 +15,7 @@ import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { HEARTBEAT_FILE, heartbeatJob, readHeartbeatSettings } from '../src/scheduler/heartbeat.js'
 import { type RunningScheduler, scheduleFile, wireScheduler } from '../src/scheduler/scheduler-wiring.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
-import { FakeAdapter } from './fakes.js'
+import { FakeAdapter, sdkMessage } from './fakes.js'
 import { notEnforced, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 
 /** An agent that records each prompt and answers `beat`. */
@@ -26,7 +26,7 @@ class RecordingAgent implements TurnAgent {
     this.prompts.push(text)
     return Promise.resolve({
       async *stream() {
-        yield { type: 'assistant' }
+        yield sdkMessage({ type: 'assistant' })
       },
       cancel: () => Promise.resolve(),
       wait: () => Promise.resolve({ status: 'finished', result: 'beat' }),

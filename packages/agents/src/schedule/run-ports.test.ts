@@ -26,6 +26,25 @@ const waits = (o: Awaited<ReturnType<SdkTurnHandle['wait']>>): SdkTurnHandle => 
 })
 
 describe('agentRunPort', () => {
+  it('runs an agent that has only send: no id, no dispose, a streaming turn', async () => {
+    const seen: string[] = []
+    const agent = {
+      send: async () => ({
+        stream: async function* () {
+          seen.push('stream')
+          yield { type: 'status' }
+        },
+        wait: async () => {
+          seen.push('wait')
+          return { status: 'finished', result: 'ok' }
+        },
+      }),
+    }
+    const r = await agentRunPort((work) => work(agent))('p', signal)
+    expect(r).toEqual({ ok: true, text: 'ok' })
+    expect(seen).toEqual(['stream', 'wait'])
+  })
+
   it('a finished run returns its text', async () => {
     const b = boundary(async () => waits({ status: 'finished', result: 'hi' }))
     expect(await agentRunPort(b.withAgent)('p', signal)).toEqual({ ok: true, text: 'hi' })
