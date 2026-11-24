@@ -37,6 +37,8 @@ describe('MCP events through startTheoClaw', () => {
       expect(await server.emit({ type: 'ping' })).toBe(204)
       await waitFor(() => (adapters.get('telegram')?.sent.length ?? 0) >= 1, 3000, 'event received')
       expect(adapters.get('telegram')?.sent[0]?.text).toContain('event received')
+      await waitFor(() => (adapters.get('telegram')?.sent.length ?? 0) >= 2, 3000, 'the summary')
+      expect(adapters.get('telegram')?.sent[1]?.text).toMatch(/^feed:\nDone\./)
     } finally {
       await app.loop.stopAll()
       await app.close()

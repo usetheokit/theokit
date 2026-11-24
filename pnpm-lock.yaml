@@ -303,8 +303,8 @@ importers:
         specifier: 0.30.0
         version: 0.30.0(@theokit/sdk@13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/gateway-agent':
-        specifier: 0.5.0
-        version: 0.5.0(51fe59c3e1f4166eef2d2a4431363359)
+        specifier: 0.6.0
+        version: 0.6.0(51fe59c3e1f4166eef2d2a4431363359)
       '@theokit/gateway-discord':
         specifier: 0.8.0
         version: 0.8.0(@theokit/gateway@0.30.0(@theokit/sdk@13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(discord.js@14.27.0)
@@ -3479,6 +3479,14 @@ packages:
 
   '@theokit/gateway-agent@0.5.0':
     resolution: {integrity: sha512-/ANd/VxzkzsrnRASKfOKsFofPBzUPf0lvzlVH/4iLZIzZgw4DtCIpDtCmyp+Pc6lvpAiXjNljnxQNXBJzCR3Ag==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': '>=0.19.0 <1.0.0'
+      '@theokit/presenter': '>=0.10.0 <1.0.0'
+      '@theokit/sdk': 13.0.0
+
+  '@theokit/gateway-agent@0.6.0':
+    resolution: {integrity: sha512-HsK3ud4w59MZBEJAwBxiRRhlKHxZInuKvyFwUsB9m9PBfNcDCYoNdftD7uWLgLQ1J6fQ1wz/ZWYgr9JMpD87Vg==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@theokit/gateway': '>=0.19.0 <1.0.0'
@@ -11337,6 +11345,12 @@ snapshots:
       reflect-metadata: 0.2.2
 
   '@theokit/gateway-agent@0.5.0(51fe59c3e1f4166eef2d2a4431363359)':
+    dependencies:
+      '@theokit/gateway': 0.30.0(@theokit/sdk@13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+      '@theokit/presenter': link:packages/presenter
+      '@theokit/sdk': 13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
+
+  '@theokit/gateway-agent@0.6.0(51fe59c3e1f4166eef2d2a4431363359)':
     dependencies:
       '@theokit/gateway': 0.30.0(@theokit/sdk@13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/presenter': link:packages/presenter
