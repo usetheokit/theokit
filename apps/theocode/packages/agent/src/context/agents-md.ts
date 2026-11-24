@@ -17,7 +17,7 @@ const SEPARATOR = '\n\n--- project-doc ---\n\n'
  *    next to the file it annotates.
  *  - BUDGET. The framework drops whole files at its ceiling; it is asked for none here, and the
  *    joined text is cut from the START at `MAX_CHARS` (root-most content goes first), as before.
- *    The aggregate policy of `composeInstructions` below is likewise ours.
+ *    The aggregate policy of `composeTheoCodePrompt` below is likewise ours.
  *  - NAMES. `CLAUDE.md` is not in the framework default, so both lists are passed.
  *
  * The containment root for imports is the framework's: the shallowest directory holding a file,
@@ -172,7 +172,17 @@ function renderParts(parts: ProjectDocParts): string {
     .join('\n\n')
 }
 
-export function composeInstructions(
+/**
+ * Composes the TheoCode system prompt. Named apart from the framework's `composeInstructions`
+ * (`@theokit/agents/config`) because it behaves differently in three ways:
+ *  - the base is never cut: when it alone exceeds the ceiling it is returned whole, with a warning;
+ *    the framework truncates it;
+ *  - one cut is reported for all rules (`rules`, user and project summed), which
+ *    `withAggregateCut` reads; the framework reports one cut per source name;
+ *  - groups of parts sit under headers (`## Project instructions`, `## Surface instructions`);
+ *    the framework only joins sources with a separator.
+ */
+export function composeTheoCodePrompt(
   base: string,
   projectDoc: ProjectDoc,
   surfaceDoc = '',

@@ -11,20 +11,20 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { composeInstructions } from '../../src/context/agents-md.js'
+import { composeTheoCodePrompt } from '../../src/context/agents-md.js'
 
 const BASE = 'base persona'
 const DOC = 'project rule text'
 
-describe('composeInstructions — source attribution', () => {
+describe('composeTheoCodePrompt — source attribution', () => {
   it('names the file the project document actually came from', () => {
-    const { text } = composeInstructions(BASE, DOC, '', undefined, ['CLAUDE.md'])
+    const { text } = composeTheoCodePrompt(BASE, DOC, '', undefined, ['CLAUDE.md'])
     expect(text).toContain('CLAUDE.md')
     expect(text).not.toContain('AGENTS.md')
   })
 
   it('names every file when the chain has more than one', () => {
-    const { text } = composeInstructions(BASE, DOC, '', undefined, ['AGENTS.md', 'AGENTS.local.md'])
+    const { text } = composeTheoCodePrompt(BASE, DOC, '', undefined, ['AGENTS.md', 'AGENTS.local.md'])
     expect(text).toContain('AGENTS.md')
     expect(text).toContain('AGENTS.local.md')
   })
@@ -32,12 +32,12 @@ describe('composeInstructions — source attribution', () => {
   it('names no file rather than the wrong one when the sources are unknown', () => {
     // The honest fallback. An unqualified header beats a header pointing at a file the reader
     // cannot open — the failure this test exists to close.
-    const { text } = composeInstructions(BASE, DOC)
+    const { text } = composeTheoCodePrompt(BASE, DOC)
     expect(text).toContain('Project instructions')
     expect(text).not.toContain('AGENTS.md')
   })
 
   it('still carries the document itself', () => {
-    expect(composeInstructions(BASE, DOC, '', undefined, ['THEO.md']).text).toContain(DOC)
+    expect(composeTheoCodePrompt(BASE, DOC, '', undefined, ['THEO.md']).text).toContain(DOC)
   })
 })

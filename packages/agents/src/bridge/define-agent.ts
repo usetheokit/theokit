@@ -10,6 +10,8 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
+import { isDeepStrictEqual } from 'node:util'
+
 import type {
   AgentOptions,
   BuiltinToolName,
@@ -24,6 +26,12 @@ import type {
 } from '@theokit/sdk'
 import type { z } from 'zod'
 
+import {
+  applyCapabilities,
+  CapabilityConflictError,
+  type Capability,
+  type CompiledAgentOptionsDraft,
+} from '../capability/capability.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type { HumanInTheLoopOptions } from '../types.js'
@@ -237,6 +245,11 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * unchanged to `Agent.create({ mcpServers })` (the SDK owns MCP execution). Absent ⇒ no MCP.
    */
   mcpServers?: McpServersMap
+  /**
+   * Capabilities applied after the fields above are compiled (the builder's `.capability()`). A
+   * field both a capability and this config declare must agree, or compilation throws.
+   */
+  capabilities?: readonly Capability[]
 }
 
 /**
@@ -310,6 +323,44 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
  * `compileAgent` (decorator path) produces, so both surfaces converge on one runtime.
  */
 export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptions {
+  const capabilities = def.capabilities
+  if (capabilities === undefined || capabilities.length === 0) return compileDeclared(def, false)
+  // Approvals are held back: they may name a tool a capability registers, so they are checked
+  // against the assembled tool list, and merged with the gates a capability declares.
+  const declared = compileDeclared(def, true)
+  const draft: CompiledAgentOptionsDraft = {
+    ...declared,
+    tools: [...declared.tools],
+    provenance: [],
+  }
+  applyCapabilities(capabilities, draft)
+  if (def.approvals !== undefined) {
+    const toolNames = new Set(draft.tools.map((t) => t.name))
+    const gates = new Map(draft.hitl)
+    for (const [toolName, options] of Object.entries(def.approvals)) {
+      if (!toolNames.has(toolName)) {
+        throw new Error(
+          `[@theokit/agents] defineAgent approval references unknown tool "${toolName}". ` +
+            `Declared tools: ${[...toolNames].join(', ') || '(none)'}.`,
+        )
+      }
+      const previous = gates.get(toolName)
+      if (previous !== undefined && !isDeepStrictEqual(previous, options)) {
+        throw new CapabilityConflictError('hitl', previous, options, 'agent-builder approvals')
+      }
+      gates.set(toolName, options)
+    }
+    draft.hitl = gates
+  }
+  const { provenance: _provenance, offTools: _offTools, ...compiled } = draft
+  return compiled as CompiledAgentOptions
+}
+
+function compileHitl(def: AgentDefinition): Pick<CompiledAgentOptions, 'hitl'> {
+  return def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}
+}
+
+function compileDeclared(def: AgentDefinition, deferApprovals: boolean): CompiledAgentOptions {
   return {
     model: def.model,
     reasoningEffort: def.reasoningEffort,
@@ -326,7 +377,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // adapter lowers to `SendOptions.maxIterations`. Absent ⇒ no key, so the SDK default is untouched.
     ...(def.maxIterations !== undefined ? { maxIterations: def.maxIterations } : {}),
     // M14 — HITL approvals compile into the same `hitl` map the decorator path produces.
-    ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
+    ...(deferApprovals ? {} : compileHitl(def)),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
     ...(def.skillsRead !== undefined ? { skillsRead: def.skillsRead } : {}),
@@ -379,8 +430,12 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...compileHooksAndPlugins(def),
     // MCP — builder/`defineAgent` servers converge on the same `mcpServers` field the `@MCP`
     // decorator path populates; the SDK adapter forwards it to `Agent.create({ mcpServers })`.
-    ...(def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}),
+    ...compileMcp(def),
   }
+}
+
+function compileMcp(def: AgentDefinition): Pick<CompiledAgentOptions, 'mcpServers'> {
+  return def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}
 }
 
 /**

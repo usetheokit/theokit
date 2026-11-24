@@ -1,8 +1,7 @@
-import { shouldAutoApprove, type ApprovalPosture } from '@theokit/agents'
+import { approvalPostureFor, type ApprovalPosture } from '@theokit/agents'
 import type { SandboxPosture } from '@theokit/agents/sandbox'
 
 import type { ApprovalPolicy } from './config.js'
-import { approvalModeFor } from './sandbox-policy.js'
 
 export interface ApprovalDecision {
   approved: boolean
@@ -33,61 +32,53 @@ function remediationFor(detail: string): string {
   return 'Install bwrap, or set an explicit sandbox_mode with kernel enforcement.'
 }
 
+/**
+ * The posture the framework decides (`approvalPostureFor`, no `interactive`: this surface has no
+ * human), with TheoCode's wording. The rule — `never` runs only when the sandbox is enforced or
+ * `danger-full-access` was chosen — is the framework's, so no surface can disagree with it.
+ */
+function decideHeadless(
+  policy: ApprovalPolicy,
+  sandbox: SandboxPosture,
+): { posture: ApprovalPosture; decision: ApprovalDecision } {
+  const posture = approvalPostureFor(policy, sandbox)
+  if (posture.kind === 'auto-approve') {
+    const unconfined = !posture.confinedBy.enforced
+    const reason = unconfined
+      ? `approval_policy="${policy}" with sandbox_mode="danger-full-access" runs every tool ` +
+        `without asking and with NO confinement: commands can read and write anything this user ` +
+        `can. Use sandbox_mode="workspace-write" to keep the kernel sandbox.`
+      : `approval_policy="${policy}" runs without asking; confinement is the kernel sandbox (${sandbox.detail})`
+    return {
+      // M86 / `@theokit/agents@8.0.0`: `auto-approve` carries the posture that permitted it.
+      posture: { ...posture, reason },
+      decision: { approved: true, unconfined, reason },
+    }
+  }
+  const reason =
+    policy === 'never'
+      ? `approval_policy="${policy}" would run without asking, but there is NO enforced sandbox ` +
+        `(${sandbox.detail}) — refusing instead of claiming a confinement that does not exist. ` +
+        remediationFor(sandbox.detail)
+      : `approval_policy="${policy}" keeps a human in the loop, and this surface has no human — ` +
+        'set approval_policy="never" to run headless, or use the interactive surface'
+  return {
+    posture: { kind: 'auto-reject', reason },
+    decision: { approved: false, unconfined: false, reason },
+  }
+}
+
 export function resolveHeadlessApproval(
   policy: ApprovalPolicy,
-  // B-021 — REQUIRED. Omitting it used to return `approved: true` for full-auto, skipping the
-  // enforced-sandbox refusal that is this function's stated purpose.
-  posture: Pick<SandboxPosture, 'enforced' | 'detail'> & { readonly mode?: SandboxPosture['mode'] },
+  // B-021 — REQUIRED. Omitting it must not approve full-auto without the enforced-sandbox check.
+  sandbox: SandboxPosture,
 ): ApprovalDecision {
-  const mode = approvalModeFor(policy)
-  if (mode === 'full-auto') {
-    // #939: the rule lives in `@theokit/agents`, so this surface and the posture the framework
-    // checks again in `applyPosture` cannot disagree about the `danger-full-access` waiver.
-    if (!shouldAutoApprove(mode, '*', posture)) {
-      return {
-        approved: false,
-        unconfined: false,
-        reason:
-          `approval_policy="${policy}" would run without asking, but there is NO enforced sandbox ` +
-          `(${posture.detail}) — refusing instead of claiming a confinement that does not exist. ` +
-          remediationFor(posture.detail),
-      }
-    }
-    if (!posture.enforced) {
-      return {
-        approved: true,
-        unconfined: true,
-        reason:
-          `approval_policy="${policy}" with sandbox_mode="danger-full-access" runs every tool ` +
-          `without asking and with NO confinement: commands can read and write anything this user ` +
-          `can. Use sandbox_mode="workspace-write" to keep the kernel sandbox.`,
-      }
-    }
-    return {
-      approved: true,
-      unconfined: false,
-      reason: `approval_policy="${policy}" runs without asking; confinement is the kernel sandbox (${posture.detail})`,
-    }
-  }
-  return {
-    approved: false,
-    unconfined: false,
-    reason:
-      `approval_policy="${policy}" keeps a human in the loop, and this surface has no human — ` +
-      'set approval_policy="never" to run headless, or use the interactive surface',
-  }
+  return decideHeadless(policy, sandbox).decision
 }
 
 export function headlessApprovalPosture(
   policy: ApprovalPolicy,
   sandbox: SandboxPosture,
 ): ApprovalPosture {
-  const decision = resolveHeadlessApproval(policy, sandbox)
-  return decision.approved
-    ? // M86 / `@theokit/agents@8.0.0` — `auto-approve` now carries the confinement it claims.
-      // The posture was already in hand, and already the thing that permitted this branch; passing
-      // the SAME value (never a synthesised one) is what keeps "approved automatically" and
-      // "confined by a kernel sandbox" from drifting into two independent assertions.
-      { kind: 'auto-approve', confinedBy: sandbox, reason: decision.reason }
-    : { kind: 'auto-reject', reason: decision.reason }
+  return decideHeadless(policy, sandbox).posture
 }

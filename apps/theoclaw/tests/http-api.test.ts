@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { createTheoClawAgent, type TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import type { RunningTheoClaw } from '../src/composition.js'
-import { createTheoClawApi, validateToolArgs } from '../src/http-api/api-routes.js'
+import { createTheoClawApi } from '../src/http-api/api-routes.js'
 import { vetoToolCall } from '../src/tools/path-veto.js'
 import { type AgentToolOptions, agentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
@@ -370,18 +370,34 @@ describe('the API in the started process', () => {
   })
 })
 
-describe('validateToolArgs', () => {
+describe('the tool route validates arguments against the tool schema', () => {
   const fake = (inputSchema: Record<string, unknown>): CustomTool => ({ name: 'fake', description: 'fake', inputSchema, handler: () => 'ran' })
+  const call = async (tool: CustomTool, args: unknown): Promise<Response | undefined> =>
+    createTheoClawApi({
+      token: CONTROL_TOKEN,
+      model: 'test-model',
+      withAgent: async () => {
+        throw new Error('no agent here')
+      },
+      toolSettings: toolSettings(false),
+      controlTools: () => [tool],
+      stderr: () => undefined,
+    })(new Request('http://127.0.0.1/tools/invoke', { method: 'POST', headers: bearer(), body: JSON.stringify({ tool: 'fake', args }) }))
 
-  it('names the first issue of args its schema refuses, and accepts valid ones', () => {
-    const tool = fake({ type: 'object', properties: { path: { type: 'string' } }, required: ['path'] })
+  const schema = { type: 'object', properties: { count: { type: 'number' } }, required: ['count'] }
 
-    expect(validateToolArgs(tool, { path: 5 })).toMatch(/^path: /)
-    expect(validateToolArgs(tool, {})).toMatch(/^path: |^\(root\): /)
-    expect(validateToolArgs(tool, { path: 'a' })).toBeUndefined()
+  it('answers 400 with the path of a wrong argument type, and runs valid arguments', async () => {
+    const refused = await call(fake(schema), { count: 'x' })
+    const body = (await refused?.json()) as { error: { type: string; message: string } }
+    expect(refused?.status).toBe(400)
+    expect(body.error.type).toBe('invalid_args')
+    expect(body.error.message).toMatch(/count: /)
+
+    expect((await call(fake(schema), { count: 1 }))?.status).toBe(200)
   })
 
-  it('validateToolArgs throws on a schema it cannot compile', () => {
-    expect(() => validateToolArgs(fake({ type: 'object', properties: { a: { $ref: '#/$defs/missing' } } }), { a: 1 })).toThrow()
+  it('answers 500 for a schema it cannot compile', async () => {
+    const response = await call(fake({ type: 'object', properties: { a: { $ref: '#/$defs/missing' } } }), { a: 1 })
+    expect(response?.status).toBe(500)
   })
 })

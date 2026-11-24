@@ -1,12 +1,9 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import { sdkMessage } from './fakes.js'
 import { createAgentEventMask } from '@theokit/agents/bridge'
 import type { SDKAgent, SDKMessage } from '@theokit/sdk'
 import { isAgentStreamEvent } from '@theokit/agents/bridge'
-import {
-  toSdkMessage,
-  toSdkTimelineEvent,
-  type TurnTimelineEvent,
-} from '../src/agent-port.js'
+import type { SdkTimelineEvent } from '@theokit/agents/bridge'
 
 import type {
   TurnAgent as ReplyTurnAgent,
@@ -164,13 +161,13 @@ function cancellableAgent(script: CancellableScript) {
                 async next() {
                   calls.reads += 1
                   index += 1
-                  if (index === 1) return { done: false, value: text('first') }
+                  if (index === 1) return { done: false, value: sdkMessage(text('first')) }
                   if (index === 2) {
                     if (script.afterFirst === 'silent') await new Promise(() => undefined)
                     else await script.afterFirst
                   }
                   return index <= 4
-                    ? { done: false, value: text(`after-${index}`) }
+                    ? { done: false, value: sdkMessage(text(`after-${index}`)) }
                     : { done: true, value: undefined }
                 },
                 async return() {
@@ -396,7 +393,7 @@ function scriptedAgent(messages: readonly unknown[]) {
     async send() {
       return {
         async *stream() {
-          yield* messages as { readonly type: string }[]
+          yield* (messages as { readonly type: string }[]).map(sdkMessage)
         },
         wait: async () => ({ status: 'finished' }),
         cancel: async () => {
@@ -558,7 +555,7 @@ describe('typed SDK usage (#2317)', () => {
       run_id: 'r',
       message: { role: 'assistant', content: [{ type: 'text', text: 'typed' }] },
     }
-    const timeline: TurnTimelineEvent = {
+    const timeline: SdkTimelineEvent = {
       kind: 'delta',
       update: { type: 'text-delta', text: 'ty' },
     }
@@ -584,12 +581,12 @@ describe('typed SDK usage (#2317)', () => {
   })
 })
 
-const THINKING = { type: 'thinking', text: 'hmm' }
-const ASSISTANT = { type: 'assistant', message: { content: [{ type: 'text', text: 'one ' }] } }
-const ASSISTANT_DONE = { type: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } }
+const THINKING = sdkMessage({ type: 'thinking', text: 'hmm' })
+const ASSISTANT = sdkMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'one ' }] } })
+const ASSISTANT_DONE = sdkMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } })
 
 /** A typed timeline: a live delta, a thinking message, then the completed text marked as already streamed. */
-const TIMELINE: readonly TurnTimelineEvent[] = [
+const TIMELINE: readonly SdkTimelineEvent[] = [
   { kind: 'delta', update: { type: 'text-delta', text: 'one ' } },
   { kind: 'message', message: THINKING },
   {
@@ -617,28 +614,30 @@ function timelineRun(): TurnRun {
   }
 }
 
-describe('the typed conversions of the port (#2317)', () => {
-  it('copies a message and a timeline event into the bridge types', () => {
-    expect(toSdkMessage({ type: 'status' })).toEqual({ type: 'status' })
-    expect(
-      toSdkTimelineEvent({ kind: 'delta', update: { type: 'text-delta', text: 'x' } }),
-    ).toEqual({
-      kind: 'delta',
-      update: { type: 'text-delta', text: 'x' },
+describe('typed messages through the sessionless turn (#2317)', () => {
+  it('translates the typed stream messages in order', async () => {
+    const run: TurnRun = {
+      async *stream() {
+        yield THINKING
+        yield ASSISTANT_DONE
+      },
+      wait: async () => ({ status: 'finished' }),
+      cancel: async () => undefined,
+    }
+    const events: TurnEvent[] = []
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work({ send: async () => run }),
+      message: 'hi',
+      runId: 'r1',
+      emit: (event) => events.push(event),
     })
-    expect(
-      toSdkTimelineEvent({
-        kind: 'message',
-        message: { type: 'status' },
-        textAlreadyStreamed: true,
-      }),
-    ).toEqual({
-      kind: 'message',
-      message: { type: 'status' },
-      textAlreadyStreamed: true,
-    })
+    expect(outcome).toEqual({ ok: true })
+    expect(events.map((e) => e.type)).toEqual(['thinking', 'text_delta'])
+    expect(events.map((e) => ('content' in e ? e.content : undefined))).toEqual(['hmm', 'done'])
   })
+})
 
+describe('the typed events of the port (#2317)', () => {
   it('accepts only events whose required fields have their kinds', () => {
     const wire = <T extends { readonly type: string }>(event: T): { readonly type: string } => event
     const textDelta = { type: 'text_delta', content: 'a' }
@@ -789,28 +788,5 @@ describe('the typed conversions of the port (#2317)', () => {
         isError: false,
       },
     ])
-  })
-})
-
-describe('typed messages through the sessionless turn (#2317)', () => {
-  it('translates the typed stream messages in order', async () => {
-    const run: TurnRun = {
-      async *stream() {
-        yield THINKING
-        yield ASSISTANT_DONE
-      },
-      wait: async () => ({ status: 'finished' }),
-      cancel: async () => undefined,
-    }
-    const events: TurnEvent[] = []
-    const outcome = await runTheoClawTurn({
-      withAgent: (work) => work({ send: async () => run }),
-      message: 'hi',
-      runId: 'r1',
-      emit: (event) => events.push(event),
-    })
-    expect(outcome).toEqual({ ok: true })
-    expect(events.map((e) => e.type)).toEqual(['thinking', 'text_delta'])
-    expect(events.map((e) => ('content' in e ? e.content : undefined))).toEqual(['hmm', 'done'])
   })
 })
