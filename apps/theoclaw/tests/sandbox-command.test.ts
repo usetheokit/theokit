@@ -7,17 +7,23 @@ import { UsageError } from '../src/cli-args.js'
 import { parseSandbox, sandboxCommand } from '../src/sandbox/sandbox-command.js'
 
 const ROWS = [
-  'aaa\tsbx-one\trunning\talpine:3\tmain',
-  'bbb\tsbx-two\texited\talpine:3\tother',
+  'aaa\tsbx-one\trunning\talpine:3\ttheoclaw.sandbox=1,theoclaw.session=main',
+  'bbb\tsbx-two\texited\talpine:3\ttheoclaw.sandbox=1,theoclaw.session=other',
 ].join('\n')
 
 function stub(stdout = ROWS, code = 0): { runner: DockerRunner; calls: string[][] } {
   const calls: string[][] = []
   const runner: DockerRunner = (args) => {
     calls.push([...args])
-    return Promise.resolve({ stdout: args[0] === 'ps' ? stdout : '', stderr: code === 0 ? '' : 'boom', code, timedOut: false })
+    const wanted = args.filter((a) => a.startsWith('label=')).map((a) => a.slice(6))
+    const rows = stdout.split('\n').filter((row) => wanted.every((w) => row.split('\t')[4]?.split(',').includes(w)))
+    return Promise.resolve({ stdout: args[0] === 'ps' ? rows.join('\n') : '', stderr: code === 0 ? '' : 'boom', code, timedOut: false })
   }
   return { runner, calls }
+}
+
+function removals(calls: string[][]): string[][] {
+  return calls.filter((c) => c[0] === 'rm')
 }
 
 function run(args: string[], docker: DockerRunner, env: NodeJS.ProcessEnv = { THEOCLAW_SANDBOX_BACKEND: 'docker' }, isTTY = false, answer = '') {
@@ -67,7 +73,7 @@ describe('sandbox list', () => {
     const { runner } = stub('', 1)
     const { code, err } = await run(['list'], runner)
     expect(code).toBe(1)
-    expect(err).toMatch(/docker ps failed: boom/)
+    expect(err).toMatch(/docker ps failed with exit code 1: boom/)
   })
 })
 
@@ -76,13 +82,13 @@ describe('sandbox recreate', () => {
     const { runner, calls } = stub()
     const { code } = await run(['recreate', '--all', '--force'], runner)
     expect(code).toBe(0)
-    expect(calls[1]).toEqual(['rm', '-f', 'aaa', 'bbb'])
+    expect(removals(calls)).toEqual([['rm', 'bbb'], ['rm', '-f', 'aaa']])
   })
 
   it('--session removes only that session', async () => {
     const { runner, calls } = stub()
     await run(['recreate', '--session', 'other'], runner)
-    expect(calls[1]).toEqual(['rm', '-f', 'bbb'])
+    expect(removals(calls)).toEqual([['rm', 'bbb']])
   })
 
   it('without --force refuses a running container when not interactive', async () => {
@@ -96,16 +102,16 @@ describe('sandbox recreate', () => {
   it('asks on a terminal and removes on yes, keeps on no', async () => {
     const yes = stub()
     expect((await run(['recreate', '--all'], yes.runner, undefined, true, 'y\n')).code).toBe(0)
-    expect(yes.calls[1]).toEqual(['rm', '-f', 'aaa', 'bbb'])
+    expect(removals(yes.calls)).toEqual([['rm', 'bbb'], ['rm', '-f', 'aaa']])
     const no = stub()
     expect((await run(['recreate', '--all'], no.runner, undefined, true, 'n\n')).code).toBe(1)
     expect(no.calls.some((c) => c[0] === 'rm')).toBe(false)
   })
 
   it('removes a stopped container without asking', async () => {
-    const { runner, calls } = stub('bbb\tsbx-two\texited\talpine:3\tother')
+    const { runner, calls } = stub('bbb\tsbx-two\texited\talpine:3\ttheoclaw.sandbox=1,theoclaw.session=other')
     expect((await run(['recreate', '--all'], runner)).code).toBe(0)
-    expect(calls[1]).toEqual(['rm', '-f', 'bbb'])
+    expect(removals(calls)).toEqual([['rm', 'bbb']])
   })
 
   it('does nothing under bwrap', async () => {
