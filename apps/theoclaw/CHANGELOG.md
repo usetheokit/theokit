@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The computer live test tells the model the code is the six capital characters in the large heading, and renders the typed text small and monospace, so the describer no longer reports the typed word as the code (#2882).
 - The live authorization tests count a finished run once even when both the reply handler and the gateway handler wait on it, and the TUI live test matches the interruption notice regardless of case (#2876).
 - The TUI feeds `useAgentStream` from the framework's `createControlStreamSource`, replacing its own frame conversion.
 - The transcript sweep passes its generation and held-session rule to `planTranscriptGC` as `isProtected`, asked at planning and again at apply, instead of filtering the plan afterwards; a transcript with no owner is kept (#2746).
