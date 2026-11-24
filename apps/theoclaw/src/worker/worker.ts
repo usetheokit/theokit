@@ -139,7 +139,8 @@ async function runLocal(message: string, profile: WorkerProfile, io: WorkerIo): 
     const run = await agent.send(message)
     for await (const event of run.stream()) {
       const text = (event as { type: string; text?: unknown }).text
-      if (event.type === 'text-delta' && typeof text === 'string') io.stdout.write(text)
+      const type: string = event.type
+      if (type === 'text-delta' && typeof text === 'string') io.stdout.write(text)
     }
     const status = sdkStatus((await run.wait()).status)
     io.stdout.write('\n')

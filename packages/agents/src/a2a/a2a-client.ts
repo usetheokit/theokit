@@ -276,17 +276,24 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       // The run's signal: a cancelled run aborts the request and the stream it holds open, and the
       // call rejects with the abort reason rather than as a failure of the remote.
       const jsonRpc = config.protocol === 'jsonrpc'
-      const res = await doFetch(config.url, {
-        method: 'POST',
-        headers: agentRequestHeaders(
-          jsonRpc ? JSON_RPC_HEADERS : AGENT_ACTION_HEADERS,
-          config.headers,
-          auth?.bearer ? { authorization: `Bearer ${auth.bearer}` } : undefined,
-          auth?.apiKey ? { [auth.apiKey.header]: auth.apiKey.value } : undefined,
-        ),
-        body: jsonRpc ? jsonRpcBody(message) : JSON.stringify({ message }),
-        signal,
-      })
+      let res: Response
+      try {
+        res = await doFetch(config.url, {
+          method: 'POST',
+          headers: agentRequestHeaders(
+            jsonRpc ? JSON_RPC_HEADERS : AGENT_ACTION_HEADERS,
+            config.headers,
+            auth?.bearer ? { authorization: `Bearer ${auth.bearer}` } : undefined,
+            auth?.apiKey ? { [auth.apiKey.header]: auth.apiKey.value } : undefined,
+          ),
+          body: jsonRpc ? jsonRpcBody(message) : JSON.stringify({ message }),
+          signal,
+        })
+      } catch (err) {
+        // A cancelled caller keeps its abort reason; any other rejection (refused connection, DNS, TLS) names the tool.
+        signal?.throwIfAborted()
+        throw failure(name, err instanceof Error ? err.message : String(err), { cause: err })
+      }
       if (!res.ok) {
         // Release the unread body so the connection returns to the pool. The status is the error
         // to report; a failure to cancel must not replace it.

@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { CustomTool } from '@theokit/sdk'
 
 import { AgentBuilder, ContextualTool } from '../../src/bridge/agent-builder.js'
+import type { Capability } from '../../src/capability/capability.js'
 import type {
   AgentDefinition,
   InferAgentInput,
@@ -101,3 +102,9 @@ const rootTool = ContextualTool.of(
   // @ts-expect-error — sendDefaults rejects an unknown key
   AgentBuilder.create().sendDefaults({ nope: true })
 }
+
+// ── `.capability()` keeps the type state, including the model requirement ────────────────────
+declare const someCapability: Capability
+// @ts-expect-error — `.model()` was never called, so `.build()` still refuses
+AgentBuilder.create().capability(someCapability).build()
+expectTypeOf(AgentBuilder.create().model('m').capability(someCapability).build).toBeFunction()

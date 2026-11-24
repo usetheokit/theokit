@@ -22,11 +22,13 @@ export interface TuiSession {
   session: () => string
   setSession: (id: string) => void
 
+  /**
+   * Pending `/image` attachments wait here for the next turn that is dispatched; `takeImages`
+   * clears them, so a send that consumes them is the only thing that carries them. They cannot live
+   * in the send body: `/image` runs before the message it applies to exists.
+   */
   takeImages: () => AttachedImage[] | undefined
   attachImages: (imgs: AttachedImage[] | undefined) => void
-
-  takeModel: () => string | undefined
-  setModel: (m: string | undefined) => void
 
   sessionModel: () => string | undefined
   setSessionModel: (m: string | undefined) => void
@@ -104,7 +106,6 @@ export function createTuiSession(opts: SessionOptions): TuiSession {
     void persistSessionId(cwd, session, undefined, opts.pointerRoot)
   }
   let images: AttachedImage[] | undefined
-  let model: string | undefined
   let fixedModel: string | undefined
 
   return {
@@ -130,17 +131,9 @@ export function createTuiSession(opts: SessionOptions): TuiSession {
     attachImages: (imgs) => {
       images = imgs
     },
-    takeModel: () => {
-      const current = model
-      model = undefined
-      return current ?? fixedModel
-    },
     sessionModel: () => fixedModel,
     setSessionModel: (m) => {
       fixedModel = m
-    },
-    setModel: (m) => {
-      model = m
     },
   }
 }

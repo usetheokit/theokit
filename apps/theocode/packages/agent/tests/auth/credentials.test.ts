@@ -23,6 +23,7 @@ import {
   credentialHome,
   ensureAuthHome,
   installAuthHome,
+  MissingCredentialError,
   resolveCredential,
   resolveCredentialForModel,
   resolveFreshCredential,
@@ -77,6 +78,22 @@ function storeCredential(env: Record<string, string | undefined>): void {
   )
 }
 
+/** Writes a stored OpenAI OAuth login under the home named by THEOCODE_HOME. */
+function storeOpenAiLogin(env: Record<string, string | undefined>): void {
+  mkdirSync(credentialHome(home, env), { recursive: true, mode: 0o700 })
+  writeFileSync(
+    authFilePath(home, env),
+    JSON.stringify({
+      type: 'oauth',
+      provider: 'openai',
+      access: 'at-stored',
+      refresh: 'rt-stored',
+      expires: Date.now() + 3_600_000,
+    }),
+    { mode: 0o600 },
+  )
+}
+
 describe('B-034 — the forced-file-store route keeps the store location', () => {
   it('test_an_overridden_home_is_honoured_on_the_ordinary_route', () => {
     // Anti-vacuity floor: if THEOCODE_HOME never worked, the assertion below would prove nothing.
@@ -90,12 +107,31 @@ describe('B-034 — the forced-file-store route keeps the store location', () =>
 
   it('test_an_overridden_home_is_honoured_on_the_openai_chatgpt_route', async () => {
     const env = { THEOCODE_HOME: join(home, 'custom') }
-    storeCredential(env)
+    storeOpenAiLogin(env)
 
     await expect(
       resolveCredentialForModel('openai-chatgpt/gpt-5', { env, home }),
       'the routed resolution discarded THEOCODE_HOME and looked in the default home',
-    ).resolves.toMatchObject({ apiKey: 'sk-ant-stored' })
+    ).resolves.toMatchObject({ kind: 'oauth', apiKey: 'at-stored' })
+  })
+
+  it('test_an_api_key_in_the_environment_does_not_win_on_the_subscription_route', async () => {
+    const env = { THEOCODE_HOME: join(home, 'custom'), OPENAI_API_KEY: 'sk-from-env' }
+    storeOpenAiLogin(env)
+
+    await expect(
+      resolveCredentialForModel('openai-chatgpt/gpt-5', { env, home }),
+    ).resolves.toMatchObject({ kind: 'oauth', apiKey: 'at-stored' })
+  })
+
+  it('test_no_stored_login_is_a_missing_credential_that_hides_the_key', async () => {
+    const env = { OPENAI_API_KEY: 'sk-from-env' }
+
+    const error = await resolveCredentialForModel('openai-chatgpt/gpt-5', { env, home }).catch(
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(MissingCredentialError)
+    expect((error as Error).message).not.toContain('sk-from-env')
   })
 })
 

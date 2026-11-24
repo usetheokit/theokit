@@ -6,10 +6,10 @@ import { join } from 'node:path'
 import type { Dispatch, SetStateAction } from 'react'
 
 import {
-  legacyRootHint,
   forkSessionBeforeUserTurn,
   readUserTurnPreviewsAsync,
 } from '@theocode/agent/session'
+import { transcriptRootHint } from '@theokit/agents/session'
 import { CLOSED_BACKTRACK } from '@theokit/tui'
 
 /** `selected` of an armed ladder with nothing chosen yet — the framework's own value. */
@@ -35,7 +35,7 @@ export async function primeBacktrack(deps: PrimeBacktrackDeps): Promise<void> {
     return
   }
   if (previews.length === 0) {
-    const hint = legacyRootHint(0, join(homedir(), '.theokit'))
+    const hint = transcriptRootHint(0, join(homedir(), '.theokit'), process.env)
     deps.setToast({ message: hint ?? 'No previous message to edit', variant: 'info' })
     return
   }
