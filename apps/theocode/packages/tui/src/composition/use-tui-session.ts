@@ -17,11 +17,9 @@ import { useTurnElapsed } from '@theokit/tui'
 import { useAgent } from '@theokit/agents/client/react'
 
 import type { TurnBody } from '../agent-session/chat-transport.js'
+import { buildTurnBody, type TurnInput } from '../agent-session/turn-body.js'
 import { getTuiRoot } from '../agent-session/index.js'
 import type { ReasoningEffort } from '@theocode/agent/config'
-
-/** What a caller passes to `send`: the text, and at most a model for this one turn. */
-export type TurnInput = { message: string; model?: string }
 
 export function useTuiSession() {
   const ROOT = getTuiRoot()
@@ -38,16 +36,7 @@ export function useTuiSession() {
   // Every send carries the turn's own options as the body, taken when the turn is dispatched: the
   // persistent session values (effort, pinned model), the pending images (consumed here), and a
   // model the caller named for this turn only.
-  const withTurn = (input: TurnInput): TurnBody => {
-    const images = SESSION.takeImages()
-    const model = input.model ?? SESSION.sessionModel()
-    return {
-      message: input.message,
-      effort: SESSION.effort(),
-      ...(model === undefined ? {} : { model }),
-      ...(images === undefined ? {} : { images }),
-    }
-  }
+  const withTurn = (input: TurnInput): TurnBody => buildTurnBody(SESSION, input)
   const agent = {
     ...raw,
     send: (input: TurnInput) => raw.send(withTurn(input)),

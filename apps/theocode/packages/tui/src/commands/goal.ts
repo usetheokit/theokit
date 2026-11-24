@@ -1,5 +1,5 @@
 import type { TurnBody } from '../agent-session/chat-transport.js'
-import type { TurnInput } from '../composition/use-tui-session.js'
+import type { TurnInput } from '../agent-session/turn-body.js'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
 import { asGoalLoopAgent } from '@theokit/agents/client'

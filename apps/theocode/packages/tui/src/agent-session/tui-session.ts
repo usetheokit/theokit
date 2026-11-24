@@ -22,6 +22,11 @@ export interface TuiSession {
   session: () => string
   setSession: (id: string) => void
 
+  /**
+   * Pending `/image` attachments wait here for the next turn that is dispatched; `takeImages`
+   * clears them, so a send that consumes them is the only thing that carries them. They cannot live
+   * in the send body: `/image` runs before the message it applies to exists.
+   */
   takeImages: () => AttachedImage[] | undefined
   attachImages: (imgs: AttachedImage[] | undefined) => void
 
