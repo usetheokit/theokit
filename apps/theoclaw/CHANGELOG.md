@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The tool route uses the bridge's default `validateAgainstInputSchema`; `validateToolArgs` is gone, and a wrong argument type still answers 400 with `<path>: <message>`. `completeWith` stays, because `runTheoClawTurn` masks the model id and records usage, and an SDK-cancelled run on `/v1/chat/completions` stays a completion (#2951).
 - Config, MCP-relay grant, visitor grant and relay identity files are written under `withFileLock` from `@theokit/sdk/persistence` (a `<path>.lock` file, via `proper-lockfile`) instead of an in-process queue, so `theoclaw mcp` and the daemon no longer interleave writes to one file; `serial-queue.ts` is gone (#2943).
 - The LAN publisher is the shared `@theokit/host/discovery-bonjour` adapter; the app-local copy is gone (#2948).
 - The sessionless turn builds its usage record from the `usage` of `runAgentTurn`'s outcome and no longer wraps the agent to catch `wait()`; the record is the same. A run that reports neither token count is `in=0 out=0`, unpriced, even if it reported a cost (#2952).
