@@ -45,6 +45,20 @@ describe('tool profiles', () => {
     expect(names('full')).toContain('shell_exec')
   })
 
+  it('keeps each profile as an exact, ordered list', () => {
+    expect(names('minimal')).toEqual(['read_file', 'list_dir'])
+    expect(names('messaging')).toEqual(['read_file', 'list_dir', 'web_fetch'])
+    expect(names('coding')).not.toContain('interactive_shell')
+    expect(names('full').slice(0, names('coding').length)).toEqual(names('coding'))
+    expect(names('coding', false)).not.toContain('write_file')
+  })
+
+  it('records the tools left off with their reasons', () => {
+    const { offTools, offLines } = settings()
+    expect(offTools).toContainEqual({ name: 'web_search', reason: expect.stringContaining('no THEOCLAW_SEARCH') })
+    expect(offLines).toContain(`tools: web search is off (${offTools.find((t) => t.name === 'web_search')!.reason})`)
+  })
+
   it('leaves the shell out when no exec gate exists', () => {
     expect(names('coding', false)).not.toContain('shell_exec')
   })
