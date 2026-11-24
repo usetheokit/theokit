@@ -25399,6 +25399,14 @@
             "dist/session.d.ts#RegistryOutcome": "type RegistryOutcome = 'removed' | 'nothing-to-remove' | 'unconfirmed' | 'failed' | 'not-attempted' | 'still-present';"
           }
         },
+        "SessionPointerUnreadableError": {
+          "tier": "stable",
+          "declaration": "declare class SessionPointerUnreadableError extends TheokitAgentError {\n    readonly path: string;\n    readonly name = \"SessionPointerUnreadableError\";\n    constructor(path: string, cause: unknown);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "SessionRegistryRemoverError": {
           "tier": "stable",
           "declaration": "declare class SessionRegistryRemoverError extends TheokitAgentError {\n    readonly name = \"SessionRegistryRemoverError\";\n    readonly sessionId: string;\n    constructor(sessionId: string, timeoutMs: number);\n}",

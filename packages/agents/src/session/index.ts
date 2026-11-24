@@ -16,6 +16,7 @@ export {
   // them a compile error and no way to fix it.
   transcriptOf,
   SessionInUseError,
+  SessionPointerUnreadableError,
   SessionRegistryRemoverError,
   type DeleteSessionOptions,
   type DeleteSessionResult,

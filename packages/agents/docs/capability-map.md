@@ -1486,6 +1486,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `scheduleSessionSweep` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
+| `SessionPointerUnreadableError` | value |
 | `SessionRegistryRemoverError` | value |
 | `startInProcessSweeper` | value |
 | `streamTurnForkingIfBusy` | value |

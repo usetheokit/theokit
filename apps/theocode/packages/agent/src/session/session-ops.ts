@@ -1,13 +1,12 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 
 import { dirname } from 'node:path'
 
 import { Agent, TheokitAgentError } from '@theokit/agents'
-import { forkTranscript, legacyTranscriptPath, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
+import { forkTranscript, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
 import {
   deleteSession as deleteInFramework,
   protectedTranscriptPaths,
-  sessionPointerPath,
   SessionInUseError,
 } from '@theokit/agents/session'
 
@@ -174,36 +173,6 @@ function toRegistryEntry(outcome: string): RegistryOutcome {
 }
 
 /**
- * Read the id the framework's `last-session` pointer names for `cwd`, or `undefined` when there is
- * none.
- *
- * Fail-fast on anything other than "the file is not there". What this returns is a deletion
- * decision: `undefined` tells the caller no session is live, so swallowing an EACCES/EIO removes the
- * live session from the protected set without a trace. Refusing is the safe direction. `readFn` is
- * injected so the refusal is testable without provoking a real permissions error.
- */
-export function readPointerId(
-  cwd: string,
-  root: string = transcriptRoot(),
-  readFn: (path: string) => string = (path) => readFileSync(path, 'utf8'),
-): string | undefined {
-  const file = sessionPointerPath(cwd, root)
-  let raw: string
-  try {
-    raw = readFn(file)
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw new Error(
-      `cannot read the live-session pointer at ${file} — refusing (would risk the live session): ` +
-        `${(err as Error).message}`,
-      { cause: err },
-    )
-  }
-  const id = raw.trim()
-  return id === '' ? undefined : id
-}
-
-/**
  * B-003 — what `forkTranscript` refuses to overwrite, and what `deleteSession` refuses to remove.
  *
  * ## The third category, which this file documented as unreachable
@@ -238,17 +207,9 @@ export function readPointerId(
  * miss rather than an incident.
  */
 export async function protectedSessions(cwd: string, baseDir: string): Promise<string[]> {
-  const paths = new Set((await protectedTranscriptPaths(cwd, baseDir)).keys())
-  // The framework set already holds the `last-session` pointer, but its reader treats an unreadable
-  // file as "no pointer". This read refuses instead, so an unreadable pointer blocks the deletion.
-  const pointed = readPointerId(cwd, baseDir)
-  if (pointed !== undefined) {
-    // Add the derived name only when the framework set holds neither naming for this id (the pointer
-    // changed between reads); otherwise the session would be listed twice under two names.
-    const names = [transcriptPath(baseDir, cwd, pointed), legacyTranscriptPath(baseDir, cwd, pointed)]
-    if (!names.some((name) => paths.has(name))) paths.add(names[0])
-  }
-  return [...paths]
+  // The framework set holds the `last-session` pointer's target and refuses (throws) when the
+  // pointer exists but cannot be read.
+  return [...(await protectedTranscriptPaths(cwd, baseDir)).keys()]
 }
 
 export async function forkSession(
