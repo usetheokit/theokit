@@ -7969,9 +7969,9 @@
           "declaration": "declare function createPermissionsPlugin(rules: readonly PermissionRule[], options: PermissionsPluginOptions): Plugin | undefined;",
           "runtime": true,
           "deprecatedSince": null,
-          "references": ["dist/bridge-entry-<hash>.d.ts#PermissionsPluginOptions"],
+          "references": ["dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions"],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#PermissionsPluginOptions": "interface PermissionsPluginOptions {\n    readonly onAsk: (toolName: string, input: unknown) => {\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    } | Promise<{\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    }>;\n}"
+            "dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions": "interface PermissionsPluginOptions {\n    readonly onAsk: (toolName: string, input: unknown) => {\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    } | Promise<{\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    }>;\n}"
           }
         },
         "createProvenanceGuard": {
@@ -9718,6 +9718,20 @@
             "dist/agent-orchestrator-<hash>.d.ts#ReflectionContext": "type ReflectionContext = Record<string, unknown>;",
             "dist/agent-orchestrator-<hash>.d.ts#ReflectionResult": "interface ReflectionResult {\n    readonly feedback?: string;\n    readonly continue: boolean;\n}",
             "dist/agent-orchestrator-<hash>.d.ts#ReflectionStrategy": "interface ReflectionStrategy {\n    readonly name: string;\n    reflect(outcome: LoopOutcome, ctx?: ReflectionContext): ReflectionResult;\n}"
+          }
+        },
+        "onAskForPolicy": {
+          "tier": "stable",
+          "declaration": "declare function onAskForPolicy(policy: ApprovalPolicy, gated: ReadonlySet<string>, options?: {\n    readonly refusal?: (toolName: string, policy: ApprovalPolicy) => string;\n}): PermissionsPluginOptions['onAsk'];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/sdk-adapter-<hash>.d.ts#ApprovalPolicy",
+            "dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions"
+          ],
+          "internals": {
+            "dist/sdk-adapter-<hash>.d.ts#ApprovalPolicy": "type ApprovalPolicy = 'untrusted' | 'on-request' | 'never';",
+            "dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions": "interface PermissionsPluginOptions {\n    readonly onAsk: (toolName: string, input: unknown) => {\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    } | Promise<{\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    }>;\n}"
           }
         },
         "outputModeration": {
@@ -15786,9 +15800,9 @@
           "declaration": "declare function createPermissionsPlugin(rules: readonly PermissionRule[], options: PermissionsPluginOptions): Plugin | undefined;",
           "runtime": true,
           "deprecatedSince": null,
-          "references": ["dist/bridge-entry-<hash>.d.ts#PermissionsPluginOptions"],
+          "references": ["dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions"],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#PermissionsPluginOptions": "interface PermissionsPluginOptions {\n    readonly onAsk: (toolName: string, input: unknown) => {\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    } | Promise<{\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    }>;\n}"
+            "dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions": "interface PermissionsPluginOptions {\n    readonly onAsk: (toolName: string, input: unknown) => {\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    } | Promise<{\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    }>;\n}"
           }
         },
         "createProvenanceGuard": {
@@ -17263,6 +17277,20 @@
             "dist/bridge-entry-<hash>.d.ts#McpApprovalSpec": "type McpApprovalSpec = HumanInTheLoopOptions | string;",
             "dist/types-<hash>.d.ts#HumanInTheLoopOptions": "interface HumanInTheLoopOptions {\n    question: string;\n    timeout?: number;\n    onTimeout?: TimeoutAction;\n    showInput?: boolean;\n    payloadSchema?: Record<string, unknown>;\n}",
             "dist/types-<hash>.d.ts#TimeoutAction": "type TimeoutAction = 'abort' | 'proceed' | 'retry';"
+          }
+        },
+        "onAskForPolicy": {
+          "tier": "stable",
+          "declaration": "declare function onAskForPolicy(policy: ApprovalPolicy, gated: ReadonlySet<string>, options?: {\n    readonly refusal?: (toolName: string, policy: ApprovalPolicy) => string;\n}): PermissionsPluginOptions['onAsk'];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/sdk-adapter-<hash>.d.ts#ApprovalPolicy",
+            "dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions"
+          ],
+          "internals": {
+            "dist/sdk-adapter-<hash>.d.ts#ApprovalPolicy": "type ApprovalPolicy = 'untrusted' | 'on-request' | 'never';",
+            "dist/sdk-adapter-<hash>.d.ts#PermissionsPluginOptions": "interface PermissionsPluginOptions {\n    readonly onAsk: (toolName: string, input: unknown) => {\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    } | Promise<{\n        readonly behavior: 'allow';\n    } | {\n        readonly behavior: 'deny';\n        readonly message?: string;\n    }>;\n}"
           }
         },
         "prepareWorkspace": {

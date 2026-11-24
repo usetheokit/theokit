@@ -32,12 +32,10 @@
  * contributed which field, inspectable as data) and `CapabilityConflictError` instead of last-wins
  * when two members declare the same scalar differently.
  */
-import { approvalModeFor } from '../config/sandbox-policy.js'
 import type { ApprovalPolicy } from '../config/config.js'
-import { createPermissionsPlugin } from '@theokit/agents'
+import { createPermissionsPlugin, onAskForPolicy } from '@theokit/agents'
 import { permissionRulesFromLayers } from '@theokit/agents/config'
 import type { PermissionRule } from '@theokit/sdk'
-import type { PermissionsPluginOptions } from '@theokit/agents'
 import { settingsReport } from '../config/settings-load.js'
 import type { Plugin } from '@theokit/agents'
 import {
@@ -166,24 +164,13 @@ export function reviewerShape(ctx: SpecContext): AgentShape {
  * what reaches it: the TUI shows it, and a headless run answers it with its approval posture. A tool
  * outside that map has no asker, and for it the refusal below is still the honest answer.
  */
-export function askGateFor(
-  policy: ApprovalPolicy,
-  humanGated: ReadonlySet<string>,
-): PermissionsPluginOptions['onAsk'] {
-  if (approvalModeFor(policy) === 'full-auto') return (_toolName, _input) => ({ behavior: 'allow' })
-  return (toolName, _input) =>
-    humanGated.has(toolName) ? { behavior: 'allow' } : refusal(toolName, policy)
-}
-
-function refusal(toolName: string, policy: ApprovalPolicy) {
-  return {
-    behavior: 'deny' as const,
-    message:
-      `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
-      `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
-      `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
-      `unmatched tools run.`,
-  }
+export function refusalMessage(toolName: string, policy: ApprovalPolicy): string {
+  return (
+    `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
+    `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
+    `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
+    `unmatched tools run.`
+  )
 }
 
 /**
@@ -230,6 +217,8 @@ export function permissionsPluginsFor(
   approvalPolicy: ApprovalPolicy,
   humanGated: ReadonlySet<string>,
 ): readonly Plugin[] {
-  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), { onAsk: askGateFor(approvalPolicy, humanGated) })
+  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), {
+    onAsk: onAskForPolicy(approvalPolicy, humanGated, { refusal: refusalMessage }),
+  })
   return plugin === undefined ? [] : [plugin]
 }

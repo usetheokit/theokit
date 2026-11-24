@@ -28,6 +28,7 @@ import type { HumanInTheLoopOptions } from '../types.js'
 
 import type { ApprovalRequiredEvent } from './agent-stream-events.js'
 import { shouldAutoApprove } from './approval-decision.js'
+import type { PermissionsPluginOptions } from './permissions-plugin.js'
 import { createHitlPlugin, type HitlDecision } from './hitl-plugin.js'
 import { recordRefusal } from './refusal-ledger.js'
 import { createToolHooksPlugin } from './tool-hooks-plugin.js'
@@ -280,4 +281,31 @@ export function approvalPostureFor(
     return { kind: 'auto-reject', reason: `approval policy "${policy}" with no human to ask` }
   }
   return { kind: 'interactive', ...opts.interactive }
+}
+
+/**
+ * What an `ask` verdict (a tool no permission rule matched) resolves to under an approval policy.
+ *
+ * `never` allows. Otherwise a tool in `gated` is allowed through to its approval gate (the card, or
+ * the headless posture), and any other tool is denied with `refusal(toolName, policy)`, because
+ * nothing can ask about it.
+ */
+export function onAskForPolicy(
+  policy: ApprovalPolicy,
+  gated: ReadonlySet<string>,
+  options: { readonly refusal?: (toolName: string, policy: ApprovalPolicy) => string } = {},
+): PermissionsPluginOptions['onAsk'] {
+  if (policy === 'never') return () => ({ behavior: 'allow' })
+  const refusal = options.refusal ?? defaultRefusal
+  return (toolName) =>
+    gated.has(toolName)
+      ? { behavior: 'allow' }
+      : { behavior: 'deny', message: refusal(toolName, policy) }
+}
+
+function defaultRefusal(toolName: string, policy: ApprovalPolicy): string {
+  return (
+    `\`${toolName}\` matched no permission rule, and approval policy "${policy}" means nothing can ask ` +
+    `for a decision. Add it to the allow rules, or set the approval policy to "never".`
+  )
 }

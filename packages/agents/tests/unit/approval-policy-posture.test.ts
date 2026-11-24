@@ -2,7 +2,11 @@ import { PermissionEngine } from '@theokit/sdk'
 import type { SandboxPosture } from '@theokit/sdk/sandbox'
 import { describe, expect, it } from 'vitest'
 
-import { applyPosture, approvalPostureFor } from '../../src/bridge/approval-posture.js'
+import {
+  applyPosture,
+  approvalPostureFor,
+  onAskForPolicy,
+} from '../../src/bridge/approval-posture.js'
 
 const enforced: SandboxPosture = { mode: 'workspace-write', enforced: true, detail: 'bwrap' }
 const unenforced: SandboxPosture = { mode: 'workspace-write', enforced: false, detail: 'no bwrap' }
@@ -34,5 +38,22 @@ describe('approvalPostureFor', () => {
     const gated = new Map([['mystery_tool', { approve: true }]]) as never
     applyPosture(extra, {}, approvalPostureFor('untrusted', enforced, { interactive }), gated)
     expect(extra.plugins).toHaveLength(1)
+  })
+})
+
+describe('onAskForPolicy', () => {
+  it('never allows every unmatched tool', async () => {
+    expect(await onAskForPolicy('never', new Set())('Read', {})).toEqual({ behavior: 'allow' })
+  })
+  it('an asking policy allows a gated tool and denies the rest naming it', async () => {
+    const onAsk = onAskForPolicy('untrusted', new Set(['Edit']))
+    expect(await onAsk('Edit', {})).toEqual({ behavior: 'allow' })
+    const denied = await onAsk('Read', {})
+    expect(denied.behavior).toBe('deny')
+    expect(denied).toHaveProperty('message', expect.stringContaining('Read'))
+  })
+  it('uses the caller refusal text', async () => {
+    const onAsk = onAskForPolicy('on-request', new Set(), { refusal: (t, p) => `${t}/${p}` })
+    expect(await onAsk('Read', {})).toEqual({ behavior: 'deny', message: 'Read/on-request' })
   })
 })
