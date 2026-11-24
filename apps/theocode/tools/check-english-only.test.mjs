@@ -8,6 +8,12 @@
  * Two of these tests are anti-vacuity floors. Without them, a guard that flags everything and a
  * guard that flags nothing would both pass.
  */
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -343,5 +349,39 @@ describe('T7 — bare Portuguese function words used as identifiers', () => {
     // A comment is stripped before the identifier scan; this detector must not reach into it,
     // or it reverses the documented decision to tolerate these words in prose.
     expect(portugueseIdentifierPair('// mapeia de origem para destino')).toBe(false)
+  })
+})
+
+describe('the line-specific allowance for the ask-bridge accent assertion', () => {
+  const ASSERTION = '    expect(err.message).not.toMatch(/[áâãçéêíóôõú]/i)'
+  const script = join(dirname(fileURLToPath(import.meta.url)), 'check-english-only.mjs')
+
+  /** Runs the real CLI over a fixture tree whose assertion sits on `line` (1-based). */
+  function run(lines) {
+    const root = mkdtempSync(join(tmpdir(), 'english-only-'))
+    try {
+      const dir = join(root, 'packages/agent/tests/ask')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'ask-bridge.test.ts'), lines.join('\n'))
+      return spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  const filler = (n) =>
+    Array.from({ length: n }, (_, i) => `const value${String(i)} = ${String(i)}`)
+
+  it('test_the_assertion_on_line_166_is_allowed', () => {
+    const res = run([...filler(165), ASSERTION])
+    expect(res.stderr).not.toMatch(/ask-bridge\.test\.ts:166/)
+    expect(res.status, res.stderr + res.stdout).toBe(0)
+  })
+
+  it('test_an_accent_on_any_other_line_still_fails', () => {
+    const res = run([...filler(160), ASSERTION, ...filler(4), ASSERTION])
+    expect(res.status).toBe(1)
+    expect(res.stderr).toMatch(/ask-bridge\.test\.ts:161 /)
+    expect(res.stderr).not.toMatch(/ask-bridge\.test\.ts:166 /)
   })
 })
