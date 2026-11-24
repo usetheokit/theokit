@@ -18,8 +18,10 @@ import { stringify as stringifyYaml } from 'yaml'
 
 import { loadMcpJson } from '../bridge/mcp-file.js'
 import type { McpServersMap } from '../types.js'
-import { readForeignSetup } from './index.js'
+
 import type { ForeignSetup, UntranslatedEntry } from './types.js'
+
+import { readForeignSetup } from './index.js'
 
 /** Why a stored import was not written or read: another import holds the lock, the import was refused, or the directory is unreadable. */
 export type ForeignImportErrorReason = 'locked' | 'refused' | 'unreadable'
