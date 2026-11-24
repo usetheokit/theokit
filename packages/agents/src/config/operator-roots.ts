@@ -356,7 +356,7 @@ export async function discoverSubagentsAcrossRoots(
     definitions[name] = { ...def, origin: 'operator' }
   }
   for (const [name, def] of Object.entries(project)) {
-    if (name in definitions) shadowed[name] = definitions[name] as RootedAgentDefinition
+    if (name in definitions) shadowed[name] = definitions[name]
     definitions[name] = { ...def, origin: 'project' }
   }
   return {
