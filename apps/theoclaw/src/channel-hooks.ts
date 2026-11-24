@@ -28,21 +28,40 @@ export interface ChannelHookOptions {
   readonly execApproval?: { readonly hook: GatewayHook; hasPending(event: MessageEvent): boolean }
 }
 
+/** The hooks of one assistant in the places `createChannelAssistant` gives them: before the policy, the policy, after it, and help. */
+export interface ChannelHookParts {
+  readonly pre: readonly GatewayHook[]
+  readonly access: GatewayHook
+  readonly app: readonly GatewayHook[]
+  readonly help: GatewayHook
+}
+
 /**
- * The gateway hooks the channel loop runs, in order. The owner policy is first, so every later
- * hook sees only owners and paired senders (FR-007); `/usage` is answered last.
+ * The gateway hooks, by place. The e-mail trigger runs before the owner policy; the owner policy
+ * is next, so every later hook sees only owners and paired senders (FR-007); `/usage` is answered
+ * last before help.
  */
-export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[] {
+export function channelHookParts(options: ChannelHookOptions): ChannelHookParts {
   const { policy, pairing, write } = options
-  const ownerPolicy = createOwnerPolicyHook({ policy, ...(options.execApproval === undefined ? {} : { execPending: options.execApproval.hasPending }), ...(pairing === undefined ? {} : { pairing }), write })
+  const access = createOwnerPolicyHook({ policy, ...(options.execApproval === undefined ? {} : { execPending: options.execApproval.hasPending }), ...(pairing === undefined ? {} : { pairing }), write })
   const groupActivation = createGroupActivationHook({
     isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
     mode: policy.groupActivation,
     write,
   })
-  const help = createHelpHook()
   const exec = options.execApproval === undefined ? [] : [options.execApproval.hook]
   const workflows = options.workflowResume === undefined ? [] : [createWorkflowApproveHook({ resume: options.workflowResume, isOwner: (platform, id) => isPolicyOwner(policy, platform, id) })]
   const acp = options.acp === undefined ? [] : [createAcpCommandHook({ sessions: options.acp, isOwner: (event) => isPolicyOwner(policy, event.platform, event.sender.id) })]
-  return [...(options.emailTrigger === undefined ? [] : [options.emailTrigger]), ownerPolicy, ...workflows, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.model === undefined ? [] : [createInfoHook(options.model)]), help]
+  return {
+    pre: options.emailTrigger === undefined ? [] : [options.emailTrigger],
+    access,
+    app: [...workflows, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.model === undefined ? [] : [createInfoHook(options.model)])],
+    help: createHelpHook(),
+  }
+}
+
+/** Every hook in the order the runner runs them: `pre`, `access`, `app`, `help`. */
+export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[] {
+  const parts = channelHookParts(options)
+  return [...parts.pre, parts.access, ...parts.app, parts.help]
 }
