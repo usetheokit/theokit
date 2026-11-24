@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The inbox target is described to the model through `createScheduleTools`' described platforms; `withInboxGuidance` and its rewrite of the `schedule_job` schema are gone (#2942).
 - `theoclaw sandbox list` and `recreate` list and remove containers with `listSandboxContainers` and `removeSandboxContainers` from `@theokit/agents/sandbox` instead of their own Docker parsing (#2941).
 - Voice replies read the note with the gateway's `event.audio.read()` and send the spoken reply as an `audio` attachment through `ctx.reply`, so the Telegram adapter's own Bot API root is used; the app's `getFile`, file download and `sendVoice` calls are gone. The attachment is `audio/mpeg`, because plugin-voice 0.12.0 always synthesizes MP3, and carries the caption `AI-generated voice` alone, not the answer text. A failed attachment still falls back to text once (#2934).
 - `logs`, `update` and the Windows task arguments run on `ServiceBackend` and `theoclawConfig` (#2915). `theoclaw update` now restarts an installed Task Scheduler task, and `theoclaw logs` reads the Windows tee file; both were Linux/macOS only. `update` stops with an error when the service state cannot be read, and a service restart failure names the host's message. `logs` without a file on Linux or macOS reports the host's error, and a missing default log file prints nothing. The entry's `--config`/`--profile` parsing is the host's `applyEntryArgs`; its messages and exit code 2 are unchanged.
