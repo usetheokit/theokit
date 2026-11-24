@@ -93,11 +93,7 @@ import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
 import { browserLine } from './tools/browser-server.js'
-import {
-  createSharedBrowser,
-  type BrowserLauncher,
-  type SharedBrowser,
-} from './tools/shared-browser.js'
+import { createSharedBrowser, type BrowserLauncher, type SharedBrowser } from '@theokit/host/browser'
 import type { MemoryWiring } from './memory/wiring.js'
 import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
