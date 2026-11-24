@@ -12,6 +12,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - `logs`, `update` and the Windows task arguments run on `ServiceBackend` and `theoclawConfig` (#2915). `theoclaw update` now restarts an installed Task Scheduler task, and `theoclaw logs` reads the Windows tee file; both were Linux/macOS only. `update` stops with an error when the service state cannot be read, and a service restart failure names the host's message. `logs` without a file on Linux or macOS reports the host's error, and a missing default log file prints nothing. The entry's `--config`/`--profile` parsing is the host's `applyEntryArgs`; its messages and exit code 2 are unchanged.
+- `announceOnLan` publishes and withdraws through `announceService` from `@theokit/host/discovery`; the app's own byte-bounded stop and the `PublishedService`/`ServicePublisher` interfaces are gone (re-exported from the host) (#2930).
 - `installShutdown` hands the process's signals to `createAppHost` (`attachSignalsEarly`, `detachSignals`, the signal named in `onError`); its listener-forwarding and `disarmed` shim is gone (#2929).
 - `TurnRun` streams the bridge's `SdkMessage` and `SdkTimelineEvent` directly: `toSdkMessage`, `toSdkTimelineEvent` and the scheduler's `handleOf` are gone, and `agentRunPort` takes the worker agent as it is. A scheduled run now drains its stream before waiting (#2908).
 - Restore re-homes session transcripts with `rehomeTranscripts` from `@theokit/host/backup`; the app's own `rehomed` is gone (#2932).
