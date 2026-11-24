@@ -88,12 +88,11 @@ export function daemonCommands(backend: ServiceBackend, io: DaemonCommandsIo): D
       await backend.install(spec)
       say(`${target.label} installed and started (${backend.definitionPath(spec)})`)
       const user = io.env.USER
-      if (backend.platform === 'linux' && user !== undefined && user !== '') {
-        if ((await lingerEnabled(user, io.runner)) === false) {
-          say(
-            `the unit stops when you log out; run loginctl enable-linger ${user} to keep it running`,
-          )
-        }
+      const checkLinger = backend.platform === 'linux' && user !== undefined && user !== ''
+      if (checkLinger && (await lingerEnabled(user, io.runner)) === false) {
+        say(
+          `the unit stops when you log out; run loginctl enable-linger ${user} to keep it running`,
+        )
       }
       return 0
     },

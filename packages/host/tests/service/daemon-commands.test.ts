@@ -34,7 +34,9 @@ function fake(platform: NodeJS.Platform) {
   const backend: ServiceBackend = {
     platform,
     definitionPath: () => '/def',
-    install: async (spec) => void installed.push(spec),
+    install: async (spec) => {
+      installed.push(spec)
+    },
     uninstall: async () => undefined,
     status: async () => 'running',
     restart: async () => undefined,
