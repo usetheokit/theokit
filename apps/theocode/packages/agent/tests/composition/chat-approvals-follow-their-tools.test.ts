@@ -58,7 +58,7 @@ vi.mock('../../src/composition/agent-spec.js', async (orig) => {
   }
 })
 
-/** Today's `approvalGates` output, written out literally. */
+/** The gate set per mode, written out literally. */
 const WRITE_GATES = {
   ApplyPatch: { question: 'Apply this file patch?' },
   Edit: { question: 'Apply this edit?' },
@@ -92,7 +92,10 @@ async function compile(writes: boolean, searchConfigured: boolean) {
   if (searchConfigured) process.env['THEOKIT_SEARCH_API_URL'] = 'http://search.invalid'
   else delete process.env['THEOKIT_SEARCH_API_URL']
   const { buildChatAgent } = await import('../../src/chat/chat.js')
-  return (await buildChatAgent({ surface: 'headless', cwd: tempRoot('chat-approvals-cwd-') } as never)) as unknown as {
+  const { withCapabilities } = await import('../helpers/with-capabilities.js')
+  return withCapabilities(
+    await buildChatAgent({ surface: 'headless', cwd: tempRoot('chat-approvals-cwd-') } as never),
+  ) as unknown as {
     approvals: Record<string, { question: string }>
     tools: { name: string }[]
   }
@@ -101,17 +104,15 @@ async function compile(writes: boolean, searchConfigured: boolean) {
 describe('the compiled approvals map', () => {
   for (const writes of [true, false]) {
     for (const searchConfigured of [true, false]) {
-      it(`test_equals_approval_gates_when_writes_${writes}_and_search_${searchConfigured}`, async () => {
+      it(`test_equals_the_gate_set_when_writes_${writes}_and_search_${searchConfigured}`, async () => {
         const agent = await compile(writes, searchConfigured)
         const expected = {
           ...(writes ? WRITE_GATES : {}),
           ...ALWAYS_GATES,
           ...(searchConfigured ? SEARCH_GATE : {}),
         }
-        const { approvalGates } = await import('../../src/chat/chat.js')
 
         expect(agent.approvals).toEqual(expected)
-        expect(approvalGates({ writes, searchConfigured })).toEqual(expected)
         const tools = new Set(agent.tools.map((t) => t.name))
         for (const name of Object.keys(agent.approvals)) expect(tools.has(name)).toBe(true)
       })
