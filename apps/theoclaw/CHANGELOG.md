@@ -10,6 +10,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 `theokit-sdk` or the framework packages rather than here. Those carry the repository name.
 
 ## [Unreleased]
+- `buildTools`, `readOnlyTools` and the `minimal` profile are built by `assistantAgentTools` and `assistantWorkerTools` from `@theokit/agents/presets`; the tool set, its order apart from `widget` and the ACP tools now following the preset's, and the `THEOCLAW_*` parsing, `/elevated` wrapper and startup off lines stay here (#2909).
 
 - Chat sessions are leased from `Agent.sessionPool`; the 314-line `SessionAgents` is gone (#2899). Agent ids and the generation file are unchanged, so stored transcripts resume. Differences: idle agents are retired by the SDK's sweep (every half of the idle limit, so within 1.5 times it); the open-session bound is enforced when a session is leased, not when a turn ends, and its warning goes to the SDK's diagnostics instead of the TheoClaw log; `heldIds()` omits an agent still opening.
 - `profileToolOptions` builds the owner chat's tools once as a `Toolset` with the four profiles and calls `narrow(profile)`; `resolveToolSettings` and `withInteractiveShell` return the tools left off as `offTools` (`OffTool[]`), and the start lines (`offLines`) are formatted from them (#2912).
