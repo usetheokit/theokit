@@ -15,7 +15,6 @@ export interface SessionTheInterpreterUses {
   cfg: () => { modelLabel: string; sandboxLabel: string; sandboxDetail: string; memory: boolean }
   sessionModel: () => string | undefined
   setSessionModel: (model: string) => void
-  setModel: (model: string | undefined) => void
   session: () => string
 }
 
@@ -28,7 +27,7 @@ interface BacktrackUsedByInterpreter {
 }
 
 export interface AgentTheInterpreterUses {
-  send: (input: { message: string }) => void
+  send: (input: { message: string; model?: string }) => void
   reset: () => void
   abort: () => void
 }
