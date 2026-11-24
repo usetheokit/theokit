@@ -71,6 +71,14 @@ export type RoutedInput<Ctx = void> =
 
 const PREFIX = '/'
 
+/** How names are compared. Both default off: the default match is the exact, case-sensitive one. */
+export interface RouteOptions {
+  /** Compare the typed command name without regard to case; the argument text is untouched. */
+  readonly caseInsensitive?: boolean
+  /** Accept a chat-platform `/name@bot` suffix on the command name and drop it before matching. */
+  readonly stripBotSuffix?: boolean
+}
+
 /**
  * Route one line of terminal input.
  *
@@ -82,10 +90,13 @@ const PREFIX = '/'
 export function routeCommand<Ctx = void>(
   input: string,
   commands: readonly CommandDefinition<Ctx>[],
+  options: RouteOptions = {},
 ): RoutedInput<Ctx> {
   if (!input.startsWith(PREFIX)) return { kind: 'message', text: input }
 
-  const body = input.slice(PREFIX.length)
+  const fold = options.caseInsensitive === true ? foldCase : keepCase
+  let body = input.slice(PREFIX.length)
+  if (options.stripBotSuffix === true) body = body.replace(/^([^\s@]+)@\S*/, '$1')
   const whole = body.trim()
 
   // Longest first, so a name can never be swallowed by its own prefix. Ties are resolved after the
@@ -96,7 +107,9 @@ export function routeCommand<Ctx = void>(
   )
   const byLength = [...entries].sort((a, b) => b.typed.length - a.typed.length)
   const matches = byLength.filter((entry) =>
-    entry.command.exact === true ? whole === entry.typed : matchesName(body, entry.typed),
+    entry.command.exact === true
+      ? same(whole, entry.typed, fold)
+      : matchesName(body, entry.typed, fold),
   )
   // Guarded by LENGTH rather than by `matches[0] === undefined`: without
   // `noUncheckedIndexedAccess`, indexing an empty array is typed as present, so the compiler calls
@@ -131,8 +144,16 @@ export function routeCommand<Ctx = void>(
  * The name must be followed by a boundary — end of input or whitespace. Without that, `/modelx`
  * would route to `model` with the argument `x`, which is the same swallowing bug one level down.
  */
-function matchesName(body: string, name: string): boolean {
-  if (!body.startsWith(name)) return false
+function matchesName(body: string, name: string, fold: Fold): boolean {
+  if (!same(body.slice(0, name.length), name, fold)) return false
   const next = body.charAt(name.length)
   return next === '' || next === ' ' || next === '\t'
+}
+
+type Fold = (text: string) => string
+const foldCase: Fold = (text) => text.toLowerCase()
+const keepCase: Fold = (text) => text
+
+function same(a: string, b: string, fold: Fold): boolean {
+  return fold(a) === fold(b)
 }

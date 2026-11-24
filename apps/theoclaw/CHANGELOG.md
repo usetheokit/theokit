@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Channel commands (`/new`, `/reset`, `/steer`, `/think`, `/compact`, `/goal`) are built from `sessionCommands` and matched without regard to case, with a Telegram `/cmd@bot` suffix accepted, by the router instead of `normalised` and a hand-made strip (#2919). A newline straight after a command name no longer counts as the separator.
 - Chat sessions are leased from `Agent.sessionPool`; the 314-line `SessionAgents` is gone (#2899). Agent ids and the generation file are unchanged, so stored transcripts resume. Differences: idle agents are retired by the SDK's sweep (every half of the idle limit, so within 1.5 times it); the open-session bound is enforced when a session is leased, not when a turn ends, and its warning goes to the SDK's diagnostics instead of the TheoClaw log; `heldIds()` omits an agent still opening.
 - `profileToolOptions` builds the owner chat's tools once as a `Toolset` with the four profiles and calls `narrow(profile)`; `resolveToolSettings` and `withInteractiveShell` return the tools left off as `offTools` (`OffTool[]`), and the start lines (`offLines`) are formatted from them (#2912).
 - `exitAfterFlush` now comes from `@theokit/agents/commands` and gives up on a stream that never flushes after 3 s, so a closed pipe cannot hold the process (#2944).

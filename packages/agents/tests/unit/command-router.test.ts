@@ -150,3 +150,19 @@ describe('exact commands', () => {
     })
   })
 })
+
+describe('routeCommand options', () => {
+  const cmds = [defineCommand({ name: 'steer', description: 's' })]
+  it('is case-sensitive and keeps bot suffixes by default', () => {
+    expect(routeCommand('/STEER x', cmds).kind).toBe('error')
+    expect(routeCommand('/steer@bot x', cmds).kind).toBe('error')
+  })
+  it('folds case in the name only, and strips a bot suffix', () => {
+    const routed = routeCommand('/Steer@Bot Go LEFT', cmds, {
+      caseInsensitive: true,
+      stripBotSuffix: true,
+    })
+    expect(routed).toMatchObject({ kind: 'command', arg: 'Go LEFT' })
+    expect(routeCommand('/steerx', cmds, { caseInsensitive: true }).kind).toBe('error')
+  })
+})

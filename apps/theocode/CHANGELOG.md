@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- The builtin verbs `sessionCommands` defines take their definitions from it (#2919); descriptions, optional arguments and the `CommandAction` mapping stay here.
 - `chat.ts` composes `codingAgentPreset` for its tools, approval gates, setting sources, hook approval and withheld builtin `shell`; `GATE_QUESTIONS`, `approvalGates` and `ALL_GATED` are removed, and the permissions plugin's gated names come from `codingAgentTools(...).gates` (#2954). Operator skills (`~/.theokit/skills/`) stay wired by TheoCode whatever the trust state, as before; project skills, MCP servers and named subagents stay separate links because they are gated one by one, which the preset's single posture cannot express.
 - The exec processor's collected write calls are typed `{ toolName; input }`, which is what `changedPathsOf` takes, so the package typechecks again (#3010).
 - Rules are cut at `MAX_CHARS` by `loadInstructionTree` and its `omissionNotice`; `assemble` and the unbounded `maxChars` are gone (#2904).

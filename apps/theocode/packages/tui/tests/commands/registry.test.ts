@@ -108,3 +108,12 @@ describe('commandPalette', () => {
     })
   })
 })
+
+describe('verbs shared with the framework session vocabulary', () => {
+  it('keeps arguments optional and adds no alias the product did not have', () => {
+    expect(routeCommand('/clear')).toEqual({ kind: 'clear' })
+    expect(routeCommand('/model')).toMatchObject({ kind: 'model' })
+    expect(routeCommand('/reset').kind).toBe('commandError')
+    expect(routeCommand('/new chat').kind).not.toBe('commandError')
+  })
+})

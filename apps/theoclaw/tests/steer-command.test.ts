@@ -43,6 +43,14 @@ describe('/steer', () => {
     await turn
   })
 
+  it('matches the name without regard to case or a bot suffix, keeping the text', async () => {
+    const t = setup()
+    await t.call('/STEER@theobot Only The First')
+    await t.call('/Steer')
+    expect(t.sends).toEqual([])
+    expect(t.replies).toEqual([STEER_IDLE_REPLY, STEER_USAGE_REPLY])
+  })
+
   it('says so when nothing runs, and without text', async () => {
     const t = setup()
     await t.call('/steer stop')

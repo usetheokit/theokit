@@ -1,6 +1,7 @@
 import {
   defineCommand,
   createCommandRegistry,
+  sessionCommands,
   type CommandDefinition,
 } from '@theokit/agents/commands'
 import type { ChatComposerCommand } from '@theokit/tui'
@@ -349,7 +350,41 @@ function definitions(custom: CustomCommands): CommandDefinition[] {
     claimed.add(def.name)
     defs.push(def)
   }
-  for (const { name, description } of BUILTINS) add(defineCommand({ name, description }))
+  // The verbs the framework's session vocabulary defines come from it; this product keeps its own
+  // descriptions, takes every argument as optional (it has never refused a bare `/model`) and
+  // routes no alias beyond its own `/exit` builtin.
+  const noop = (): void => undefined
+  const shared = new Map(
+    sessionCommands({
+      reset: noop,
+      compact: noop,
+      status: noop,
+      clear: noop,
+      retry: noop,
+      usage: noop,
+      help: noop,
+      quit: noop,
+      sessions: noop,
+      resume: noop,
+      fork: noop,
+      rename: noop,
+      archive: noop,
+      delete: noop,
+      goal: noop,
+      login: noop,
+      logout: noop,
+      stop: noop,
+      setModel: noop,
+    }).map((def) => [def.name, def] as const),
+  )
+  for (const { name, description } of BUILTINS) {
+    const base = shared.get(name)
+    if (base === undefined) {
+      add(defineCommand({ name, description }))
+      continue
+    }
+    add(defineCommand({ name: base.name, description }))
+  }
   // Every Codex name, INCLUDING the ones the menu does not offer: being answerable when typed
   // and being advertised are different jobs, and only the first one is what stops a person
   // arriving from Codex hitting `unknown command`.
