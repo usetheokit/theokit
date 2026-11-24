@@ -19276,6 +19276,14 @@
           "references": [],
           "internals": {}
         },
+        "RouteOptions": {
+          "tier": "stable",
+          "declaration": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n    readonly anyWhitespace?: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "RoutedInput": {
           "tier": "stable",
           "declaration": "type RoutedInput<Ctx = void> = {\n    readonly kind: 'command';\n    readonly command: CommandDefinition<Ctx>;\n    readonly arg: string;\n} | {\n    readonly kind: 'message';\n    readonly text: string;\n} | {\n    readonly kind: 'error';\n    readonly reason: RouteFailure;\n    readonly input: string;\n};",
@@ -19304,11 +19312,14 @@
         },
         "SessionCommandHandlers": {
           "tier": "stable",
-          "declaration": "interface SessionCommandHandlers {\n    reset?: () => void | Promise<void>;\n    stop?: () => void | Promise<void>;\n    steer?: (text: string) => void | Promise<void>;\n    compact?: () => void | Promise<void>;\n    setModel?: (model: string) => void | Promise<void>;\n    setEffort?: (effort: string) => void | Promise<void>;\n    status?: () => void | Promise<void>;\n}",
+          "declaration": "interface SessionCommandHandlers<Ctx = void> {\n    reset?: Handler<Ctx>;\n    stop?: Handler<Ctx>;\n    steer?: ArgHandler<Ctx>;\n    compact?: Handler<Ctx>;\n    setModel?: ArgHandler<Ctx>;\n    setEffort?: ArgHandler<Ctx>;\n    status?: Handler<Ctx>;\n    clear?: Handler<Ctx>;\n    retry?: Handler<Ctx>;\n    usage?: ArgHandler<Ctx>;\n    help?: Handler<Ctx>;\n    quit?: Handler<Ctx>;\n    sessions?: Handler<Ctx>;\n    resume?: ArgHandler<Ctx>;\n    fork?: Handler<Ctx>;\n    rename?: ArgHandler<Ctx>;\n    archive?: ArgHandler<Ctx>;\n    delete?: ArgHandler<Ctx>;\n    goal?: ArgHandler<Ctx>;\n    login?: ArgHandler<Ctx>;\n    logout?: Handler<Ctx>;\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": [],
-          "internals": {}
+          "references": ["dist/commands.d.ts#ArgHandler", "dist/commands.d.ts#Handler"],
+          "internals": {
+            "dist/commands.d.ts#ArgHandler": "type ArgHandler<Ctx> = (arg: string, ctx: Ctx) => void | Promise<void>;",
+            "dist/commands.d.ts#Handler": "type Handler<Ctx> = (ctx: Ctx) => void | Promise<void>;"
+          }
         },
         "SessionsGcArgs": {
           "tier": "stable",
@@ -19383,7 +19394,7 @@
         },
         "createCommandRegistry": {
           "tier": "stable",
-          "declaration": "declare function createCommandRegistry<Ctx>(definitions: readonly CommandDefinition<Ctx>[]): CommandRegistry<Ctx>;",
+          "declaration": "declare function createCommandRegistry<Ctx>(definitions: readonly CommandDefinition<Ctx>[], options?: RouteOptions): CommandRegistry<Ctx>;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
@@ -19391,6 +19402,7 @@
             "dist/commands.d.ts#CommandDefinition",
             "dist/commands.d.ts#CommandRegistry",
             "dist/commands.d.ts#RouteFailure",
+            "dist/commands.d.ts#RouteOptions",
             "dist/commands.d.ts#RoutedInput"
           ],
           "internals": {
@@ -19398,6 +19410,7 @@
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
             "dist/commands.d.ts#CommandRegistry": "interface CommandRegistry<Ctx> {\n    palette(): readonly {\n        name: string;\n        description: string;\n    }[];\n    route(input: string): RoutedInput<Ctx>;\n    dispatch(input: string, ctx: Ctx): Promise<RoutedInput<Ctx>>;\n}",
             "dist/commands.d.ts#RouteFailure": "type RouteFailure = 'unknown-command' | 'missing-argument' | 'unexpected-argument' | 'ambiguous-command';",
+            "dist/commands.d.ts#RouteOptions": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n    readonly anyWhitespace?: boolean;\n}",
             "dist/commands.d.ts#RoutedInput": "type RoutedInput<Ctx = void> = {\n    readonly kind: 'command';\n    readonly command: CommandDefinition<Ctx>;\n    readonly arg: string;\n} | {\n    readonly kind: 'message';\n    readonly text: string;\n} | {\n    readonly kind: 'error';\n    readonly reason: RouteFailure;\n    readonly input: string;\n};"
           }
         },
@@ -19513,19 +19526,21 @@
         },
         "routeCommand": {
           "tier": "stable",
-          "declaration": "declare function routeCommand<Ctx = void>(input: string, commands: readonly CommandDefinition<Ctx>[]): RoutedInput<Ctx>;",
+          "declaration": "declare function routeCommand<Ctx = void>(input: string, commands: readonly CommandDefinition<Ctx>[], options?: RouteOptions): RoutedInput<Ctx>;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
             "dist/commands.d.ts#CommandArgument",
             "dist/commands.d.ts#CommandDefinition",
             "dist/commands.d.ts#RouteFailure",
+            "dist/commands.d.ts#RouteOptions",
             "dist/commands.d.ts#RoutedInput"
           ],
           "internals": {
             "dist/commands.d.ts#CommandArgument": "type CommandArgument = 'none' | 'optional' | 'required';",
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
             "dist/commands.d.ts#RouteFailure": "type RouteFailure = 'unknown-command' | 'missing-argument' | 'unexpected-argument' | 'ambiguous-command';",
+            "dist/commands.d.ts#RouteOptions": "interface RouteOptions {\n    readonly caseInsensitive?: boolean;\n    readonly stripBotSuffix?: boolean;\n    readonly anyWhitespace?: boolean;\n}",
             "dist/commands.d.ts#RoutedInput": "type RoutedInput<Ctx = void> = {\n    readonly kind: 'command';\n    readonly command: CommandDefinition<Ctx>;\n    readonly arg: string;\n} | {\n    readonly kind: 'message';\n    readonly text: string;\n} | {\n    readonly kind: 'error';\n    readonly reason: RouteFailure;\n    readonly input: string;\n};"
           }
         },
@@ -19549,18 +19564,22 @@
         },
         "sessionCommands": {
           "tier": "stable",
-          "declaration": "declare function sessionCommands(handlers: SessionCommandHandlers): CommandDefinition[];",
+          "declaration": "declare function sessionCommands<Ctx = void>(handlers: SessionCommandHandlers<Ctx>): CommandDefinition<Ctx>[];",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
+            "dist/commands.d.ts#ArgHandler",
             "dist/commands.d.ts#CommandArgument",
             "dist/commands.d.ts#CommandDefinition",
+            "dist/commands.d.ts#Handler",
             "dist/commands.d.ts#SessionCommandHandlers"
           ],
           "internals": {
+            "dist/commands.d.ts#ArgHandler": "type ArgHandler<Ctx> = (arg: string, ctx: Ctx) => void | Promise<void>;",
             "dist/commands.d.ts#CommandArgument": "type CommandArgument = 'none' | 'optional' | 'required';",
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
-            "dist/commands.d.ts#SessionCommandHandlers": "interface SessionCommandHandlers {\n    reset?: () => void | Promise<void>;\n    stop?: () => void | Promise<void>;\n    steer?: (text: string) => void | Promise<void>;\n    compact?: () => void | Promise<void>;\n    setModel?: (model: string) => void | Promise<void>;\n    setEffort?: (effort: string) => void | Promise<void>;\n    status?: () => void | Promise<void>;\n}"
+            "dist/commands.d.ts#Handler": "type Handler<Ctx> = (ctx: Ctx) => void | Promise<void>;",
+            "dist/commands.d.ts#SessionCommandHandlers": "interface SessionCommandHandlers<Ctx = void> {\n    reset?: Handler<Ctx>;\n    stop?: Handler<Ctx>;\n    steer?: ArgHandler<Ctx>;\n    compact?: Handler<Ctx>;\n    setModel?: ArgHandler<Ctx>;\n    setEffort?: ArgHandler<Ctx>;\n    status?: Handler<Ctx>;\n    clear?: Handler<Ctx>;\n    retry?: Handler<Ctx>;\n    usage?: ArgHandler<Ctx>;\n    help?: Handler<Ctx>;\n    quit?: Handler<Ctx>;\n    sessions?: Handler<Ctx>;\n    resume?: ArgHandler<Ctx>;\n    fork?: Handler<Ctx>;\n    rename?: ArgHandler<Ctx>;\n    archive?: ArgHandler<Ctx>;\n    delete?: ArgHandler<Ctx>;\n    goal?: ArgHandler<Ctx>;\n    login?: ArgHandler<Ctx>;\n    logout?: Handler<Ctx>;\n}"
           }
         },
         "sessionsGcCommand": {

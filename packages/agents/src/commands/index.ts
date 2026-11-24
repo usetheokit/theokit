@@ -23,6 +23,7 @@ export type { CommandRegistry } from './command-registry.js'
 export type {
   CommandArgument,
   CommandDefinition,
+  RouteOptions,
   RouteFailure,
   RoutedInput,
 } from './command-router.js'
