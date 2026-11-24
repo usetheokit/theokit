@@ -3,8 +3,9 @@ import { dirname } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runCli } from '../src/cli.js'
-import { GrantStore, grantsPath } from '../src/mcp-relay/grants.js'
-import { createMcpRelay } from '../src/mcp-relay/relay-server.js'
+import { createMcpRelayServer } from '@theokit/agents/mcp-relay'
+import { createGrantStore } from '@theokit/http/guards'
+import { grantsPath } from '../src/mcp-relay/command.js'
 import { harness } from './support/cli-harness.js'
 
 const INSTANCE = 'i'.repeat(40)
@@ -15,11 +16,11 @@ async function setup(timeoutMs = 2000) {
   const v = harness()
   const path = grantsPath(v.io.env, v.io.homeDir)
   mkdirSync(dirname(path), { recursive: true })
-  const store = new GrantStore(path)
-  const { token } = await store.create('chatgpt', ['list_dir'])
-  const server = createMcpRelay({
+  const store = createGrantStore(path)
+  const { credential: token } = await store.create('chatgpt', ['list_dir'])
+  const server = createMcpRelayServer({
     instanceToken: INSTANCE,
-    grantsPath: path,
+    grants: store,
     timeoutMs,
     pollMs: 300,
   })
@@ -48,10 +49,10 @@ describe('mcp-relay server', () => {
     const poll = r.post('/instance/poll', INSTANCE, {})
     const client = r.post('/mcp', r.token, rpc)
     const { jobs } = (await (await poll).json()) as {
-      jobs: { id: string; client: string; allowedTools: string[]; body: unknown }[]
+      jobs: { id: string; client: string; scopes: string[]; body: unknown }[]
     }
     expect(jobs).toHaveLength(1)
-    expect(jobs[0]).toMatchObject({ client: 'chatgpt', allowedTools: ['list_dir'], body: rpc })
+    expect(jobs[0]).toMatchObject({ client: 'chatgpt', scopes: ['list_dir'], body: rpc })
     const answer = { jsonrpc: '2.0', id: 1, result: { tools: [] } }
     expect(
       (await r.post('/instance/respond', INSTANCE, { id: jobs[0]!.id, response: answer })).status,

@@ -4,7 +4,6 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { McpFileError } from '../../src/bridge/mcp-file.js'
 import { loadMcpScopes } from '../../src/bridge/mcp-scopes.js'
 
 const made: string[] = []
@@ -65,12 +64,29 @@ describe('loadMcpScopes', () => {
     expect(r.personal).toEqual(['e'])
   })
 
-  it('a malformed project .mcp.json throws McpFileError and a malformed personal file only warns', () => {
-    const goodHome = dir({})
-    const badCwd = dir({ '.mcp.json': '{nope' })
-    expect(() => loadMcpScopes({ cwd: badCwd, home: goodHome, projectAllowed: true })).toThrow(
-      McpFileError,
-    )
+  it.each([true, false])(
+    'a malformed project .mcp.json (projectAllowed %s) warns once and keeps the personal servers',
+    (projectAllowed) => {
+      const personalDir = dir({ '.mcp.json': doc({ mine: 'c' }) })
+      const badCwd = dir({ '.mcp.json': '{nope' })
+      const warnings: string[] = []
+      const r = loadMcpScopes({
+        cwd: badCwd,
+        home: dir({}),
+        personalFiles: [personalDir],
+        projectAllowed,
+        onWarn: (m) => warnings.push(m),
+      })
+      expect(Object.keys(r.servers)).toEqual(['mine'])
+      expect(r.personal).toEqual(['mine'])
+      expect(r.shadowed).toEqual([])
+      expect(r.projectWithheld).toEqual([])
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toContain(badCwd)
+    },
+  )
+
+  it('a malformed personal file only warns', () => {
     const warnings: string[] = []
     const badHome = dir({ '.claude.json': '{nope' })
     const r = loadMcpScopes({
