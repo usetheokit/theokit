@@ -26,6 +26,7 @@ import type {
 } from '@theokit/sdk'
 import type { z } from 'zod'
 
+import type { Capability } from '../capability/capability.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type { HumanInTheLoopOptions } from '../types.js'
@@ -381,6 +382,14 @@ export interface AgentBuilder<
    */
   mcp(servers: McpServersMap): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * Add a {@link Capability} (or a preset such as `codingAgentPreset`) to the chain. Capabilities
+   * apply in call order at compile time, after the other builder fields; a field both declare must
+   * agree or compilation throws. The tool names a capability registers are not added to the
+   * type-level tool union (so `.approval()` does not type-check them), but a gate for one that
+   * arrives through `approvals` is checked against the assembled tools.
+   */
+  capability(c: Capability): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * Apply a reusable partial chain (Spring-Boot-style composition). `preset` receives the current
    * builder and returns an advanced one; its accumulated type-state flows through.
    */
@@ -445,6 +454,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     thinking: (level: string) => makeBuilder({ ...config, thinking: level }),
     subagents: (map: Record<string, SubagentAgentDefinition>) =>
       makeBuilder({ ...config, subagents: map }),
+    capability: (c: Capability) =>
+      makeBuilder({ ...config, capabilities: [...(config.capabilities ?? []), c] }),
     settingSources: (selection: SettingSourcesSelection) =>
       makeBuilder({ ...config, settingSources: selection }),
     hookApproval: (gate: HookApprovalGate) => makeBuilder({ ...config, hookApproval: gate }),

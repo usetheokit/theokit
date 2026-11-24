@@ -13,14 +13,12 @@ import { isTransientError } from '@theokit/agents'
 import {
   CredentialNotFoundError,
   DEFAULT_PROVIDERS,
-  isSubscriptionRoute,
   providerFromApiKeyPrefix,
   resolveAgentCredential,
 } from '@theokit/agents/auth'
 import type { SourceOrigin } from '@theokit/agents/auth'
 import type { CredentialProviderDescriptor as ProviderDescriptor } from '@theokit/agents/auth'
 
-import { ENV_HOME } from '../config/index.js'
 import { OPENAI_OAUTH_CONFIG, credentialStore } from './oauth-config.js'
 
 const PROVIDERS = ['openrouter', 'anthropic', 'openai'] as const
@@ -55,17 +53,6 @@ export function credentialHome(home: string, env: Record<string, string | undefi
 
 export const authFilePath = (home: string, env: Record<string, string | undefined> = {}): string =>
   storeAuthFilePath(credentialStore(home), env)
-
-/** The variables that say WHERE the credential store is — never which key to use. */
-function storeLocationOnly(
-  env: Record<string, string | undefined>,
-): Record<string, string | undefined> {
-  const kept: Record<string, string | undefined> = {}
-  for (const name of [ENV_HOME, 'THEOKIT_HOME', 'THEOKIT_AUTH_HOME']) {
-    if (env[name] !== undefined) kept[name] = env[name]
-  }
-  return kept
-}
 
 /**
  * B-034 — returns the auth home and no longer WRITES it into the caller's environment.
@@ -196,14 +183,17 @@ function toSdkSource(source: SourceOrigin): string {
 export function resolveCredential(opts: {
   env: Record<string, string | undefined>
   home: string | undefined
+  model?: string | undefined
 }): ResolvedCredential {
-  const { env, home } = opts
+  const { env, home, model } = opts
   try {
     const resolved = resolveAgentCredential({
       env,
       providers: DESCRIPTORS,
       // The variable NAME is this product's; the refuse-to-fall-back semantics are the framework's.
       declaredProviderEnvVar: 'THEOCODE_PROVIDER',
+      // The `openai-chatgpt/` route is the framework's to answer: stored OpenAI login, never a key.
+      ...(model === undefined ? {} : { model }),
       ...(home === undefined ? {} : { home, store: credentialStore(home) }),
     })
     return {
@@ -238,11 +228,12 @@ function classifyRefreshFailure(err: unknown): {
 export async function resolveFreshCredential(opts: {
   env: Record<string, string | undefined>
   home: string | undefined
+  model?: string | undefined
   fetch?: typeof fetch
   now?: () => number
   timeoutMs?: number
 }): Promise<ResolvedCredential> {
-  const resolved = resolveCredential({ env: opts.env, home: opts.home })
+  const resolved = resolveCredential({ env: opts.env, home: opts.home, model: opts.model })
   if (resolved.kind !== 'oauth' || opts.home === undefined) return resolved
   if (resolved.provider !== 'openai') return resolved
   const baseFetch = opts.fetch ?? fetch
@@ -277,16 +268,5 @@ export async function resolveCredentialForModel(
     timeoutMs?: number
   },
 ): Promise<ResolvedCredential> {
-  if (model !== undefined && isSubscriptionRoute(model)) {
-    // B-034 — `env: {}` forces the FILE store by hiding the api-key environment variables. It was
-    // also hiding the variable that LOCATES that store: `ENV_HOME` is the credential store's
-    // `homeEnvVar` (`oauth-config.ts`), so the routed resolution looked in the default home while
-    // the ordinary one looked in the overridden one. Asymmetric and user-visible: the first
-    // resolution finds the credential, the second does not.
-    //
-    // B-007 closed on the bullet "does not discard variables beyond the intended ones"; the commit
-    // it named as its fix never touched this file.
-    return resolveFreshCredential({ ...opts, env: storeLocationOnly(opts.env) })
-  }
-  return resolveFreshCredential(opts)
+  return resolveFreshCredential({ ...opts, model })
 }
