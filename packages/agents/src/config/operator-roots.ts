@@ -6,7 +6,6 @@ import type { AgentDefinition, TrustPosture } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import { discoverSubagents } from '@theokit/sdk/subagents-loader'
 
-
 /**
  * B-024 — read the operator's roots when `user: true`, or say why not.
  *
