@@ -14,6 +14,7 @@ const GIT_TIMEOUT_MS = 10_000
 
 function defaultRun(cwd: string): GitRun {
   return (args) => {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- git is looked up on PATH, as the caller's shell would
     const res = spawnSync('git', args, {
       cwd,
       encoding: 'utf8',
