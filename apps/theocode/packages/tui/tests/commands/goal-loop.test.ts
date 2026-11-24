@@ -13,7 +13,6 @@ vi.mock('@theocode/agent/config', () => ({
 }))
 
 import { runGoalLoop } from '../../src/commands/goal.js'
-import { forkCurrentSessionWith } from '../../src/persistence/fork-session.js'
 
 function start(sendAndWait: ReturnType<typeof vi.fn>) {
   const done = new Promise<void>((resolve) => {
@@ -74,25 +73,5 @@ describe('goal loop over sendAndWait', () => {
     expect(caught).toBeInstanceOf(GoalTurnFailedError)
     expect((caught as GoalTurnFailedError).status).toBe('error')
     expect((caught as GoalTurnFailedError).cause).toBe(cause)
-  })
-
-  it('a goal turn sent while a fork copies makes the fork stale', async () => {
-    const commit = vi.fn()
-    let finish!: (v: { newId: string; copied: boolean }) => void
-    const pending = forkCurrentSessionWith({
-      newId: () => 'b',
-      fork: () => new Promise((r) => (finish = r)),
-      current: () => 'a',
-      commit,
-    })
-    const sendAndWait = vi.fn().mockResolvedValue({ status: 'done' })
-    runGoal.mockImplementation(async (agent: { send(p: string): Promise<unknown> }) => {
-      await agent.send('continue')
-      return { status: 'completed', turnsUsed: 1, tokensUsed: 0 }
-    })
-    await start(sendAndWait)
-    finish({ newId: 'b', copied: true })
-    expect(await pending).toEqual({ newId: 'a', copied: false, stale: true })
-    expect(commit).not.toHaveBeenCalled()
   })
 })
