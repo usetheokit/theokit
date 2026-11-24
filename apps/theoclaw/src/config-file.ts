@@ -116,12 +116,10 @@ export async function writeConfiguration(path: string, entries: Readonly<Record<
   // Two calls, in this process or another, are locked per path, so the second checks for the file only
   // after the first has finished and is the one refused without `force`. The lock file sits beside the
   // target, so the directory exists first.
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  await withFileLock(resolve(path), async () => {
-    try {
-      await theoclawConfig.write(path, entries, options)
-    } catch (error) {
-      throw asConfigError(error, path)
-    }
-  })
+  try {
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+    await withFileLock(resolve(path), () => theoclawConfig.write(path, entries, options))
+  } catch (error) {
+    throw asConfigError(error, path)
+  }
 }
