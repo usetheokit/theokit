@@ -19841,7 +19841,7 @@
         },
         "InstructionTree": {
           "tier": "stable",
-          "declaration": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n}",
+          "declaration": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n    readonly found: number;\n    readonly chars: number;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": ["dist/config.d.ts#InstructionBlock"],
@@ -19849,9 +19849,17 @@
             "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}"
           }
         },
+        "InstructionTreeBase": {
+          "tier": "stable",
+          "declaration": "interface InstructionTreeBase {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "InstructionTreeBudget": {
           "tier": "stable",
-          "declaration": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n}",
+          "declaration": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly omissionNotice?: (omitted: number, found: number) => string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -19958,12 +19966,18 @@
         },
         "LoadInstructionTreeInput": {
           "tier": "stable",
-          "declaration": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n}",
+          "declaration": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n    readonly also?: readonly InstructionTreeBase[];\n    readonly render?: (block: InstructionBlock) => string;\n    readonly separator?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/config.d.ts#InstructionTreeBudget"],
+          "references": [
+            "dist/config.d.ts#InstructionBlock",
+            "dist/config.d.ts#InstructionTreeBase",
+            "dist/config.d.ts#InstructionTreeBudget"
+          ],
           "internals": {
-            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n}"
+            "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}",
+            "dist/config.d.ts#InstructionTreeBase": "interface InstructionTreeBase {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n}",
+            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly omissionNotice?: (omitted: number, found: number) => string;\n}"
           }
         },
         "LoadInstructionWalkInput": {
@@ -20638,14 +20652,16 @@
           "references": [
             "dist/config.d.ts#InstructionBlock",
             "dist/config.d.ts#InstructionTree",
+            "dist/config.d.ts#InstructionTreeBase",
             "dist/config.d.ts#InstructionTreeBudget",
             "dist/config.d.ts#LoadInstructionTreeInput"
           ],
           "internals": {
             "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}",
-            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n}",
-            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n}",
-            "dist/config.d.ts#LoadInstructionTreeInput": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n}"
+            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n    readonly found: number;\n    readonly chars: number;\n}",
+            "dist/config.d.ts#InstructionTreeBase": "interface InstructionTreeBase {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n}",
+            "dist/config.d.ts#InstructionTreeBudget": "interface InstructionTreeBudget {\n    readonly maxDepth: number;\n    readonly maxFiles: number;\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly omissionNotice?: (omitted: number, found: number) => string;\n}",
+            "dist/config.d.ts#LoadInstructionTreeInput": "interface LoadInstructionTreeInput {\n    readonly cwd: string;\n    readonly roots: readonly string[];\n    readonly budget: InstructionTreeBudget;\n    readonly onWarn?: (message: string) => void;\n    readonly fileNames?: readonly string[] | ((entry: string) => boolean);\n    readonly order?: 'outward-in' | 'lexicographic' | 'as-listed';\n    readonly also?: readonly InstructionTreeBase[];\n    readonly render?: (block: InstructionBlock) => string;\n    readonly separator?: string;\n}"
           }
         },
         "loadInstructionWalk": {
@@ -20660,7 +20676,7 @@
           ],
           "internals": {
             "dist/config.d.ts#InstructionBlock": "interface InstructionBlock {\n    readonly path: string;\n    readonly content: string;\n    readonly scopes: readonly string[];\n    readonly scopesUnreadable: boolean;\n    readonly truncated?: boolean;\n}",
-            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n}",
+            "dist/config.d.ts#InstructionTree": "interface InstructionTree {\n    readonly blocks: readonly InstructionBlock[];\n    readonly truncated: boolean;\n    readonly count: number;\n    readonly found: number;\n    readonly chars: number;\n}",
             "dist/config.d.ts#LoadInstructionWalkInput": "interface LoadInstructionWalkInput {\n    readonly cwd: string;\n    readonly alternatives?: readonly string[];\n    readonly local?: readonly string[];\n    readonly maxChars: number;\n    readonly maxCharsPerFile?: number;\n    readonly onWarn?: (message: string) => void;\n    readonly operator?: readonly string[];\n}"
           }
         },

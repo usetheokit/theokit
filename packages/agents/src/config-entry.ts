@@ -83,6 +83,7 @@ export {
   type LoadInstructionWalkInput,
   type InstructionBlock,
   type InstructionTree,
+  type InstructionTreeBase,
   type InstructionTreeBudget,
   type LoadInstructionTreeInput,
 } from './config/instruction-tree.js'

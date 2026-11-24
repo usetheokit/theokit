@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- Rules are cut at `MAX_CHARS` by `loadInstructionTree` and its `omissionNotice`; `assemble` and the unbounded `maxChars` are gone (#2904).
 - The `ask` verdict of the `permissions` plugin is answered by `onAskForPolicy` from `@theokit/agents`; `askGateFor` is removed and the refusal wording stays here as `refusalMessage` (#2905).
 - The `THEOKIT_HOME` entry in `ENV_KNOBS` cites one resolvable reader (`backtrack.ts:transcriptRootHint`) instead of a comma-joined list the path-existence invariant could not resolve (#2982).
 - Headless approval is decided by `approvalPostureFor` from `@theokit/agents`; `resolveHeadlessApproval` and `headlessApprovalPosture` keep only the remediation and `danger-full-access` wording, and take a full `SandboxPosture` (#2903).
