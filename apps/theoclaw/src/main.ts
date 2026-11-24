@@ -8,6 +8,7 @@ import { dirname } from 'node:path'
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 import { resolveSecretRefs } from '@theokit/agents/auth'
+import { exitAfterFlush } from '@theokit/agents/commands'
 import { teeOutput } from '@theokit/host'
 import { restartSelf, waitForPredecessor } from '@theokit/host/service'
 
@@ -36,7 +37,6 @@ import {
   readImportAtStart,
   requireImportedMcp,
 } from './migration/import-start.js'
-import { exitAfterFlush } from './exit-after-flush.js'
 import { applyProxyEnvironment } from './ops/proxy.js'
 import {
   readTelemetrySettings,

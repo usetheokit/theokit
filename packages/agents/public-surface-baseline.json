@@ -18563,6 +18563,14 @@
           "references": [],
           "internals": {}
         },
+        "ExitAfterFlushDeps": {
+          "tier": "stable",
+          "declaration": "interface ExitAfterFlushDeps {\n    readonly streams?: readonly {\n        write(chunk: string, done: () => void): boolean;\n    }[];\n    readonly exit?: (code: number) => void;\n    readonly capMs?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "HeadlessIo": {
           "tier": "stable",
           "declaration": "interface HeadlessIo {\n    readonly out: (s: string) => void;\n    readonly err: (s: string) => void;\n}",
@@ -18773,6 +18781,16 @@
           "references": ["dist/commands.d.ts#ExitAfterDrainDeps"],
           "internals": {
             "dist/commands.d.ts#ExitAfterDrainDeps": "interface ExitAfterDrainDeps {\n    readonly exit?: (code: number) => void;\n    readonly setExitCode?: (code: number) => void;\n    readonly capMs?: number;\n}"
+          }
+        },
+        "exitAfterFlush": {
+          "tier": "stable",
+          "declaration": "declare function exitAfterFlush(code: number, deps?: ExitAfterFlushDeps): Promise<void>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/commands.d.ts#ExitAfterFlushDeps"],
+          "internals": {
+            "dist/commands.d.ts#ExitAfterFlushDeps": "interface ExitAfterFlushDeps {\n    readonly streams?: readonly {\n        write(chunk: string, done: () => void): boolean;\n    }[];\n    readonly exit?: (code: number) => void;\n    readonly capMs?: number;\n}"
           }
         },
         "formatGcJson": {
