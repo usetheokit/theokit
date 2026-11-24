@@ -220,6 +220,22 @@ function asNumber(version: string): number {
   return major * 1e6 + minor * 1e3 + patch
 }
 
+/**
+ * Whether the floor leg leaves `range` out. That leg runs only the packages that claim the installed
+ * version as a floor, so a bounded range whose every floor is above it (the host's `>=12.0.0 <14`
+ * against 5.32.0) is not part of it. A range that excludes the version for another reason, such as
+ * a ceiling at or below it, is still checked.
+ */
+function belongsToAHigherFloor(range: string, installed: string): boolean {
+  return range
+    .split('||')
+    .every(
+      (part) =>
+        /^>=\d/.test(part.trim()) &&
+        asNumber(part.trim().slice(2).split(/\s+/)[0] ?? '') > asNumber(installed),
+    )
+}
+
 describe('the declared SDK range delivers the parity the package advertises', () => {
   it('has at least one declaration to check, so a silent zero cannot pass', () => {
     // The control. `everySdkDeclaration()` reads the filesystem, and a rename or a moved root would
@@ -266,12 +282,22 @@ describe('the declared SDK range delivers the parity the package advertises', ()
       .some((d) => floorsOf(d.range).some((f) => f.major === major && f.minor === minor))
     for (const { pkg, field, range } of declarations) {
       if (atTheFloorLeg && isExact(range) && asNumber(range) > asNumber(installed)) continue
+      if (atTheFloorLeg && belongsToAHigherFloor(range, installed)) continue
       expect(
         admits(range, installed),
         `${pkg} [${field}] declares @theokit/sdk "${range}", which does not admit ${installed}, ` +
           'the version the root pnpm.overrides installs for every importer',
       ).toBe(true)
     }
+  })
+
+  it('leaves out of the floor leg only a range whose floor is above the installed version', () => {
+    expect(belongsToAHigherFloor('>=12.0.0 <14', '5.32.0')).toBe(true)
+    expect(belongsToAHigherFloor('>=5.32.0 <14', '5.32.0')).toBe(false)
+    expect(belongsToAHigherFloor('>=5.3.0 <14', '5.32.0')).toBe(false)
+    // A ceiling below the installed version is a refusal, not a higher floor.
+    expect(belongsToAHigherFloor('>=1.0.0 <5', '5.32.0')).toBe(false)
+    expect(admits('>=12.0.0 <14', '5.32.0')).toBe(false)
   })
 
   it('admits no major below the one that introduced the compat root, in ANY declaration', () => {

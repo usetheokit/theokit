@@ -43,6 +43,8 @@ import { join } from 'node:path'
 
 import { describeCommandFailure, runWithOneRetry } from './describe-command-failure.mjs'
 
+const SDK_NAME = '@theokit/sdk'
+const PROBE_SDK_VERSION = '12'
 const only = process.argv[2]
 const pkgs = readdirSync('packages', { withFileTypes: true })
   .filter((e) => e.isDirectory())
@@ -109,6 +111,12 @@ for (const dir of pkgs) {
     const peers = Object.entries(manifest.peerDependencies ?? {})
       .filter(([n]) => !n.startsWith('@theokit/'))
       .map(([n, r]) => `${n}@${String(r).replace(/^>=/, '')}`)
+    // The SDK is installed at 12, the lowest version every tarball admits: the host's peer is
+    // `>=12.0.0 <14` (the rest are `>=5.32.0 <14`), so an SDK below 12 is refused with ERESOLVE.
+    const sdk =
+      SDK_NAME in { ...manifest.peerDependencies, ...manifest.dependencies }
+        ? [`${SDK_NAME}@${PROBE_SDK_VERSION}`]
+        : []
     // Args built first so the CALL fits one line. `eslint-disable-next-line` binds to the next
     // LINE, and prettier — which lint-staged runs before eslint, for exactly this reason — breaks a
     // long call across lines, leaving the directive on `execFileSync(` and the rule firing on
@@ -124,6 +132,7 @@ for (const dir of pkgs) {
       join(out, tgz),
       ...siblings,
       ...peers,
+      ...sdk,
       '--no-audit',
       '--no-fund',
       '--ignore-scripts',
