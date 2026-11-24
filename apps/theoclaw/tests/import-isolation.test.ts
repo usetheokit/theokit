@@ -8,7 +8,7 @@ import type { AgentImport, TheoClawAgentOptions } from '../src/agent/create-agen
 import { createAgentFactory } from '../src/control-plane/agent-factory.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { importedMcpPaths, importedMcpSecrets } from '../src/migration/import-start.js'
-import type { ImportedSetup } from '../src/migration/import-store.js'
+import type { StoredForeignImport } from '@theokit/agents/foreign-setup'
 import { FakeAgent } from './fakes.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { CONTROL_TOKEN, enforced, notEnforced, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
@@ -24,7 +24,7 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) cleanup()
 })
 
-function setupWith(mcpServers: ImportedSetup['mcpServers']): ImportedSetup {
+function setupWith(mcpServers: StoredForeignImport['mcpServers']): StoredForeignImport {
   return {
     kind: 'claude-code',
     instructions: 'Imported instruction: the project is called Lighthouse.',

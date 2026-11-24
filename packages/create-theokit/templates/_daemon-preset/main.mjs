@@ -2,7 +2,8 @@
 // Entry of a long-running agent app on @theokit/host.
 //   node main.mjs                      run the daemon (stops cleanly on SIGINT / SIGTERM)
 //   node main.mjs onboard [--yes] [--model <id>] [--force]
-//   node main.mjs daemon install|uninstall|status
+//   node main.mjs daemon install|uninstall|status|restart|logs
+//   node main.mjs --config <path> [--profile <name>]   how a Windows scheduled task starts the daemon
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -10,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { createAppHost } from '@theokit/host/app-host'
-import { serviceBackend } from '@theokit/host/service'
+import { daemonCommands, serviceBackend } from '@theokit/host/service'
 
 import {
   APP,
@@ -60,27 +61,43 @@ async function onboard(argv) {
 }
 
 async function daemon(argv) {
-  const [action] = argv
+  const [action, ...rest] = argv
   const backend = serviceBackend()
-  if (action === 'install') {
-    const env = {}
-    if (process.env[CONFIG_VARIABLE] !== undefined)
-      env[CONFIG_VARIABLE] = process.env[CONFIG_VARIABLE]
-    await backend.install({
-      label: APP,
-      command: process.execPath,
-      args: [join(here, 'main.mjs')],
-      env,
-      workingDirectory: here,
-    })
-    console.log(`Installed service ${APP}`)
-  } else if (action === 'uninstall') {
-    await backend.uninstall(APP)
-    console.log(`Uninstalled service ${APP}`)
-  } else if (action === 'status') {
-    console.log(await backend.status(APP))
-  } else {
-    throw new Error('usage: daemon install|uninstall|status')
+  const commands = daemonCommands(backend, {
+    stdout: process.stdout,
+    stderr: process.stderr,
+    env: process.env,
+    prefix: APP,
+  })
+  switch (action) {
+    case 'install':
+      // A scheduled task carries no environment: on Windows the config goes in as `--config <path>`.
+      return commands.install({
+        label: APP,
+        command: process.execPath,
+        args: [join(here, 'main.mjs')],
+        env:
+          process.env[CONFIG_VARIABLE] === undefined
+            ? {}
+            : { [CONFIG_VARIABLE]: process.env[CONFIG_VARIABLE] },
+        entryArgs: () => config.entryArgs(process.env, home),
+        workingDirectory: here,
+      })
+    case 'uninstall':
+      return commands.uninstall(APP)
+    case 'status':
+      return commands.status(APP)
+    case 'restart':
+      return commands.restart(APP)
+    case 'logs': {
+      const { values } = parseArgs({
+        args: rest,
+        options: { lines: { type: 'string', default: '200' } },
+      })
+      return commands.logs(APP, Number(values.lines))
+    }
+    default:
+      throw new Error('usage: daemon install|uninstall|status|restart|logs [--lines <n>]')
   }
 }
 
@@ -117,8 +134,11 @@ async function run() {
 const [command, ...rest] = process.argv.slice(2)
 try {
   if (command === 'onboard') await onboard(rest)
-  else if (command === 'daemon') await daemon(rest)
-  else if (command === undefined || command === 'run') await run()
+  else if (command === 'daemon') process.exitCode = await daemon(rest)
+  else if (command === '--config' || command === '--profile') {
+    config.applyEntryArgs(process.argv.slice(2), process.env)
+    await run()
+  } else if (command === undefined || command === 'run') await run()
   else throw new Error(`unknown command "${command}" (onboard, daemon, run)`)
 } catch (error) {
   console.error(error instanceof Error ? error.message : error)

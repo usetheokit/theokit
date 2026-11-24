@@ -23,6 +23,7 @@ export type { CommandRegistry } from './command-registry.js'
 export type {
   CommandArgument,
   CommandDefinition,
+  RouteOptions,
   RouteFailure,
   RoutedInput,
 } from './command-router.js'
@@ -38,12 +39,14 @@ export type { SessionsGcArgs, SessionsGcOptions, SessionsGcOutcome } from './ses
 export {
   createShutdown,
   exitAfterDrain,
+  exitAfterFlush,
   DEFAULT_WATCHDOG_MS,
   SHUTDOWN_EXIT_CODES,
 } from './shutdown.js'
 export type {
   CleanupTask,
   ExitAfterDrainDeps,
+  ExitAfterFlushDeps,
   Shutdown,
   ShutdownDeps,
   ShutdownOutcome,

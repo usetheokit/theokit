@@ -104,6 +104,8 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 
 `serviceBackend('win32')` registers a logon-triggered scheduled task named by `label` (least privilege, no time limit, restart after failure every minute) from a UTF-16 XML file kept in a fresh private temporary directory and removed afterwards. `scheduledTaskXml(spec, { user })` returns the definition.
 
+`daemonCommands(backend, { stdout, stderr, env, runner?, prefix? })` gives `install`, `uninstall`, `status`, `restart` and `logs` over a backend, for values the app already parsed (argv parsing stays in the app). `install(target)` takes `{ label, command, args, env?, workingDirectory?, description?, entryArgs? }`; on Windows the task carries no environment, so `entryArgs()` (such as `instanceConfig.entryArgs`) is appended to `args` and `env` is not passed (a non-empty `env` without `entryArgs` throws `ServiceDefinitionError`). On Linux `install` prints a `loginctl enable-linger` notice when `lingerEnabled(user, runner?)` answers `false`. `status` resolves 0 when running and 3 otherwise. Backend failures throw; the commands resolve the exit code.
+
 - **A task carries no environment.** `install` with a non-empty `spec.env` throws `ServiceDefinitionError`: pass the values as `args` instead. Every argument is quoted per the `CommandLineToArgvW` rules.
 - The task runs as `USERDOMAIN\USERNAME` from `options.env`; without `USERNAME`, `install` throws `ServiceDefinitionError`. `command` and `workingDirectory` must be Windows absolute paths.
 - A failing `/Create` or `/Run` deletes the task and throws `ServiceCommandError`.
@@ -201,6 +203,32 @@ await host.start() // a failure stops the started services in reverse, then reje
 - With `signals`, the first SIGINT or SIGTERM runs `close()`, then `exit(0)`, or `exit(1)` if a step failed or timed out. A second signal goes to `onError` and is ignored. Listeners are removed when the teardown ends.
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
+
+## `createChannelAssistant` (`@theokit/host/channel-assistant`)
+
+Turns channels, an agent factory and an access policy into a running chat assistant. Needs the optional peers `@theokit/gateway` and `@theokit/gateway-agent`.
+
+```ts
+const assistant = createChannelAssistant({
+  channels: [{ platform: 'telegram', build: () => adapter, descriptor }],
+  sessions: { agent: ({ key, agentId, context }) => buildAgent(key) }, // feeds Agent.sessionPool; or `{ pool }` with your own `handler`
+  access: { owners, dm: 'pairing', pairing, isAuthenticated }, // or `accessHook`; exactly one is required
+  preHooks: [emailHook], // before the access policy
+  hooks: [appHook], // after the access policy, before `help`
+  help: helpHook,
+  reply: { decorateReply, onTurnEnd },
+  maskStreams: [process.stdout, process.stderr], // masked with `secrets`; `assistant.flushMask()` on exit
+  transcripts: { start: (heldIds) => startSweeper(heldIds) },
+  services: [{ name: 'control-plane', start, stop }], // after the channels, stopped first
+  events: { agent: () => toolLessAgent() }, // assistant.withEventAgent(work)
+  secrets: [token], // masked in every reply and written line
+})
+await assistant.start() // `background: true` returns before the platforms connect
+assistant.router // webhook routes
+await assistant.close() // channels stop, then session agents are disposed; once
+```
+
+Hook order is `preHooks`, access policy, `hooks`, `help`. An assistant with no access policy is refused; to serve everyone, say `access: { dm: 'open', owners: new Set(), isAuthenticated: () => false }`. `close()` stops the services, the channels, the sweeper, then the sessions.
 
 ## `applyOutboundProxy` and `validateProxy`
 

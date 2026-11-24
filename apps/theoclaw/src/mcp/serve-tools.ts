@@ -6,32 +6,12 @@ import { handleMcpToolsHttp, serveMcpToolsStdio } from 'theokit/server/agent'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { loadConfiguration } from '../config-file.js'
-import { vetoToolCall } from '../tools/path-veto.js'
+import { pathVetoPlugin } from '../tools/path-veto.js'
 import { buildTools } from '../tools/tool-registry.js'
 import { resolveToolSettings, type ToolSettings } from '../tools/tool-settings.js'
 
 /** The `serverInfo.name` TheoClaw answers an MCP client with. */
 export const MCP_SERVER_NAME = 'theoclaw'
-
-/**
- * `tools` with the state-directory veto in front of each handler. An MCP call skips the SDK's
- * `pre_tool_call` plugins, so the veto the agents get from `pathVetoPlugin` is applied here (OC-67).
- */
-export function vetoedTools(tools: readonly CustomTool[], settings: ToolSettings): CustomTool[] {
-  return tools.map((tool) => ({
-    ...tool,
-    handler: (input: Record<string, unknown>, ctx?: unknown) => {
-      const refusal = vetoToolCall(tool.name, input, settings)
-      if (refusal !== undefined) throw new Error(refusal)
-      return (
-        tool.handler as (
-          input: Record<string, unknown>,
-          ctx?: unknown,
-        ) => ReturnType<CustomTool['handler']>
-      )(input, ctx)
-    },
-  })) as CustomTool[]
-}
 
 /** One MCP JSON-RPC request answered over the `/control` tools, for the authenticated `/mcp` route. */
 export async function handleMcpRequest(
@@ -39,9 +19,12 @@ export async function handleMcpRequest(
   settings: ToolSettings,
   request: Request,
 ): Promise<Response> {
-  const reply = await handleMcpToolsHttp(vetoedTools(tools, settings), MCP_SERVER_NAME, request)
+  const reply = await handleMcpToolsHttp(tools, MCP_SERVER_NAME, request, {
+    plugins: [pathVetoPlugin(settings)],
+  })
   // TheoClaw's wording for a refused method: a plain-text body with the framework's `allow` header.
-  if (reply.status === 405) return new Response('method not allowed', { status: 405, headers: reply.headers })
+  if (reply.status === 405)
+    return new Response('method not allowed', { status: 405, headers: reply.headers })
   return reply
 }
 
@@ -69,17 +52,22 @@ export async function serveMcpStdio(io: McpCommandIo): Promise<void> {
       variable: 'THEOCLAW_MCP_EXPIRES_AT',
     })
   const settings = resolveToolSettings(env, io.cwd)
-  const tools = vetoedTools(buildTools(settings), settings)
+  const tools = buildTools(settings)
   const lines = createInterface({ input: io.stdin as Readable })
   const timer =
     expires === undefined
       ? undefined
       : setTimeout(() => lines.close(), Math.min(expires - Date.now(), 2 ** 31 - 1))
   try {
-    await serveMcpToolsStdio(tools, MCP_SERVER_NAME, {
-      lines,
-      write: (line) => void io.stdout.write(line),
-    })
+    await serveMcpToolsStdio(
+      tools,
+      MCP_SERVER_NAME,
+      {
+        lines,
+        write: (line) => void io.stdout.write(line),
+      },
+      { plugins: [pathVetoPlugin(settings)] },
+    )
   } finally {
     clearTimeout(timer)
   }

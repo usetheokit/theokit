@@ -39,7 +39,6 @@ function stubCollaborators() {
     cfg: vi.fn(() => ({ modelLabel: 'm', sandboxLabel: 's', sandboxDetail: 'read-only' })),
     sessionModel: vi.fn(() => undefined),
     setSessionModel: vi.fn(),
-    setModel: vi.fn(),
     session: vi.fn(() => 'sess-1'),
   }
   const ptyOwner = {

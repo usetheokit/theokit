@@ -1,12 +1,11 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 
-import { atomicWriteJson } from '@theokit/sdk/persistence'
+import { atomicWriteJson, withFileLock } from '@theokit/sdk/persistence'
 
 import { UsageError } from '../cli-args.js'
-import { serializedPerFile } from '../serial-queue.js'
 
 /**
  * Expiring visitor grants for WebChat (OC-143). A reverse proxy such as Cloudflare Access
@@ -95,7 +94,8 @@ export async function visitorsCommand(args: readonly string[], io: VisitorsIo, n
   if (verb === 'revoke') {
     if (rest.length > 0) throw new UsageError(USAGE)
     // Read, change and write as one step per file, so two commands never start from the same old grants.
-    await serializedPerFile(file, async () => {
+    mkdirSync(dirname(file), { recursive: true })
+    await withFileLock(resolve(file), async () => {
       const grants = { ...readGrants(file) }
       delete grants[who]
       await writeGrants(file, grants)
@@ -106,7 +106,8 @@ export async function visitorsCommand(args: readonly string[], io: VisitorsIo, n
   if (verb === 'grant') {
     if (rest.length !== 2 || rest[0] !== '--for') throw new UsageError(USAGE)
     const until = now + parseDuration(rest[1] ?? '')
-    await serializedPerFile(file, async () => {
+    mkdirSync(dirname(file), { recursive: true })
+    await withFileLock(resolve(file), async () => {
       const grants = { ...readGrants(file) }
       for (const [other, at] of Object.entries(grants)) if (at <= now) delete grants[other]
       grants[who] = until

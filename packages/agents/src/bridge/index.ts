@@ -98,6 +98,7 @@ export { withTypedStream } from './handle-wrappers.js'
 export {
   applyPosture,
   approvalPostureFor,
+  onAskForPolicy,
   type ApprovalPolicy,
   type ApprovalPosture,
 } from './approval-posture.js'
@@ -315,6 +316,7 @@ export type { CompiledWiring } from './compiled-wiring.js'
 export {
   runAgentTurn,
   completeFromTurn,
+  type CompleteFromTurnOptions,
   type AgentTurnAgent,
   type AgentTurnMessage,
   type AgentTurnOutcome,

@@ -109,9 +109,13 @@ export function classifyTurnFailure(err: unknown): TurnFailure {
       if (typed.code !== 'unknown' || rawCode === undefined) rawCode = typed.rawCode ?? rawCode
     }
     if (!transient) {
-      const status = field(field(node, 'metadata'), 'statusCode')
       transient =
-        isTransientError(node) || (typeof status === 'number' && TRANSIENT_STATUS.has(status))
+        isTransientError(node) ||
+        [
+          field(field(node, 'metadata'), 'statusCode'),
+          field(node, 'status'),
+          field(node, 'statusCode'),
+        ].some((status) => typeof status === 'number' && TRANSIENT_STATUS.has(status))
     }
     node = field(node, 'cause')
   }

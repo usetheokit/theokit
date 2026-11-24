@@ -143,3 +143,27 @@ describe('the JSONL processor derives the same final message', () => {
     expect(p.finish('finished').finalText).toBe('It defines parseDuration.')
   })
 })
+
+describe("the end-of-turn diff is scoped to the turn's writes", () => {
+  it('test_aliased_edit_and_apply_patch_calls_scope_the_git_status', () => {
+    const { io } = capture()
+    const calls: string[][] = []
+    const proc = createHumanProcessor(io, 's', (args) => {
+      calls.push(args)
+      return { ok: true, stdout: '' }
+    })
+    const call = (toolName: string, input: unknown) => ({
+      type: 'tool-input-available' as const,
+      toolCallId: `c_${toolName}`,
+      toolName,
+      input,
+    })
+    proc.process(call('Edit', { path: 'a.ts' }))
+    proc.process(
+      call('ApplyPatch', { patch: '*** Begin Patch\n*** Add File: b.ts\n+x\n*** End Patch' }),
+    )
+    proc.finish('finished')
+    const status = calls.find((c) => c[0] === 'status') ?? []
+    expect(status.slice(status.indexOf('--') + 1)).toEqual(['a.ts', 'b.ts'])
+  })
+})

@@ -46,7 +46,7 @@ import { THEME_RESOLUTION, THEMES } from './theme.js'
  * built once at selection: the provider memoizes on the IDENTITY of the prop.
  */
 const initialTheme = (): TheoThemeProp => THEMES[THEME_RESOLUTION.base]
-const controller = createThemeController(initialTheme())
+const controller = createThemeController({ initial: initialTheme() })
 
 /**
  * What `/theme` selected, for `/status` and for `/theme`'s own report: a base name, or

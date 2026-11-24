@@ -107,13 +107,13 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
     effect:
       'Whether the session collector runs on its own, at most once a day, applying the SAME 30-day window, 1-day floor and operation budget `sessions gc` uses. `0`/`false` keeps collection manual.',
   },
-    {
-      name: ENV_SESSION_GC_MAX_AGE_DAYS,
-      reader: CONFIG,
-      default: 'the collector\'s own 30-day window',
-      effect:
-        'How many days of session transcripts the collector keeps. `.claude/settings.json` spells it `cleanupPeriodDays`. Unset leaves the collector\'s own window, so this knob and that file cannot disagree about a default neither of them owns.',
-    },
+  {
+    name: ENV_SESSION_GC_MAX_AGE_DAYS,
+    reader: CONFIG,
+    default: "the collector's own 30-day window",
+    effect:
+      "How many days of session transcripts the collector keeps. `.claude/settings.json` spells it `cleanupPeriodDays`. Unset leaves the collector's own window, so this knob and that file cannot disagree about a default neither of them owns.",
+  },
   {
     name: ENV_PROVIDER,
     reader: CREDENTIALS,
@@ -129,7 +129,7 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   },
   {
     name: ENV_THEOKIT_HOME,
-    reader: 'packages/agent/src/session/session-ops.ts:legacyRootHint',
+    reader: 'packages/tui/src/backtrack/backtrack.ts:transcriptRootHint',
     default: '~/.theokit',
     effect:
       'Root of the runtime state, including session transcripts. Changing it moves `/sessions`, `/backtrack` and `sessions gc` along with it.',
@@ -183,12 +183,14 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   },
   {
     name: ENV_SEARCH_API_URL,
-    reader: 'packages/agent/src/chat/chat.ts:webSearchConfigured',
+    reader: 'packages/agent/src/chat/chat.ts:buildChatAgent',
     default: '—',
     effect:
-      'The web-search provider endpoint. Absent or misspelt, `web_search` is not declared to the ' +
-      'model at all and its approval entry is omitted — the capability disappears silently, which ' +
-      'looks identical to a model that chose not to search.',
+      'The generic web-search provider endpoint; it needs `THEOKIT_SEARCH_API_KEY` too. `BRAVE_API_KEY`, ' +
+      '`TAVILY_API_KEY` and `THEOKIT_SEARCH=searxng:<url>` also enable search, and `THEOKIT_SEARCH=off` ' +
+      'disables it. With no provider, `web_search` is not declared to the model at all and its ' +
+      'approval entry is omitted — the capability disappears silently, which looks identical to a ' +
+      'model that chose not to search.',
   },
   {
     name: ENV_OPENROUTER_API_KEY,

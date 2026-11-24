@@ -1,22 +1,20 @@
 import {
-  type AgentStreamSource,
-  AgentStreaming,
-  ChatComposer,
-  ChatMessage,
+  AgentSession,
+  type AgentStreamEvent,
+  type AgentSessionCommand,
+  type AgentSessionFooterInfo,
   InkInputProvider,
-  Notice,
   Stack,
+  StatusFooter,
   TheoTUIProvider,
-  ToolCallCard,
-  useAgentStream,
 } from '@theokit/tui'
-import { createControlStreamInbox, createControlStreamSource, type ControlStreamSource } from '@theokit/agents/control'
+import { createControlStreamInbox, createControlStreamSource } from '@theokit/agents/control'
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
-import { Text, useInput } from 'ink'
+import { Text } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
 import { type ControlClient, nextArrival } from '../control-client/control-client.js'
-import { nextSessionId, type TuiNotice } from './frames.js'
+import { nextSessionId } from './frames.js'
 
 export interface TheoClawTuiProps {
   /** The connection to the running instance; the TUI builds no agent (plan D1). */
@@ -42,157 +40,102 @@ const COMMANDS = createCommandRegistry<TuiActions>([
 ])
 const PALETTE = COMMANDS.palette()
 
-/** One line of the transcript; a turn folds its own text and tools through `useAgentStream`. */
-type Item =
-  | { readonly kind: 'user'; readonly text: string }
-  | ({ readonly kind: 'notice' } & TuiNotice)
-  | {
-      readonly kind: 'turn'
-      readonly id: number
-      readonly source: AgentStreamSource
-    }
-
-function Turn({ source }: { readonly source: AgentStreamSource }): ReactElement {
-  const { events } = useAgentStream(source)
-  return (
-    <>
-      {events.map((event) => {
-        if (event.kind === 'notice')
-          return (
-            <Notice key={event.id} variant={event.variant}>
-              {event.text}
-            </Notice>
-          )
-        if (event.kind === 'message')
-          return (
-            <ChatMessage key={event.id} role={event.role}>
-              {event.text}
-            </ChatMessage>
-          )
-        if (event.kind === 'tool')
-          return <ToolCallCard key={event.id} name={event.name} status={event.status} />
-        return null
-      })}
-    </>
-  )
+interface SessionProps {
+  readonly client: ControlClient
+  readonly session: string
+  /** Resolves when the connection's last chat, on this or an earlier session, has finished unwinding. */
+  readonly previous: { current: Promise<void> }
+  readonly onFresh: () => void
+  readonly onQuit: () => void
 }
 
-function Entry({ item }: { readonly item: Item }): ReactElement {
-  switch (item.kind) {
-    case 'user':
-      return <ChatMessage role="user">{item.text}</ChatMessage>
-    case 'turn':
-      return <Turn source={item.source} />
-    case 'notice':
-      return <Notice variant={item.variant}>{item.text}</Notice>
+/** One session's screen: remounted (by `key`) when `/new` moves to another session, which clears it. */
+function Session({ client, session, previous, onFresh, onQuit }: SessionProps): ReactElement {
+  // The turn the stream is on, for the notices and the refusal of `/new` while it runs.
+  const turn = useRef<{ readonly inbox: ReturnType<typeof createControlStreamInbox>; readonly signal: AbortSignal; ended: boolean } | undefined>(undefined)
+
+  const stream = (message: string, signal: AbortSignal): AsyncIterable<AgentStreamEvent> => {
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
+    const mine = { inbox, signal, ended: false }
+    // A function source: the turn is opened when the session consumes it, exactly once.
+    const source = createControlStreamSource(client, session, message, { inbox })
+    const onAbort = (): void => source.interrupt()
+    return (async function* () {
+      // The connection runs one chat at a time and the session starts the next turn as soon as Esc
+      // is pressed (or `/new` remounts it), so a turn waits for the chat before it, on any session,
+      // to finish unwinding on the instance. Taken when the stream starts, so a stream that is
+      // closed before it runs leaves the chain alone.
+      const after = previous.current
+      let finished!: () => void
+      previous.current = new Promise<void>((resolve) => (finished = resolve))
+      turn.current = mine
+      try {
+        await after
+        if (!signal.aborted) {
+          signal.addEventListener('abort', onAbort, { once: true })
+          yield* source()
+        }
+      } finally {
+        signal.removeEventListener('abort', onAbort)
+        mine.ended = true
+        finished()
+      }
+    })()
   }
+
+  const commands: readonly AgentSessionCommand[] = PALETTE.map(({ name, description }) => ({
+    name,
+    description,
+    run: (args, controls) => {
+      // The session matches by name; the registry decides what is a command (`/new chat` is a message).
+      const text = args === '' ? `/${name}` : `/${name} ${args}`
+      const routed = COMMANDS.route(text)
+      if (routed.kind !== 'command') return controls.send(text)
+      void routed.command.run?.(routed.arg, {
+        interrupt: controls.interrupt,
+        quit: onQuit,
+        fresh: () => {
+          const running = turn.current
+          // The running turn stays on this session: switching now would leave Esc nothing to stop.
+          if (running !== undefined && !running.ended && !running.signal.aborted) {
+            running.inbox.post({ variant: 'warning', text: 'a turn is running: press Esc first' })
+            return
+          }
+          onFresh()
+        },
+      })
+    },
+  }))
+
+  const footer = ({ running, queued }: AgentSessionFooterInfo): ReactElement => (
+    <StatusFooter
+      {...(running ? { hint: queued > 0 ? `${queued} queued · esc to interrupt` : 'esc to interrupt' } : {})} right={<Text dimColor>session {session}</Text>} />
+  )
+
+  return <AgentSession stream={stream} commands={commands} renderFooter={footer} placeholder="Message TheoClaw" />
 }
 
 /**
- * TheoClaw's terminal UI (FR-009): multiline input with slash completion, the assistant's text as it
- * is generated, a card per tool call, and Esc to interrupt the running turn so the next message
- * redirects it. Every turn is the running instance's, on the session shown in the footer.
+ * TheoClaw's terminal UI (FR-009): the framework's `AgentSession` (transcript, streaming indicator,
+ * composer with slash completion, Esc to interrupt, a message typed during a turn queued) on the
+ * running instance's turns, on the session shown in the footer.
  */
 export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps): ReactElement {
-  const [items, setItems] = useState<readonly Item[]>([])
-  const [session, setSession] = useState(base)
-  const fresh = useRef(0)
-  const running = useRef(false)
-  const [busy, setBusy] = useState(false)
-  // A message submitted while a turn runs (a redirect typed right after Esc), sent once it ends.
-  const queued = useRef<string | undefined>(undefined)
-
-  const interrupt = (): void => {
-    if (running.current) current.current?.interrupt()
-  }
-
-  const turns = useRef(0)
-  const current = useRef<ControlStreamSource | undefined>(undefined)
-  const inbox = useRef<ReturnType<typeof createControlStreamInbox> | undefined>(undefined)
-  // While a turn runs a notice goes to its stream, which places it where the turn has reached, so later output stays below it.
-  const notice = (n: TuiNotice): void => {
-    if (running.current && inbox.current !== undefined) inbox.current.post(n)
-    else setItems((current) => [...current, { kind: 'notice', ...n }])
-  }
-
-  const send = (text: string): void => {
-    turns.current += 1
-    const id = turns.current
-    running.current = true
-    setBusy(true)
-    const mine = createControlStreamInbox({ stamp: nextArrival })
-    inbox.current = mine
-    // What is left once the framework ended the fold (a notice posted after the interruption) goes below the turn.
-    const inTurn = (n: TuiNotice): void => setItems((current) => [...current, { kind: 'notice', ...n }])
-    const onEnd = (): void => {
-      running.current = false
-      setBusy(false)
-      const next = queued.current
-      queued.current = undefined
-      if (next !== undefined) send(next)
-    }
-    // A function source: the hook starts the turn when it mounts, so the stream is opened exactly once.
-    const source = createControlStreamSource(client, session, text, {
-      inbox: mine,
-      onNotice: inTurn,
-      onEnd,
-    })
-    current.current = source
-    setItems((current) => [
-      ...current,
-      { kind: 'user', text },
-      { kind: 'turn', id, source },
-    ])
-  }
-
-  useInput((_input, key) => {
-    if (key.escape) interrupt()
-  })
-
-  const actions: TuiActions = {
-    interrupt,
-    quit: () => void client.close().then(onExit),
-    fresh: () => {
-      // The running turn stays on this session: switching now would leave Esc nothing to stop.
-      if (running.current) return notice({ variant: 'warning', text: 'a turn is running: press Esc first' })
-      fresh.current += 1
-      setSession(nextSessionId(base, fresh.current))
-      setItems([])
-    },
-  }
-
-  const submit = (text: string): void => {
-    const trimmed = text.trim()
-    if (trimmed === '') return
-    const routed = COMMANDS.route(trimmed)
-    if (routed.kind === 'command') {
-      // Run in place, not through `dispatch`: a command's effect lands before the next keystroke.
-      void routed.command.run?.(routed.arg, actions)
-      return
-    }
-    // One turn at a time: a message typed while one runs is sent when it ends (by Esc or by itself).
-    if (running.current) {
-      queued.current = text
-      return notice({ variant: 'warning', text: 'sent when the running turn ends' })
-    }
-    send(text)
-  }
-
+  const [fresh, setFresh] = useState(0)
+  const session = fresh === 0 ? base : nextSessionId(base, fresh)
+  const previous = useRef<Promise<void>>(Promise.resolve())
   return (
     <TheoTUIProvider>
       <InkInputProvider>
         <Stack gap={1}>
-          {items.map((item, index) => (
-            <Entry key={index} item={item} />
-          ))}
-          {busy ? <AgentStreaming showCancelHint /> : null}
-          <ChatComposer
-            onSubmit={submit}
-            multiLine
-            commands={PALETTE}
-            placeholder="Message TheoClaw"
+          <Session
+            key={session}
+            client={client}
+            session={session}
+            previous={previous}
+            onFresh={() => setFresh((n) => n + 1)}
+            onQuit={() => void client.close().then(onExit)}
           />
-          <Text dimColor>session {session}</Text>
         </Stack>
       </InkInputProvider>
     </TheoTUIProvider>

@@ -121,6 +121,23 @@ describe('running the hook', () => {
     expect(warns.join(' ')).toContain('exit 3')
   })
 
+  it('test_the_project_dir_reaches_the_command_without_touching_process_env', async () => {
+    const before = process.env.CLAUDE_PROJECT_DIR
+    delete process.env.CLAUDE_PROJECT_DIR
+    try {
+      await runSessionStartHooks({
+        specs: [spec(`printenv CLAUDE_PROJECT_DIR >> ${marker}`)],
+        cwd,
+        sessionId: 'tui-abc',
+        approved: () => true,
+      })
+      expect(lines()).toEqual([cwd])
+      expect(process.env.CLAUDE_PROJECT_DIR).toBeUndefined()
+    } finally {
+      if (before !== undefined) process.env.CLAUDE_PROJECT_DIR = before
+    }
+  })
+
   it('test_the_session_id_reaches_the_command', async () => {
     // Without it the hook cannot tell which session it is starting, which is most of what a
     // SessionStart hook is for.
