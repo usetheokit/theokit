@@ -144,8 +144,8 @@ export async function buildChatAgent(overrides: {
   // B-055 — a surface that wants to SHOW a veto passes a listener. The signal leaves at the veto
   // site because on the wire a blocked call is indistinguishable from a successful one, by the
   // SDK's design (see `buildHookHandlers`).
-  const lifecycleHooks = chatHookChain(cfg, posture, cwd, overrides?.onHookVeto)
-  const providerPlugins = resolveProviderPlugins(overrides?.model, modelId)
+  const lifecycleHooks = chatHookChain(cfg, posture, cwd, overrides.onHookVeto)
+  const providerPlugins = resolveProviderPlugins(overrides.model, modelId)
   // Decided ONCE, here, for the same reason `mcpServers` is: the tool and its approval entry are
   // written by two different functions, and the framework refuses a map naming a tool it was not
   // given — so two reads that disagreed would crash the user's terminal at construction.
@@ -153,7 +153,7 @@ export async function buildChatAgent(overrides: {
   const searchConfigured = webSearch.adapter !== undefined
   const rules = bothRuleRoots(cwd, operatorHome)
   const projectDoc = await projectDocument(posture, cwd, rules, operatorHome)
-  const reasoning_effort = overrides?.reasoning_effort
+  const reasoning_effort = overrides.reasoning_effort
   const coding = codingPreset({ cfg, modelId, posture, cwd, interactiveBackend, lifecycleHooks, writePolicy, searchAdapter: webSearch.adapter, reasoning_effort })
   const baseCtx = { cfg, modelId, posture, providerPlugins, coding, overrides, cwd, rules, operatorHome, projectDoc, instructionFiles: await agentsMdChain(cwd) }
   const { agent: base, cuts: aggregateCuts } = baseAgent(baseCtx)
@@ -162,7 +162,7 @@ export async function buildChatAgent(overrides: {
   // to be loaded inside the chain, where the result was passed to `.mcp()` and then unreachable —
   // which is why every listing that wanted it had to re-read the file and could disagree with what
   // actually ran.
-  const mcp = mcpScopes(posture, cwd, overrides?.onMcpWarn)
+  const mcp = mcpScopes(posture, cwd, overrides.onMcpWarn)
     const disk = await diskEntities(cwd, operatorHome, posture)
   const chain = withShellAndProjectEntities(base, {
     registry,
@@ -178,7 +178,7 @@ export async function buildChatAgent(overrides: {
     searchConfigured,
   })
 
-  const onCompiled = publishWiringAndListen(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts, agentsMdFiles: baseCtx.instructionFiles })
+  const onCompiled = publishWiringAndListen(overrides.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts, agentsMdFiles: baseCtx.instructionFiles })
 
   // M70 — the two registrations that depend on the surface PROFILE, applied here because the builder
   // is a fluent chain with no `.tools([...])`: there is no way to skip a link in the middle of it.
@@ -191,13 +191,13 @@ export async function buildChatAgent(overrides: {
   // two casts, because `createQuestionTool` returned its own interface and took no name. T1.1 aligned the
   // type, T1.2 made name and description options, and the adapter stopped existing — it did not shrink,
   // it vanished. `askUser` remains the fallback; the preferred asker comes from the context.
-  const profileScopedTools = profileTools(overrides?.surface, ask, abandonQuestion)
+  const profileScopedTools = profileTools(overrides.surface, ask, abandonQuestion)
   // B-099 / #1925 — `skill_read`, the tool the system prompt tells the model to call, is no longer built
   // here: `.skills(…, { read: 'advertised' })` in `withProjectEntities` makes the framework serve exactly
   // what the `<skills>` block lists, after the trust gate.
   const allTools = [
     ...profileScopedTools,
-    ...(overrides?.extraTools ?? []),
+    ...(overrides.extraTools ?? []),
   ]
   return chain.tools(allTools).onWired(onCompiled).build()
 }
