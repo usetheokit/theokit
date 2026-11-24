@@ -1,4 +1,4 @@
-import { DiscoveryError, type DiscoveryErrorRoute } from '@theokit/host/discovery'
+import { DiscoveryError, type DiscoveryErrorRoute, type ServicePublisher } from '@theokit/host/discovery'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
@@ -8,22 +8,7 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
  * socket, and `lan-publisher.ts` wraps the one adapter, `@theokit/host/discovery-bonjour`.
  */
 
-/** The one DNS-SD service TheoClaw publishes: `_theoclaw._tcp` with the bound port. */
-export interface PublishedService {
-  readonly name: string
-  readonly type: 'theoclaw'
-  readonly port: number
-  /** Exactly the control path; no token and no setting value ever reaches the TXT record (NFR-003). */
-  readonly txt: { readonly path: '/control' }
-}
-
-export interface ServicePublisher {
-  publish(service: PublishedService): void
-  /** Withdraw every published service (goodbye records); rejects when the goodbye send fails. */
-  unpublishAll(): Promise<void>
-  /** Close the library's socket. */
-  destroy(): Promise<void>
-}
+export type { PublishedService, ServicePublisher } from '@theokit/host/discovery'
 
 export type PublisherFactory = (options: { onError(error: TheoClawDiscoveryError): void }) => ServicePublisher
 
