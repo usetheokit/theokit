@@ -16,7 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
-- `chat.ts` composes `codingAgentPreset` for its tools, approval gates, setting sources, hook approval and withheld builtin `shell`; `GATE_QUESTIONS`, `approvalGates` and `ALL_GATED` are removed, and the permissions plugin's gated names come from `codingAgentTools(...).gates` (#2954).
+- `chat.ts` composes `codingAgentPreset` for its tools, approval gates, setting sources, hook approval and withheld builtin `shell`; `GATE_QUESTIONS`, `approvalGates` and `ALL_GATED` are removed, and the permissions plugin's gated names come from `codingAgentTools(...).gates` (#2954). Operator skills (`~/.theokit/skills/`) stay wired by TheoCode whatever the trust state, as before; project skills, MCP servers and named subagents stay separate links because they are gated one by one, which the preset's single posture cannot express.
 - The `ask` verdict of the `permissions` plugin is answered by `onAskForPolicy` from `@theokit/agents`; `askGateFor` is removed and the refusal wording stays here as `refusalMessage` (#2905).
 - The `THEOKIT_HOME` entry in `ENV_KNOBS` cites one resolvable reader (`backtrack.ts:transcriptRootHint`) instead of a comma-joined list the path-existence invariant could not resolve (#2982).
 - Headless approval is decided by `approvalPostureFor` from `@theokit/agents`; `resolveHeadlessApproval` and `headlessApprovalPosture` keep only the remediation and `danger-full-access` wording, and take a full `SandboxPosture` (#2903).

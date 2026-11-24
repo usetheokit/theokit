@@ -452,6 +452,10 @@ function withProjectEntities(
   const { posture, cfg, lifecycleHooks } = ctx
   return (
     withShell
+      // Operator skills stay a product link, not a preset option (#2954): the preset drops `skills`
+      // when the directory is untrusted, and `~/.theokit/skills/` is the operator's own, so it loads
+      // whatever the trust state. Project skills, MCP servers and named subagents are gated one by
+      // one below because the preset has one `projectSettings` posture for all three.
       // A2A — the product's own delegation: a read-only analyst child. `SubAgent.create` returns a
       // `CustomTool`, so it wires through the same `.tool()` seam. The coding tools and their
       // approvals come from `codingAgentPreset`, applied in `baseAgent`.

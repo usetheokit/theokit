@@ -47,6 +47,18 @@ vi.mock('../../src/config/index.js', async (orig) => ({
   resolveEffectiveConfig,
 }))
 
+const presetSpy = vi.fn()
+vi.mock('@theokit/agents/presets', async (orig) => {
+  const real = await orig<typeof import('@theokit/agents/presets')>()
+  return {
+    ...real,
+    codingAgentPreset: (options: Parameters<typeof real.codingAgentPreset>[0]) => {
+      presetSpy(options)
+      return real.codingAgentPreset(options)
+    },
+  }
+})
+
 const realHome = process.env.HOME
 beforeEach(() => {
   process.env.HOME = tempRoot('preset-policy-home-')
@@ -92,5 +104,32 @@ describe('the coding preset in read-only', () => {
     resolveTrustPosture.mockReturnValueOnce(posture(false))
 
     expect((await compile()).settingSources).toEqual(['user'])
+  })
+
+  it('test_hands_the_preset_the_posture_evidence_and_the_foreign_surfaces', async () => {
+    await compile()
+    const options = presetSpy.mock.calls.at(-1)?.[0]
+
+    // The evidence `trustedBy` is built from: the level and source that authorized the root, and the
+    // one capability the preset reads. A grant without `source` could not say where a refusal came from.
+    expect(options.posture).toEqual({
+      level: 'trusted',
+      source: 'store',
+      allows: { projectSettings: true },
+    })
+    expect(options.claudeCode).toEqual({
+      import: ['skills', 'subagents', 'plugins', 'commands', 'context'],
+    })
+  })
+
+  it('test_an_untrusted_posture_is_handed_over_denying_with_its_source', async () => {
+    resolveTrustPosture.mockReturnValueOnce(posture(false))
+    await compile()
+
+    expect(presetSpy.mock.calls.at(-1)?.[0].posture).toEqual({
+      level: 'untrusted',
+      source: 'store',
+      allows: { projectSettings: false },
+    })
   })
 })

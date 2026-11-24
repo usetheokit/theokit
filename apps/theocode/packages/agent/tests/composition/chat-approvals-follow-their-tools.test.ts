@@ -5,6 +5,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { codingAgentTools } from '@theokit/agents/presets'
+import {
+  createGenericHttpSearchAdapter,
+  createWebFetchTool,
+  createWebSearchTool,
+} from '@theokit/agents/tools'
+
 import { tempRoot } from '../helpers/temp-root.js'
 
 const TRUSTED = {
@@ -72,6 +79,13 @@ const ALWAYS_GATES = {
 }
 const SEARCH_GATE = { web_search: { question: 'Search the web for this?' } }
 
+const delegateTool = {
+  name: 'delegate_to_team',
+  description: 'x',
+  inputSchema: {},
+  handler: async () => '',
+}
+
 const realHome = process.env.HOME
 const realSearch = process.env['THEOKIT_SEARCH_API_URL']
 
@@ -104,7 +118,7 @@ async function compile(writes: boolean, searchConfigured: boolean) {
 describe('the compiled approvals map', () => {
   for (const writes of [true, false]) {
     for (const searchConfigured of [true, false]) {
-      it(`test_equals_the_gate_set_when_writes_${writes}_and_search_${searchConfigured}`, async () => {
+      it(`test_equals_approval_gates_when_writes_${writes}_and_search_${searchConfigured}`, async () => {
         const agent = await compile(writes, searchConfigured)
         const expected = {
           ...(writes ? WRITE_GATES : {}),
@@ -113,6 +127,20 @@ describe('the compiled approvals map', () => {
         }
 
         expect(agent.approvals).toEqual(expected)
+        // The gate set the preset declares for this mode is the same map, so the card and the set the
+        // permissions plugin receives cannot drift apart (the check `approvalGates` used to carry).
+        const declared = codingAgentTools({
+          cwd: '/tmp/proj',
+          sandboxMode: writes ? 'workspace-write' : 'read-only',
+          shellInReadOnly: true,
+          interactive: { start: () => undefined } as never,
+          webFetch: createWebFetchTool(),
+          ...(searchConfigured && {
+            webSearch: createWebSearchTool({ search: createGenericHttpSearchAdapter() }),
+          }),
+          ...(writes && { delegateToTeam: delegateTool as never }),
+        })
+        expect(Object.fromEntries(declared.gates)).toEqual(expected)
         const tools = new Set(agent.tools.map((t) => t.name))
         for (const name of Object.keys(agent.approvals)) expect(tools.has(name)).toBe(true)
       })
@@ -127,7 +155,11 @@ describe('the permissions plugin', () => {
     expect(permissionsSpy).toHaveBeenCalledTimes(1)
     const gated = permissionsSpy.mock.calls[0]?.[3] as ReadonlySet<string>
     expect([...gated].sort()).toEqual(
-      [...Object.keys(WRITE_GATES), ...Object.keys(ALWAYS_GATES), ...Object.keys(SEARCH_GATE)].sort(),
+      [
+        ...Object.keys(WRITE_GATES),
+        ...Object.keys(ALWAYS_GATES),
+        ...Object.keys(SEARCH_GATE),
+      ].sort(),
     )
   })
 })
