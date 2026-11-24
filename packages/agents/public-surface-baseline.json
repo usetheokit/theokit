@@ -21965,7 +21965,7 @@
             "dist/doctor.d.ts#credential": "declare function credential(state: CredentialState, options?: {\n    name?: string;\n    remedy?: string;\n}): Check;",
             "dist/doctor.d.ts#leftovers": "declare function leftovers(name: string, paths: readonly string[], hint?: string): Check[];",
             "dist/doctor.d.ts#settingsReport": "declare function settingsReport(reports: readonly SettingsFileReport[]): Check[];",
-            "dist/doctor.d.ts#skillsInventory": "declare function skillsInventory(options: {\n    declared: readonly string[];\n    roots: readonly string[];\n}): Check;"
+            "dist/doctor.d.ts#skillsInventory": "declare function skillsInventory(options: {\n    declared: readonly string[];\n    roots: readonly string[];\n}): Check & {\n    readonly undeclared: readonly string[];\n    readonly missing: readonly string[];\n};"
           }
         },
         "credentialShape": {
@@ -22103,6 +22103,14 @@
           "references": [],
           "internals": {}
         },
+        "TurnRetries": {
+          "tier": "stable",
+          "declaration": "interface TurnRetries {\n    readonly onRunEvent: (event: {\n        type: string;\n        attempt?: number;\n    }) => void;\n    attempts(): number;\n    startTurn(): void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "classifyTurnFailure": {
           "tier": "stable",
           "declaration": "declare function classifyTurnFailure(err: unknown): TurnFailure;",
@@ -22111,6 +22119,16 @@
           "references": ["dist/errors.d.ts#TurnFailure"],
           "internals": {
             "dist/errors.d.ts#TurnFailure": "interface TurnFailure {\n    code: KnownAgentRunErrorCode;\n    rawCode?: string;\n    transient: boolean;\n    message: string;\n}"
+          }
+        },
+        "createTurnRetries": {
+          "tier": "stable",
+          "declaration": "declare function createTurnRetries(): TurnRetries;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/errors.d.ts#TurnRetries"],
+          "internals": {
+            "dist/errors.d.ts#TurnRetries": "interface TurnRetries {\n    readonly onRunEvent: (event: {\n        type: string;\n        attempt?: number;\n    }) => void;\n    attempts(): number;\n    startTurn(): void;\n}"
           }
         },
         "describeTurnFailure": {

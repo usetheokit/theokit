@@ -139,7 +139,7 @@ const HINTS: readonly {
  */
 export interface TurnErrorContext {
   /**
-   * The highest attempt the provider reached, from `@theocode/shared/retry-record`.
+   * The highest attempt the provider reached, from `createTurnRetries` (`@theokit/agents/errors`).
    *
    * `0` or `1` is not a retry and is not reported: a single attempt IS the turn, and "after 1
    * attempt" on every ordinary failure is the noise that gets a message skipped.

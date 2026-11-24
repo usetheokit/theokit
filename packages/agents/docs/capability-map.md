@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1656 export(s) across 30 entry point(s).
+1658 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -1633,11 +1633,13 @@ Measured against `@theokit/sdk@13.0.0`.
 | Symbol | Kind |
 |---|---|
 | `classifyTurnFailure` | value |
+| `createTurnRetries` | value |
 | `DEFAULT_TURN_FAILURE_HINTS` | value |
 | `describeTurnFailure` | value |
 | `KnownAgentRunErrorCode` | type |
 | `TurnFailure` | type |
 | `TurnFailureHints` | type |
+| `TurnRetries` | type |
 
 ## `@theokit/agents/presets`
 

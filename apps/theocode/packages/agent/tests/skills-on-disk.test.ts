@@ -17,7 +17,7 @@
  * This module answers only what is on disk. Whether a found skill is WIRED is a separate question the
  * trust gate already answers, and conflating them would produce a row that is wrong in a new way.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -45,7 +45,10 @@ function write(root: string, name: string): void {
 /** The operator's own root — `~/.theokit/skills/<name>/SKILL.md`. */
 function writeUser(name: string): void {
   mkdirSync(join(home, '.theokit', 'skills', name), { recursive: true })
-  writeFileSync(join(home, '.theokit', 'skills', name, 'SKILL.md'), `---\nname: ${name}\n---\nbody\n`)
+  writeFileSync(
+    join(home, '.theokit', 'skills', name, 'SKILL.md'),
+    `---\nname: ${name}\n---\nbody\n`,
+  )
 }
 
 describe('#67 — declared against what is on disk', () => {
@@ -93,7 +96,6 @@ describe('#67 — declared against what is on disk', () => {
 
     expect(skillsOnDisk(cwd, ['hollow']).declaredButAbsent).toEqual(['hollow'])
   })
-
 
   it('test_a_skill_under_the_user_root_is_not_reported_as_absent', () => {
     // Measured 2026-09-05 against the built binary: a `SKILL.md` at `~/.theokit/skills/<name>/`,
@@ -150,7 +152,6 @@ describe('#67 — declared against what is on disk', () => {
     })
   })
 
-
   it('test_the_foreign_root_is_not_offered_the_declare_it_remedy', () => {
     // Dogfooded on this repository 2026-09-05: `.claude/skills/` held 40 entries installed by a
     // Claude Code kit and `.theokit/skills/` was empty, so the row asked the operator to declare
@@ -175,7 +176,6 @@ describe('#67 — declared against what is on disk', () => {
 
     expect(skillsOnDisk(cwd, ['theirs']).declaredButAbsent).toEqual([])
   })
-
 
   it('test_a_skill_from_a_plugin_bundle_is_not_reported_as_missing', () => {
     // Measured 2026-09-06 on the built binary: a bundle at `.claude/plugins/<n>/skills/<name>/SKILL.md`
@@ -205,6 +205,36 @@ describe('#67 — declared against what is on disk', () => {
     )
 
     expect(skillsOnDisk(cwd, []).presentButUndeclared).toEqual([])
+  })
+
+  it('test_a_file_under_plugins_is_not_a_bundle_and_does_not_hide_one', () => {
+    const plugins = join(cwd, '.claude', 'plugins')
+    mkdirSync(join(plugins, 'demo', 'skills', 'bundled'), { recursive: true })
+    writeFileSync(join(plugins, 'demo', 'skills', 'bundled', 'SKILL.md'), 'x\n')
+    writeFileSync(join(plugins, 'README.md'), 'not a bundle\n')
+    writeFileSync(join(plugins, 'skills'), 'a file named like a skills dir\n')
+
+    expect(skillsOnDisk(cwd, []).bundledSkills).toEqual(['bundled'])
+  })
+
+  it('test_a_symlinked_bundle_directory_still_contributes_and_a_dangling_link_is_ignored', () => {
+    const plugins = join(cwd, '.claude', 'plugins')
+    const real = join(cwd, 'elsewhere')
+    mkdirSync(join(real, 'skills', 'linked'), { recursive: true })
+    writeFileSync(join(real, 'skills', 'linked', 'SKILL.md'), 'x\n')
+    mkdirSync(plugins, { recursive: true })
+    symlinkSync(real, join(plugins, 'viaLink'))
+    symlinkSync(join(cwd, 'nowhere'), join(plugins, 'dangling'))
+
+    expect(skillsOnDisk(cwd, []).bundledSkills).toEqual(['linked'])
+  })
+
+  it('test_a_plugins_path_that_is_a_file_is_no_bundle_and_does_not_throw', () => {
+    mkdirSync(join(cwd, '.claude'), { recursive: true })
+    writeFileSync(join(cwd, '.claude', 'plugins'), 'a file where the directory goes\n')
+
+    expect(skillsOnDisk(cwd, ['x']).bundledSkills).toEqual([])
+    expect(skillsOnDisk(cwd, ['x']).declaredButAbsent).toEqual(['x'])
   })
 
   it('test_no_skills_anywhere_is_not_an_error', () => {
