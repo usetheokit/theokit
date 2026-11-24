@@ -29,6 +29,7 @@ export type ForeignImportErrorReason = 'locked' | 'refused' | 'unreadable'
 
 /** Thrown by `writeForeignImport` and `readForeignImport`; its message names a path or a server, never a value. */
 export class ForeignImportError extends TheokitAgentError {
+  override readonly name = 'ForeignImportError'
   readonly reason: ForeignImportErrorReason
   constructor(message: string, reason: ForeignImportErrorReason) {
     super(message, {
@@ -36,7 +37,6 @@ export class ForeignImportError extends TheokitAgentError {
       // a held lock may clear; a refusal or an unreadable path fails the same way next time.
       isRetryable: reason === 'locked',
     })
-    this.name = 'ForeignImportError'
     this.reason = reason
   }
 }
