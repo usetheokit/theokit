@@ -1,35 +1,45 @@
 /**
- * The variable is supplied, and never overwritten.
- *
- * Both halves matter and only one is obvious. Supplying it stops every turn being denied in a
- * repository that also uses Claude Code (usetheokit/theokit-sdk#522). NOT overwriting it is what
- * keeps this safe to run inside Claude Code itself, where the real value is already exported and
- * pointing at the actual project root — clobbering it would break the hooks this is meant to fix.
+ * `CLAUDE_PROJECT_DIR` reaches a hook through `projectDirEnv`, and never the process environment.
  */
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { installClaudeProjectDir } from '../../src/hooks/claude-project-dir.js'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-describe('installClaudeProjectDir', () => {
-  it('test_an_unset_variable_is_given_the_project_directory', () => {
-    const env: Record<string, string | undefined> = {}
-    expect(installClaudeProjectDir(env, '/repo')).toBe('/repo')
-    expect(env.CLAUDE_PROJECT_DIR).toBe('/repo')
-  })
+import { buildHookHandlers } from '../../src/hooks/build-handlers.js'
+import { hookFingerprint } from '../../src/hooks/hook-trust.js'
+import type { HookSpec } from '../../src/hooks/hooks-spec.js'
+import { ctxTurn } from './hooks-test-helpers.js'
 
-  it('test_a_value_that_is_already_set_is_left_alone', () => {
-    // Inside Claude Code the real value is exported and points at the true project root. A hook
-    // borrowed from `.claude/` resolves against it correctly, and overwriting would break it.
-    const env: Record<string, string | undefined> = { CLAUDE_PROJECT_DIR: '/real/root' }
-    expect(installClaudeProjectDir(env, '/somewhere/else')).toBe('/real/root')
-    expect(env.CLAUDE_PROJECT_DIR).toBe('/real/root')
-  })
+let dir: string
+let saved: string | undefined
 
-  it('test_a_blank_value_counts_as_unset', () => {
-    // An exported-but-empty variable produces the same broken `/.claude/...` path as no variable at
-    // all, so treating it as "already set" would preserve exactly the bug this fixes.
-    const env: Record<string, string | undefined> = { CLAUDE_PROJECT_DIR: '   ' }
-    expect(installClaudeProjectDir(env, '/repo')).toBe('/repo')
-    expect(env.CLAUDE_PROJECT_DIR).toBe('/repo')
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'projdir-'))
+  saved = process.env.CLAUDE_PROJECT_DIR
+  delete process.env.CLAUDE_PROJECT_DIR
+})
+afterEach(() => {
+  if (saved !== undefined) process.env.CLAUDE_PROJECT_DIR = saved
+  rmSync(dir, { recursive: true, force: true })
+})
+
+describe('CLAUDE_PROJECT_DIR for hooks', () => {
+  it('test_a_hook_sees_the_cwd_and_process_env_stays_clean', async () => {
+    const out = join(dir, 'printed.txt')
+    const spec: HookSpec = {
+      event: 'PostToolUse',
+      command: `printf "%s" "$CLAUDE_PROJECT_DIR" > ${out}`,
+      timeout_ms: 5_000,
+    }
+    const handlers = buildHookHandlers([spec], {
+      trusted: true,
+      approved: new Set([hookFingerprint(spec)]),
+      cwd: dir,
+    })
+    await handlers.transform_tool_result?.('a plain string result', ctxTurn())
+    expect(readFileSync(out, 'utf8')).toBe(dir)
+    expect(process.env.CLAUDE_PROJECT_DIR).toBeUndefined()
   })
 })
