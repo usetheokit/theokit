@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `driveTurn` passes `onFormatError: 'fail'` and reads `turn.errorMessage` from `runHeadlessTurn`; `keepStreamError` and `processorFailed` are gone (#2918).
+- `delegate_to_team` runs the squad with `ownsMembers`, `onDisposeError` and `timeoutMs` instead of racing it against `withClockCap` and disposing the members by hand: on the 15 minute cap the member in flight is now cancelled through its run's `cancel()`, and the tool still reports `delegation_timeout`; a member that fails to dispose is reported with its role. `runTeamWithCap` is removed (#2907).
 - `chat.ts` composes `codingAgentPreset` for its tools, approval gates, setting sources, hook approval and withheld builtin `shell`; `GATE_QUESTIONS`, `approvalGates` and `ALL_GATED` are removed, and the permissions plugin's gated names come from `codingAgentTools(...).gates` (#2954). Operator skills (`~/.theokit/skills/`) stay wired by TheoCode whatever the trust state, as before; project skills, MCP servers and named subagents stay separate links because they are gated one by one, which the preset's single posture cannot express.
 - The exec processor's collected write calls are typed `{ toolName; input }`, which is what `changedPathsOf` takes, so the package typechecks again (#3010).
 - Rules are cut at `MAX_CHARS` by `loadInstructionTree` and its `omissionNotice`; `assemble` and the unbounded `maxChars` are gone (#2904).
