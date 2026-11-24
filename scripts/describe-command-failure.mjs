@@ -59,3 +59,51 @@ export function runWithOneRetry(attempt, log) {
 function indent(text) {
   return text.replaceAll('\n', '\n      ')
 }
+
+/**
+ * The `npm install` specs for the peers a consumer owes a package, so the probe does not accuse it
+ * of what the consumer must supply.
+ *
+ * Third-party peers install at their declared floor (`>=18` -> `18`). A required `@theokit/*` peer
+ * that this run does not pack (`@theokit/sdk`) installs at its declared range: left to npm it
+ * resolves to whatever an OPTIONAL peer's range drags in (`@theokit/host` -> `@theokit/gateway`
+ * -> sdk 9.x), which conflicts with the host's own `>=12 <14` and fails the install with ERESOLVE.
+ * Optional `@theokit/*` peers and packed siblings are not installed here; see `specForMissing`.
+ * @param {{ peerDependencies?: Record<string, string>, peerDependenciesMeta?: Record<string, { optional?: boolean }> }} manifest
+ * @param {ReadonlySet<string>} siblings names packed by this run
+ * @returns {string[]}
+ */
+export function peerSpecs(manifest, siblings) {
+  return Object.entries(manifest.peerDependencies ?? {}).flatMap(([n, r]) => {
+    if (!n.startsWith('@theokit/')) return [`${n}@${String(r).replace(/^>=/, '')}`]
+    if (siblings.has(n) || manifest.peerDependenciesMeta?.[n]?.optional === true) return []
+    return [`${n}@${String(r)}`]
+  })
+}
+
+/**
+ * The package an import failed to find, from node's stderr (`Cannot find package 'x' imported
+ * from ...`), or undefined for any other failure.
+ * @param {string} stderr
+ * @returns {string | undefined}
+ */
+export function missingPackage(stderr) {
+  return /Cannot find package '([^']+)'/.exec(stderr)?.[1]
+}
+
+/**
+ * What to install so an entry that imports `name` can load, or undefined when `name` is nobody's to
+ * supply: an OPTIONAL peer the package declares (`@theokit/host/channel-assistant` imports
+ * `@theokit/gateway`) at its declared range, or a package this run packs (a peer of that peer,
+ * `@theokit/presenter`) from its tarball. Anything else is a real undeclared dependency.
+ * @param {string} name
+ * @param {{ peerDependencies?: Record<string, string>, peerDependenciesMeta?: Record<string, { optional?: boolean }> }} manifest
+ * @param {ReadonlyMap<string, string>} tarballs packed siblings by name
+ * @returns {string | undefined}
+ */
+export function specForMissing(name, manifest, tarballs) {
+  if (manifest.peerDependenciesMeta?.[name]?.optional === true) {
+    return `${name}@${manifest.peerDependencies?.[name] ?? ''}`
+  }
+  return tarballs.get(name)
+}
