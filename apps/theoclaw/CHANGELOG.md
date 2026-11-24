@@ -10,6 +10,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 `theokit-sdk` or the framework packages rather than here. Those carry the repository name.
 
 ## [Unreleased]
+- `buildTools`, `readOnlyTools` and the `minimal` profile are built by `assistantAgentTools` and `assistantWorkerTools` from `@theokit/agents/presets`; the tool set, its order apart from `widget` and the ACP tools now following the preset's, and the `THEOCLAW_*` parsing, `/elevated` wrapper and startup off lines stay here (#2909).
 
 - `exitAfterFlush` now comes from `@theokit/agents/commands` and gives up on a stream that never flushes after 3 s, so a closed pipe cannot hold the process (#2944).
 - The inbox target is described to the model through `createScheduleTools`' described platforms; `withInboxGuidance` and its rewrite of the `schedule_job` schema are gone (#2942).
