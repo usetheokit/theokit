@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . && knip --no-progress && node tools/check-english-only.mjs --quiet && node tools/check-doc-references.mjs --quiet && node tools/check-config-documented.mjs --quiet && node tools/check-env-knobs-documented.mjs --quiet && node tools/check-sdk-pin.mjs --quiet && node tools/check-typed-error-assertions.mjs --quiet && node tools/check-codex-parity.mjs --quiet && node tools/check-parity-ledger.mjs --quiet --run && npm run depcruise",
+    "lint": "pnpm --dir standalone install --frozen-lockfile --lockfile-only && node tools/sync-standalone.mjs --check && eslint . && knip --no-progress && node tools/check-english-only.mjs --quiet && node tools/check-doc-references.mjs --quiet && node tools/check-config-documented.mjs --quiet && node tools/check-env-knobs-documented.mjs --quiet && node tools/check-sdk-pin.mjs --quiet && node tools/check-typed-error-assertions.mjs --quiet && node tools/check-codex-parity.mjs --quiet && node tools/check-parity-ledger.mjs --quiet --run && npm run depcruise",
     "lint:deadcode": "knip --no-progress",
     "depcruise": "depcruise packages --config .dependency-cruiser.cjs",
     "format": "prettier --write .",

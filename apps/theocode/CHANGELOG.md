@@ -18,6 +18,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- The standalone lockfile follows the agent's `@theokit/sdk` 15.2.0 pin, and TheoCode lint now runs the frozen standalone lockfile check and the standalone sync check, so a stale lockfile fails the pull request and not the release (#3092).
 - The withheld-shell test's control opts in to the SDK builtin shell (`builtinTools`), since SDK 15 no longer declares it by default (#3083).
 - The delegation test `parent-withheld-reaches-roles` passes a temporary directory instead of the real working directory, so the ambient-cwd guard (B-161) passes again.
 
