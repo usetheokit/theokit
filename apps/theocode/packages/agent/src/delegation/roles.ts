@@ -3,6 +3,7 @@ import type { CustomTool, HookHandlers, SDKAgent, SubagentDefinition } from '@th
 
 import { discoverRoles } from './role-discovery.js'
 import { ConfigurationError } from '@theokit/agents'
+import type { BuiltinToolName } from '@theokit/sdk'
 import type { SandboxBackend } from '@theokit/agents/sandbox'
 import { SDK_FOREIGN_SURFACES } from '../setting-sources.js'
 import { ToolRegistry, type ToolScope } from '../tools/index.js'
@@ -44,7 +45,7 @@ export interface RoleAgentContext {
    * Builtin tools the parent withholds. A role withholds these AND `shell` (the SDK's union rule,
    * usetheokit/theokit-sdk#580): a child never holds a builtin its parent was denied.
    */
-  withheldBuiltinTools?: readonly string[]
+  withheldBuiltinTools?: readonly BuiltinToolName[]
   /**
    * B-061 — the seam that makes a role's composition assertable without a credential.
    *
@@ -206,7 +207,7 @@ async function roleAgentOptions(
     // resolved per role from the registry under a different name. What goes is only the builtin
     // nobody declared, and a role that lost a tool it needed would fail loudly rather than quietly —
     // the right direction for this to be wrong in.
-    withheldBuiltinTools: [...new Set(['shell', ...(ctx.withheldBuiltinTools ?? [])])] as never,
+    withheldBuiltinTools: [...new Set<BuiltinToolName>(['shell', ...(ctx.withheldBuiltinTools ?? [])])],
       // #825 — the prompt the member runs with, carrying the memory `applySubagentMemory` folded
       // in. Without it the SDK falls back to the file on disk and the memory is lost, with nothing
       // reporting that anything went missing.

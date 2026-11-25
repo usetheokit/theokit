@@ -399,6 +399,8 @@ function codingPreset(ctx: {
     posture: ctx.posture,
     cwd,
     hooks: ctx.lifecycleHooks,
+    // What `codingAgentPreset` withholds from this agent (below); the team's members withhold the same.
+    withheldBuiltinTools: ['shell'],
   })
   const shared = {
     cwd,
