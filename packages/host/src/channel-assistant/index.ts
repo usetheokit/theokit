@@ -13,8 +13,6 @@ import type {
   MessageEvent,
   PlatformName,
 } from '@theokit/gateway'
-import { createAgentHandler } from '@theokit/gateway-agent'
-import type { AgentHandlerOptions, TurnAgent } from '@theokit/gateway-agent'
 import { Agent, Security } from '@theokit/sdk'
 import type { GenerationStore, SDKAgent, SessionPool } from '@theokit/sdk'
 
@@ -32,19 +30,25 @@ export type {
   ChannelSetOptions,
 } from './channels.js'
 
-/** The reply path: the hooks of `createAgentHandler` the app may set. */
-export type ChannelAssistantReply = Pick<
-  AgentHandlerOptions,
-  | 'prompt'
-  | 'ackEmoji'
-  | 'progress'
-  | 'decorateReply'
-  | 'onTurnStart'
-  | 'onTurnEnd'
-  | 'noAnswerText'
-  | 'errorText'
-  | 'sendOptions'
->
+/** The part of an agent the assistant uses for an event run; an SDK agent or a fake fits. */
+export interface TurnAgent {
+  send(prompt: string, options?: Record<string, unknown>): Promise<unknown>
+}
+
+/** A session agent on loan for one turn: `release` hands it back to the pool. */
+export interface AgentLease {
+  readonly agent: TurnAgent
+  release(): void | Promise<void>
+}
+
+/**
+ * Builds the reply handler over the owned pool, for example with `createAgentHandler` from
+ * `@theokit/gateway-agent`: `({ agentFor, secrets }) => createAgentHandler({ agentFor, secrets, ...reply })`.
+ */
+export type ReplyHandlerFactory = (args: {
+  readonly agentFor: (event: MessageEvent) => Promise<AgentLease>
+  readonly secrets: readonly string[]
+}) => GatewayHandler
 
 /** What the assistant needs of a session store it is given: which agents it holds, and the end of them. */
 export interface SessionHost {
@@ -94,9 +98,10 @@ export interface ChannelAssistantOptions {
   readonly hooks?: readonly GatewayHook[]
   /** The last hook, which answers `/help`. */
   readonly help?: GatewayHook
-  /** The reply handler. Default: `createAgentHandler` over the owned pool, with `reply`. */
+  /** The reply handler. Required with `sessions.pool`. */
   readonly handler?: GatewayHandler
-  readonly reply?: ChannelAssistantReply
+  /** The reply handler over the owned pool. With owned sessions, one of `handler` and `replyHandler` is required. */
+  readonly replyHandler?: ReplyHandlerFactory
   /** One factory for every event run (trigger, e-mail, webhook): a fresh agent per run, disposed after it. */
   readonly events?: { readonly agent: () => TurnAgent | Promise<TurnAgent> }
   /** Every value that must not leave in a reply or a written line. */
@@ -186,13 +191,18 @@ function sessionsOf(options: ChannelAssistantOptions, secrets: readonly string[]
     ...(owned.maxOpen === undefined ? {} : { maxOpen: owned.maxOpen }),
   })
   const keyOf = owned.sessionKey ?? defaultSessionKey
-  const handler =
-    options.handler ??
-    createAgentHandler({
-      ...options.reply,
+  let { handler } = options
+  if (handler === undefined) {
+    if (options.replyHandler === undefined) {
+      throw new TypeError(
+        'createChannelAssistant: owned `sessions` need a `handler` or a `replyHandler`',
+      )
+    }
+    handler = options.replyHandler({
       agentFor: async (event) => await pool.lease(keyOf(event), event),
       secrets,
     })
+  }
   return { host: pool, handler }
 }
 
