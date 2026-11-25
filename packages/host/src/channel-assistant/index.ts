@@ -199,7 +199,7 @@ function sessionsOf(options: ChannelAssistantOptions, secrets: readonly string[]
       )
     }
     handler = options.replyHandler({
-      agentFor: async (event) => (await pool.lease(keyOf(event), event)),
+      agentFor: async (event) => await pool.lease(keyOf(event), event),
       secrets,
     })
   }
