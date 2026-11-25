@@ -1,5 +1,11 @@
 # @theokit/presenter
 
+## 0.18.3
+
+### Patch Changes
+
+- 6b21aee: Widen the declared `@theokit/sdk` range to `<16`, so these packages install next to SDK 14 and 15 (15.2.0 is the one tested).
+
 ## 0.18.2
 
 ### Patch Changes
