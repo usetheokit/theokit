@@ -32,6 +32,9 @@ function byCodeUnit(a: string, b: string): number {
  * combines them: `active` is the union, `entities` keeps one row per name AND scope, and `off` is
  * set only when nothing of the capability is active.
  *
+ * Temporary: delete this file once `recordWiring` accepts ungated scopes (usetheokit/theokit-sdk#1554)
+ * and `wired-capabilities.ts` makes one `recordWiring` call per capability.
+ *
  * @throws UngatedCapabilityError (from the SDK) when a gated group's capability has no posture gate.
  */
 export function recordScopedWiring<K extends string>(input: {
