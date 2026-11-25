@@ -1,8 +1,7 @@
-diff --git a/dist/chunk-LUED2AGU.js b/dist/chunk-LUED2AGU.js
-index f744ceb..b09c7f2 100644
---- a/dist/chunk-LUED2AGU.js
-+++ b/dist/chunk-LUED2AGU.js
-@@ -2269,7 +2269,7 @@ User: ${turn.prompt}
+diff --git a/dist/chunk-DSPSIDKM.js b/dist/chunk-DSPSIDKM.js
+--- a/dist/chunk-DSPSIDKM.js
++++ b/dist/chunk-DSPSIDKM.js
+@@ -2269,7 +2269,7 @@
  Assistant: ${turn.reply}
  </turn>`;
  }
@@ -11,7 +10,7 @@ index f744ceb..b09c7f2 100644
    const { z: z5 } = await import('zod');
    return Tool.create({
      name: "save_memory",
-@@ -2283,7 +2283,7 @@ async function createSaveMemoryTool(workspaceCwd, memory) {
+@@ -2283,7 +2283,7 @@
            `fact is ${text.length} characters; the limit is ${MAX_REVIEW_FACT_CHARS}. Shorten it.`
          );
        }
@@ -20,7 +19,7 @@ index f744ceb..b09c7f2 100644
        return "saved";
      }
    });
-@@ -2307,8 +2307,8 @@ function reviewerOptions(deps, review, n, tool) {
+@@ -2307,8 +2307,8 @@
    };
  }
  async function reviewOnce(job) {
@@ -31,7 +30,7 @@ index f744ceb..b09c7f2 100644
    const reviewer = await deps.create(reviewerOptions(deps, review, n, tool));
    try {
      const run = await reviewer.send(reviewPrompt(turn), { signal });
-@@ -2322,7 +2322,7 @@ async function reviewOnce(job) {
+@@ -2322,7 +2322,7 @@
      await reviewer.dispose();
    }
  }
@@ -40,7 +39,7 @@ index f744ceb..b09c7f2 100644
    const abort = new AbortController();
    let tail = Promise.resolve();
    let pending = 0;
-@@ -2330,7 +2330,7 @@ function createTurnReviewQueue(deps, review, memory) {
+@@ -2330,7 +2330,7 @@
    let dropping = false;
    async function runJob(n, turn) {
      try {
@@ -49,7 +48,7 @@ index f744ceb..b09c7f2 100644
      } catch (cause) {
        const message = cause instanceof Error ? cause.message : String(cause);
        diagFailure(`[theokit-sdk] memory review failed for agent ${deps.agentId}: ${message}`);
-@@ -2366,7 +2366,7 @@ function createTurnReviewQueue(deps, review, memory) {
+@@ -2366,7 +2366,7 @@
      }
    };
  }
@@ -58,7 +57,7 @@ index f744ceb..b09c7f2 100644
    const memory = options.memory;
    if (memory?.enabled !== true || memory.review === void 0) return void 0;
    const create = async (reviewerOptions2) => {
-@@ -2376,7 +2376,8 @@ function createAgentTurnReviews(agentId, workspaceCwd, options, agentMemory) {
+@@ -2376,7 +2376,8 @@
    const queue = createTurnReviewQueue(
      { agentId, workspaceCwd, options, create },
      memory.review,
@@ -68,7 +67,7 @@ index f744ceb..b09c7f2 100644
    );
    if (agentMemory !== void 0) agentMemory.reviewsIdle = () => queue.idle();
    return queue;
-@@ -10071,7 +10072,8 @@ var LocalAgent = class {
+@@ -10217,7 +10218,8 @@
        this.agentId,
        this.workspaceCwd,
        options,
@@ -78,11 +77,10 @@ index f744ceb..b09c7f2 100644
      );
      registerLocalAgent({
        agentId: this.agentId,
-diff --git a/dist/chunk-TD44S5TW.cjs b/dist/chunk-TD44S5TW.cjs
-index 6c9c543..fd9b08e 100644
---- a/dist/chunk-TD44S5TW.cjs
-+++ b/dist/chunk-TD44S5TW.cjs
-@@ -2271,7 +2271,7 @@ User: ${turn.prompt}
+diff --git a/dist/chunk-BFUJ4LUG.cjs b/dist/chunk-BFUJ4LUG.cjs
+--- a/dist/chunk-BFUJ4LUG.cjs
++++ b/dist/chunk-BFUJ4LUG.cjs
+@@ -2271,7 +2271,7 @@
  Assistant: ${turn.reply}
  </turn>`;
  }
@@ -91,7 +89,7 @@ index 6c9c543..fd9b08e 100644
    const { z: z5 } = await import('zod');
    return Tool.create({
      name: "save_memory",
-@@ -2285,7 +2285,7 @@ async function createSaveMemoryTool(workspaceCwd, memory) {
+@@ -2285,7 +2285,7 @@
            `fact is ${text.length} characters; the limit is ${MAX_REVIEW_FACT_CHARS}. Shorten it.`
          );
        }
@@ -100,7 +98,7 @@ index 6c9c543..fd9b08e 100644
        return "saved";
      }
    });
-@@ -2309,8 +2309,8 @@ function reviewerOptions(deps, review, n, tool) {
+@@ -2309,8 +2309,8 @@
    };
  }
  async function reviewOnce(job) {
@@ -111,7 +109,7 @@ index 6c9c543..fd9b08e 100644
    const reviewer = await deps.create(reviewerOptions(deps, review, n, tool));
    try {
      const run = await reviewer.send(reviewPrompt(turn), { signal });
-@@ -2324,7 +2324,7 @@ async function reviewOnce(job) {
+@@ -2324,7 +2324,7 @@
      await reviewer.dispose();
    }
  }
@@ -120,7 +118,7 @@ index 6c9c543..fd9b08e 100644
    const abort = new AbortController();
    let tail = Promise.resolve();
    let pending = 0;
-@@ -2332,7 +2332,7 @@ function createTurnReviewQueue(deps, review, memory) {
+@@ -2332,7 +2332,7 @@
    let dropping = false;
    async function runJob(n, turn) {
      try {
@@ -129,7 +127,7 @@ index 6c9c543..fd9b08e 100644
      } catch (cause) {
        const message = cause instanceof Error ? cause.message : String(cause);
        chunkVPWGGPZ6_cjs.diagFailure(`[theokit-sdk] memory review failed for agent ${deps.agentId}: ${message}`);
-@@ -2368,7 +2368,7 @@ function createTurnReviewQueue(deps, review, memory) {
+@@ -2368,7 +2368,7 @@
      }
    };
  }
@@ -138,7 +136,7 @@ index 6c9c543..fd9b08e 100644
    const memory = options.memory;
    if (memory?.enabled !== true || memory.review === void 0) return void 0;
    const create = async (reviewerOptions2) => {
-@@ -2378,7 +2378,8 @@ function createAgentTurnReviews(agentId, workspaceCwd, options, agentMemory) {
+@@ -2378,7 +2378,8 @@
    const queue = createTurnReviewQueue(
      { agentId, workspaceCwd, options, create },
      memory.review,
@@ -148,7 +146,7 @@ index 6c9c543..fd9b08e 100644
    );
    if (agentMemory !== void 0) agentMemory.reviewsIdle = () => queue.idle();
    return queue;
-@@ -10073,7 +10074,8 @@ var LocalAgent = class {
+@@ -10219,7 +10220,8 @@
        this.agentId,
        this.workspaceCwd,
        options,
