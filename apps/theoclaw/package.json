@@ -42,7 +42,7 @@
     "@theokit/agents-pty": "workspace:*",
     "@theokit/di": "0.3.1",
     "@theokit/di-agent": "0.6.0",
-    "@theokit/gateway": "0.31.0",
+    "@theokit/gateway": "0.33.0",
     "@theokit/gateway-agent": "0.6.0",
     "@theokit/gateway-discord": "0.8.0",
     "@theokit/gateway-email": "0.6.0",
