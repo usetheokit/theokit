@@ -41,6 +41,11 @@ export interface RoleAgentContext {
   posture: TrustPosture
   hooks?: HookHandlers
   /**
+   * Builtin tools the parent withholds. A role withholds these AND `shell` (the SDK's union rule,
+   * usetheokit/theokit-sdk#580): a child never holds a builtin its parent was denied.
+   */
+  withheldBuiltinTools?: readonly string[]
+  /**
    * B-061 — the seam that makes a role's composition assertable without a credential.
    *
    * Deliberately the SAME shape as `ReviewFactoryDeps.createInstance` (`review/create-agent.ts:42`)
@@ -201,7 +206,7 @@ async function roleAgentOptions(
     // resolved per role from the registry under a different name. What goes is only the builtin
     // nobody declared, and a role that lost a tool it needed would fail loudly rather than quietly —
     // the right direction for this to be wrong in.
-    withheldBuiltinTools: ['shell' as const],
+    withheldBuiltinTools: [...new Set(['shell', ...(ctx.withheldBuiltinTools ?? [])])] as never,
       // #825 — the prompt the member runs with, carrying the memory `applySubagentMemory` folded
       // in. Without it the SDK falls back to the file on disk and the memory is lost, with nothing
       // reporting that anything went missing.

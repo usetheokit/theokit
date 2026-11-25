@@ -150,3 +150,22 @@ describe('#74 — what a delegated role is allowed to read', () => {
     expect((await localOf({ subagents: true, hooks: true })).cwd).toBe('/p')
   })
 })
+
+describe('withheld builtins cross from the parent to the role', () => {
+  it('withholds shell and whatever else the parent withholds', async () => {
+    let seen: Record<string, unknown> = {}
+    await buildRoleAgent('explorer', {
+      cwd: '/p',
+      posture: posture({ subagents: true }),
+      apiKey: 'k',
+      parent: { model: 'openai/gpt-5', reasoning_effort: 'medium' },
+      sandbox: { kind: 'none' },
+      withheldBuiltinTools: ['shell', 'web_fetch'],
+      createAgent: async (opts: unknown) => {
+        seen = opts as Record<string, unknown>
+        return {} as never
+      },
+    } as never)
+    expect([...(seen.withheldBuiltinTools as string[])].sort()).toEqual(['shell', 'web_fetch'])
+  })
+})
