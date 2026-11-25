@@ -1,5 +1,5 @@
 import { TheokitAgentError } from '@theokit/agents'
-import { readFileSync } from 'node:fs'
+import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { extname } from 'node:path'
 
 export interface AttachedImage {
@@ -36,32 +36,45 @@ export function readImageAttachment(path: string): AttachedImage {
       'unsupported_type',
     )
   }
-  // Read FIRST, then measure the bytes that arrived. Stat-then-read let the file grow in the gap,
-  // so the limit governed a size nobody ended up loading — `js/file-system-race`, and the measure
-  // was wrong in the direction that matters. `size` is now what this process is holding.
-  let bytes: Buffer
+  // One descriptor: fstat refuses an oversized file before any byte is read, and the read itself is
+  // bounded at cap + 1 so a file that grows after fstat still cannot allocate past the limit.
+  let fd: number
   try {
-    bytes = readFileSync(path)
-  } catch {
-    throw new ImageAttachError(`image not found: ${path}`, 'not_found')
-  }
-  const size = bytes.length
-  if (size > MAX_IMAGE_BYTES) {
-    throw new ImageAttachError(
-      `image too large: ${path} is ${(size / 1024 / 1024).toFixed(1)} MiB (max ${MAX_IMAGE_BYTES / 1024 / 1024} MiB)`,
-      'too_large',
-    )
-  }
-  // B-051 — the read runs AFTER the stat succeeded and can still fail: EACCES on a file you may
-  // stat but not read, EISDIR on a directory named like an image, EMFILE under a wide sweep. This
-  // was the one path that left the declared ImageAttachError contract, so a caller catching the
-  // typed error let it through untyped.
-  try {
-    return { data: bytes.toString('base64'), mimeType }
+    fd = openSync(path, 'r')
   } catch (err) {
-    throw new ImageAttachError(
-      `image unreadable: ${path} — ${(err as Error).message}`,
-      'unreadable',
-    )
+    throw readFailure(path, err)
   }
+  try {
+    const size = fstatSync(fd).size
+    if (size > MAX_IMAGE_BYTES) throw tooLarge(path, size)
+    const buf = Buffer.alloc(MAX_IMAGE_BYTES + 1)
+    let total = 0
+    for (;;) {
+      const n = readSync(fd, buf, total, buf.length - total, null)
+      if (n === 0) break
+      total += n
+      if (total > MAX_IMAGE_BYTES) throw tooLarge(path, total)
+    }
+    return { data: buf.subarray(0, total).toString('base64'), mimeType }
+  } catch (err) {
+    if (err instanceof ImageAttachError) throw err
+    throw readFailure(path, err)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function tooLarge(path: string, size: number): ImageAttachError {
+  return new ImageAttachError(
+    `image too large: ${path} is ${(size / 1024 / 1024).toFixed(1)} MiB (max ${MAX_IMAGE_BYTES / 1024 / 1024} MiB)`,
+    'too_large',
+  )
+}
+
+// ENOENT is the only "not found"; EACCES, EISDIR, EMFILE and the rest are unreadable.
+function readFailure(path: string, err: unknown): ImageAttachError {
+  if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    return new ImageAttachError(`image not found: ${path}`, 'not_found')
+  }
+  return new ImageAttachError(`image unreadable: ${path} — ${(err as Error).message}`, 'unreadable')
 }
