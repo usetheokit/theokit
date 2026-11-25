@@ -10,7 +10,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 `theokit-sdk` or the framework packages rather than here. Those carry the repository name.
 
 ## [Unreleased]
-- The state-directory veto test accepts the SDK's protected-path floor refusal as a refusal, beside the plugin veto and the tool's own error (#3083).
 - The live computer test accepts the screen code when the model spaces its characters, and the live shell test checks the digest in the shell tool's output instead of the model's transcription of it (#3068).
 - The live LAN withdrawal test expects the shared adapter's `DiscoveryError` (code and route) from `unpublishAll`, not `TheoClawDiscoveryError`; an offline test covers the same rejection (#3061).
 - Tests cover a malformed workflow file skipped beside a valid one, and a refused approval that stops the later steps and keeps the earlier result (#2959).

@@ -160,7 +160,7 @@
     "superjson": "^2.2.6"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=5.32.0 <16",
+    "@theokit/sdk": ">=5.32.0 <14",
     "@theokit/ui": "^1.1.0",
     "@vitejs/plugin-react": "^4.7.0",
     "db0": "^0.3.0",
@@ -205,7 +205,7 @@
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.9.0",
-    "@theokit/sdk": ">=5.32.0 <16",
+    "@theokit/sdk": ">=5.32.0 <14",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
     "@vitejs/plugin-react": "^4.7.0",

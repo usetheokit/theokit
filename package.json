@@ -70,7 +70,7 @@
     "@opentelemetry/sdk-metrics": "3.0.0",
     "@opentelemetry/sdk-trace-base": "2.12.1",
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": ">=5.32.0 <16",
+    "@theokit/sdk": ">=5.32.0 <14",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.9.3",
     "@types/pg": "^8.21.0",
@@ -151,11 +151,11 @@
       "katex@<0.18.2": "^0.18.2",
       "mermaid@<11.16.1": "^11.16.1",
       "@theokit/presenter": "workspace:*",
-      "@theokit/sdk": "15.2.0",
+      "@theokit/sdk": "13.0.0",
       "picomatch@>=4.0.0 <=4.0.7": "file:./vendor/picomatch"
     },
     "patchedDependencies": {
-      "@theokit/sdk@15.2.0": "patches/@theokit__sdk@15.2.0.patch",
+      "@theokit/sdk@13.0.0": "patches/@theokit__sdk@13.0.0.patch",
       "@vitest/utils@4.1.12": "patches/@vitest__utils@4.1.12.patch"
     }
   },
