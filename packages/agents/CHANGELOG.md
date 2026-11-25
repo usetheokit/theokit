@@ -1,5 +1,42 @@
 # @theokit/agents
 
+## 17.6.0
+
+### Minor Changes
+
+- 25773a5: `loadInstructionTree` reports `found` (files admitted, including those the character ceiling left out) and `chars` (their total). `budget.omissionNotice(omitted, found)` appends a last block when the ceiling cuts, with room reserved for it. `render`, `separator` and `also` let a caller measure the ceiling on the text it sends and share it across several bases.
+- 8f7531a: `discoverSubagentsAcrossRoots` (`@theokit/agents/config`) returns the operator's `~/.theokit/agents/` merged with the project's `.theokit/agents/` as parsed definitions labelled `origin: 'operator' | 'project'`. The project root is read only under a `projectSettings` posture and wins a name clash; roots it did not read come back in `withheld`.
+
+### Patch Changes
+
+- b8ad15b: `AgentBuilder.capability()` adds a capability or preset to a builder chain; `codingAgentTools` returns the `gates` it applies; `codingAgentPreset` takes `claudeCode: { import }`, granted only under a `projectSettings` posture.
+- 2ee28e6: `protectedTranscriptPaths` no longer reads an unreadable `last-session` pointer as "no pointer": only `ENOENT` does, and any other read failure throws the new `SessionPointerUnreadableError`, so `deleteSession`, `forkSession` and the GC refuse instead of possibly removing the pointed session.
+- 4e66bbc: `resolveAgentCredential` resolves a `openai-chatgpt/…` model from the stored OpenAI OAuth login only, so an API key in the environment cannot win over it; with no such login it throws `CredentialNotFoundError` naming the login, without any key value.
+- 78e4aca: `runHeadlessTurn` returns `errorMessage` (the first `error` event, thrown stream or fatal formatter), and `onFormatError: 'fail'` makes a throwing `format` an `error` outcome.
+- 7bed66d: `sessionCommands<Ctx>` passes the caller's context to every handler and adds `clear`, `retry`, `usage`, `help`, `quit` (alias `exit`), `sessions`, `resume`, `fork`, `rename`, `archive`, `delete`, `goal`, `login` and `logout`; `routeCommand` and `createCommandRegistry` take `RouteOptions` (`caseInsensitive`, `stripBotSuffix`).
+- b1ed5de: `@theokit/agents/foreign-setup` stores an imported setup for the next start: `writeForeignImport(dir, setup, { now? })` stages, validates and swaps `<dir>/import` atomically (files 0600, directories 0700, a pid lock, recovery of an interrupted swap), `readForeignImport(dir, { onWarn?, env? })` reads it back, and `ForeignImportError` carries a `reason` of `locked`, `refused` or `unreadable`. `plannedForeignImportFiles` lists what a write would create.
+- 63c865b: `ForeignImportError` extends `TheokitAgentError` with a stable `code` and a declared `isRetryable` (only `locked` is retryable).
+- 696bd17: `classifyTurnFailure` also reads a numeric `status` or `statusCode` on the error and its causes, so a provider error with a top-level status 503 or 429 is transient.
+- b53ec4c: `ForeignImportError` extends `TheokitAgentError` with a stable `code` and `isRetryable: false`, so `isTransientError` sees it.
+- 8accc36: `createScheduleTools` accepts a platform as `{ name, description, channelIdHint? }`: `schedule_job` lists the description and uses the hint for `channelId`.
+- 6d5ca98: `@theokit/agents/control` exports `createControlStreamInbox`, an implementation of `ControlStreamInbox`, and `createControlClient` takes `dropAcknowledgements` to omit `interrupt_ok`, `steer_ok` and `no_turn` from `chat()`.
+- 0366f3b: `completeFromTurn` takes any agent that has `send` and an optional `{ onCancelled: 'throw' | 'complete', onFailure }`; the default still throws on a cancelled run.
+- fb95ca2: `codingAgentPreset` and `codingAgentTools` take `shellInReadOnly` to keep `Bash` and the interactive tools in a `read-only` sandbox, and `bashDescription` to replace the `Bash` description. Both default off.
+- 820fc84: `ForeignImportError` and `SettingsFileError` extend `TheokitAgentError` with a stable `code` and an explicit `isRetryable`, so `isTransientError` sees them. `@theokit/host` now declares `@theokit/sdk` `>=12.0.0`: the channel assistant uses the `agent` form of `Agent.sessionPool` and the mask handle's `flush()`, which SDK 12 added.
+- 3d5284d: `checks.skillsInventory` also returns `undeclared` and `missing`, the sorted skill names behind its detail string, so a caller no longer parses the string. Status and wording are unchanged.
+- e6496e6: Test only: the SDK range guard no longer expects a package whose range starts above a floor leg's version (host, `>=12`) to admit that version.
+- ccbe289: The SDK range test of `@theokit/agents` leaves out of its floor leg a manifest whose floor is above the installed SDK (the host's `>=12.0.0 <14`), and still refuses a range that excludes the installed version for another reason.
+- 6aa55d3: `createA2ATool` rejects a refused connection, DNS or TLS failure as `A2A call to "<name>" failed: <reason>` with the original as `cause`; a cancelled caller still gets its abort reason.
+- 9bd74d4: `agentRunPort` takes `ScheduledRunAgent`, the `send` and turn it uses, so an agent without `agentId` or `dispose` fits; `FakeAgent` streams and timeline events are typed as the bridge's `SdkMessage` and `SdkTimelineEvent`.
+- 54c0477: `@theokit/agents/presets` exports `assistantAgentPreset`, `assistantAgentTools` and `assistantWorkerTools`: a chat assistant's tools (read, list, documents, web, todolist; the shell and writers only with host tools, no writer in `read-only`), its `minimal`/`messaging`/`coding`/`full` tiers as `Toolset` profiles, and every tool left out as an `OffTool` with its reason.
+- 649ecd1: `@theokit/agents/commands` exports `exitAfterFlush`, which waits for stdout and stderr to flush and then exits, bounded by `capMs`.
+- dfa4757: `InProcessTransport` forwards the object passed to `send(input)` to the runner as `InProcessRunInput.body`, as `HttpTransport` does, so a per-turn option no longer needs a side channel.
+- d943038: `loadMcpScopes` warns and loads no project servers when `<cwd>/.mcp.json` is malformed, as it already did for a personal file, instead of throwing and losing the personal servers.
+- 62909c3: `onAskForPolicy(policy, gated, { refusal })` answers the `ask` verdict of `createPermissionsPlugin`: `never` allows, a gated tool is passed to its approval gate, any other tool is denied with a message that names the two ways out.
+- 59ba1fa: `readSettingsFile` keeps a `permissions` list only when every entry is a string, and with `throwOnMalformed` throws a `SettingsFileError` (with `path` and `kind`) for an unreadable or malformed file; `translateSettingsDocument` applies the same key split to a document already in memory.
+- ad33506: `@theokit/agents/presets` exports `changedPathsOf`, which lists the files a turn's write tool calls named (including `apply_patch` headers), and `turnDiff`, which prints the git diff of those paths, new files included.
+- d52d363: `@theokit/agents/errors` exports `createTurnRetries`, which reads a run's `rate_limit` events and reports the highest attempt of the current turn, for `describeTurnFailure`'s `attempts` option.
+
 ## 17.5.0
 
 ### Minor Changes
