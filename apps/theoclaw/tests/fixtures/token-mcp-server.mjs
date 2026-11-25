@@ -5,7 +5,7 @@
  * It speaks newline-delimited JSON-RPC (the MCP stdio transport): `initialize`, `tools/list` and
  * `tools/call`, and ignores notifications. Every `tools/call` appends one line to the file
  * `FIXTURE_LOG` names, so a test can count the calls the model made; the call returns
- * `FIXTURE_TOKEN`. Its argument is `name`, not a path, so TheoClaw's path veto never judges it.
+ * `FIXTURE_TOKEN`, or, when `FIXTURE_RESULT` holds JSON, that whole result (to mimic a browser server). Its argument is `name`, not a path, so TheoClaw's path veto never judges it.
  */
 import { appendFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
@@ -29,6 +29,7 @@ const HANDLERS = {
   'tools/list': () => ({ tools: [TOOL] }),
   'tools/call': (params) => {
     if (process.env.FIXTURE_LOG) appendFileSync(process.env.FIXTURE_LOG, `tools/call ${JSON.stringify(params?.arguments ?? {})}\n`)
+    if (process.env.FIXTURE_RESULT) return JSON.parse(process.env.FIXTURE_RESULT)
     return { content: [{ type: 'text', text: process.env.FIXTURE_TOKEN ?? '' }] }
   },
 }
