@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `composition.test.ts` is split in two: the reviewer and delegated-role cases moved to `composition-review-role.test.ts`, with every test name kept, which brings the file back under `max-lines` (#3054).
 - `discoverRoles` reads both roots through `discoverSubagentsAcrossRoots` from `@theokit/agents/config` and applies memory by each definition's origin; it no longer passes the home directory to `discoverSubagents` as a project (#2925).
 - The invalid-grant refresh test in `credentials.test.ts` asserts the measured `failure refreshing the credential` message instead of a bare `toThrow()`, which `check-typed-error-assertions` rejects (#3050).
 - The english-only allowance for the `ask-bridge.test.ts` accent assertion follows it to line 166, which turns `pnpm --filter theocode run lint` green again (#3047).
