@@ -772,9 +772,6 @@ importers:
       '@theokit/gateway':
         specifier: 0.33.0
         version: 0.33.0(@theokit/sdk@13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
-      '@theokit/gateway-agent':
-        specifier: 0.5.0
-        version: 0.5.0(5cb1050f2c4d6910e3e72e112185b972)
       '@theokit/sdk':
         specifier: 13.0.0
         version: 13.0.0(patch_hash=e3f8d1a3c6cf729ae3f4f4bcd22c5b470b0f903467458977bd184fde5a52a646)(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@2.12.1(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-logs@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-trace-base@2.12.1(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { BasePlatformAdapter } from '@theokit/gateway'
+import { BasePlatformAdapter, maskSecrets } from '@theokit/gateway'
 import type {
   GatewayHook,
   MessageEvent,
@@ -12,6 +12,7 @@ import type { SDKAgent } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
 import { createChannelAssistant } from '../../src/channel-assistant/index.js'
+import type { ReplyHandlerFactory } from '../../src/channel-assistant/index.js'
 
 class FakeAdapter extends BasePlatformAdapter {
   connects = 0
@@ -77,6 +78,24 @@ function fakeAgent(disposed: string[]): SDKAgent {
   } as unknown as SDKAgent
 }
 
+/** A reply handler over the leased agent: sends one turn, masks the answer, sends it, releases the lease. */
+const replyOver =
+  (adapter: FakeAdapter): ReplyHandlerFactory =>
+  ({ agentFor, secrets }) =>
+  async (incoming) => {
+    const lease = await agentFor(incoming)
+    try {
+      const run = (await lease.agent.send(incoming.text)) as {
+        stream(): AsyncIterable<{ message: { content: { text: string }[] } }>
+      }
+      let text = ''
+      for await (const part of run.stream()) text += part.message.content[0]?.text ?? ''
+      await adapter.sendMessage({ text: maskSecrets(text, secrets) } as unknown as OutboundMessage)
+    } finally {
+      await lease.release()
+    }
+  }
+
 async function until(condition: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 5000
   while (!condition()) {
@@ -94,6 +113,7 @@ describe('createChannelAssistant', () => {
     const assistant = createChannelAssistant({
       channels: [{ platform: 'telegram', build: () => adapter }],
       sessions: { agent: () => fakeAgent(disposed) },
+      replyHandler: replyOver(adapter),
       secrets: [SECRET],
       accessHook: openHook,
     })
@@ -125,6 +145,7 @@ describe('createChannelAssistant', () => {
     const assistant = createChannelAssistant({
       channels: [{ platform: 'telegram', build: () => adapter }],
       sessions: { agent: () => fakeAgent([]) },
+      replyHandler: replyOver(adapter),
       preHooks: [hook('pre')],
       accessHook: hook('access'),
       hooks: [hook('app-1'), hook('app-2')],
@@ -142,6 +163,7 @@ describe('createChannelAssistant', () => {
     const assistant = createChannelAssistant({
       channels: [{ platform: 'telegram', build: () => adapter }],
       sessions: { agent: () => fakeAgent([]) },
+      replyHandler: replyOver(adapter),
       access: { owners: new Set(['telegram:boss']), dm: 'allowlist', isAuthenticated: () => true },
     })
     await assistant.start()
@@ -164,6 +186,7 @@ describe('createChannelAssistant', () => {
         { platform: 'telegram', build: () => adapter },
       ],
       sessions: { agent: () => fakeAgent([]) },
+      replyHandler: replyOver(adapter),
       secrets: [SECRET],
       accessHook: openHook,
       write: (line) => lines.push(line),
@@ -181,6 +204,7 @@ describe('createChannelAssistant', () => {
       channels: [],
       accessHook: openHook,
       sessions: { agent: () => fakeAgent([]) },
+      replyHandler: replyOver(new FakeAdapter('telegram')),
       events: {
         agent: () =>
           ({
@@ -206,6 +230,16 @@ describe('createChannelAssistant', () => {
         access: { owners: new Set(), dm: 'open', isAuthenticated: () => false },
       }),
     ).toThrow(/exactly one/)
+  })
+
+  it('refuses owned sessions with no reply handler', () => {
+    expect(() =>
+      createChannelAssistant({
+        channels: [],
+        sessions: { agent: () => fakeAgent([]) },
+        accessHook: openHook,
+      }),
+    ).toThrow(/replyHandler/)
   })
 
   it('needs a handler with a pool it is given, and uses both', async () => {
@@ -288,6 +322,7 @@ describe('createChannelAssistant', () => {
     const assistant = createChannelAssistant({
       channels: [],
       sessions: { agent: () => fakeAgent([]) },
+      replyHandler: replyOver(new FakeAdapter('telegram')),
       accessHook: openHook,
       secrets: [SECRET],
       maskStreams: [stream],
@@ -304,6 +339,7 @@ describe('createChannelAssistant', () => {
     const assistant = createChannelAssistant({
       channels: [],
       sessions: { agent: () => fakeAgent([]) },
+      replyHandler: replyOver(new FakeAdapter('telegram')),
       accessHook: openHook,
     })
     expect((await assistant.router(new Request('http://localhost/webhooks/telegram'))).status).toBe(
