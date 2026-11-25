@@ -50,7 +50,7 @@ describe('satisfiesSdkRange (M48 T2.2)', () => {
   })
 
   it('test_supported_range_rejects_sdk_below_the_peer_floor', () => {
-    expect(SUPPORTED_SDK_RANGE).toBe('>=5.32.0 <14')
+    expect(SUPPORTED_SDK_RANGE).toBe('>=5.32.0 <16')
     expect(satisfiesSdkRange('4.52.1', SUPPORTED_SDK_RANGE)).toBe(false)
     expect(satisfiesSdkRange('5.0.1', SUPPORTED_SDK_RANGE)).toBe(false)
     expect(satisfiesSdkRange('5.32.0', SUPPORTED_SDK_RANGE)).toBe(true)
@@ -62,7 +62,7 @@ describe('satisfiesSdkRange (M48 T2.2)', () => {
     expect(satisfiesSdkRange('11.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
     expect(satisfiesSdkRange('12.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
     expect(satisfiesSdkRange('13.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
-    expect(satisfiesSdkRange('14.0.0', SUPPORTED_SDK_RANGE)).toBe(false)
+    expect(satisfiesSdkRange('16.0.0', SUPPORTED_SDK_RANGE)).toBe(false)
     expect(satisfiesSdkRange('8.0.0-next.1', SUPPORTED_SDK_RANGE)).toBe(false)
   })
 })

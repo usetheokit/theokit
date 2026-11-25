@@ -13,7 +13,7 @@ with `does not provide an export named`. That is the mistake this file exists to
 
 1664 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@13.0.0`.
+Measured against `@theokit/sdk@15.2.0`.
 
 ## `@theokit/agents`
 

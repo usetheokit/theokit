@@ -4560,7 +4560,7 @@
         },
         "PluginsSettings": {
           "tier": "stable",
-          "declaration": "interface PluginsSettings {\n    enabled?: string[];\n}",
+          "declaration": "interface PluginsSettings {\n    enabled?: string[];\n    code?: readonly Plugin[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -5408,7 +5408,7 @@
         },
         "SessionRecord": {
           "tier": "stable",
-          "declaration": "interface SessionRecord {\n    type: \"user\" | \"assistant\" | \"system\";\n    uuid: string;\n    parentUuid: string | null;\n    sessionId: string;\n    timestamp: string;\n    isSidechain?: boolean;\n    userType?: string;\n    cwd?: string;\n    version?: string;\n    subtype?: string;\n    compactMetadata?: {\n        preTokens: number;\n        trigger: string;\n    };\n    deferredToolCalls?: Array<{\n        toolUseId: string;\n        schemaVersion: number;\n    }>;\n    message?: TranscriptMessage;\n}",
+          "declaration": "interface SessionRecord {\n    type: \"user\" | \"assistant\" | \"system\";\n    uuid: string;\n    parentUuid: string | null;\n    sessionId: string;\n    timestamp: string;\n    isSidechain?: boolean;\n    userType?: string;\n    cwd?: string;\n    version?: string;\n    subtype?: string;\n    memoryPartition?: string;\n    compactMetadata?: {\n        preTokens: number;\n        trigger: string;\n    };\n    deferredToolCalls?: Array<{\n        toolUseId: string;\n        schemaVersion: number;\n    }>;\n    message?: TranscriptMessage;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -6228,7 +6228,7 @@
         },
         "SubagentDefinition": {
           "tier": "stable",
-          "declaration": "interface AgentDefinition {\n    description: string;\n    prompt: string;\n    source?: string;\n    memory?: string;\n    model?: ModelSelection | \"inherit\";\n    mcpServers?: Array<string | Record<string, McpServerConfig>>;\n    tools?: string[];\n    sandbox?: boolean;\n}",
+          "declaration": "interface AgentDefinition {\n    description: string;\n    prompt: string;\n    source?: string;\n    memory?: string;\n    model?: ModelSelection | \"inherit\";\n    mcpServers?: Array<string | Record<string, McpServerConfig>>;\n    tools?: string[];\n    sandbox?: boolean;\n    withheldBuiltinTools?: readonly BuiltinToolName[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],

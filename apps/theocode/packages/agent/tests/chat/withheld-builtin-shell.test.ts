@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 
 const roots: string[] = []
 afterAll(() => {
@@ -29,8 +29,7 @@ const POSTURE = {
  * request the provider receives. The SDK's own tool collection runs, so a builtin it still declares
  * shows up here.
  */
-async function declaredToolNames(def: unknown): Promise<string[]> {
-  const { toAgentFactory } = await import('@theokit/agents')
+async function declaredToolNames(make: () => Promise<unknown>): Promise<string[]> {
   const bodies: { tools?: { name?: string; function?: { name?: string } }[] }[] = []
   const realFetch = globalThis.fetch
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
@@ -44,10 +43,7 @@ async function declaredToolNames(def: unknown): Promise<string[]> {
     return new Response('{"error":{"message":"stubbed"}}', { status: 500 })
   }) as typeof fetch
   try {
-    const agent = await toAgentFactory(def as never, {
-      apiKey: 'sk-test-1913-0000000000',
-      approvals: POSTURE,
-    })(`s-${Math.random()}`)
+    const agent = await make()
     try {
       const run = await (
         agent as never as { send: (m: string) => Promise<{ wait: () => Promise<unknown> }> }
@@ -65,28 +61,68 @@ async function declaredToolNames(def: unknown): Promise<string[]> {
   return withTools[0]!.tools!.map((t) => t.name ?? t.function?.name ?? '')
 }
 
+/**
+ * SDK 15 declares `shell` only on opt-in, and the framework has no way to opt in. So the opt-in is
+ * forced at the SDK's `Agent.create`: what then keeps `shell` out is the agent's own withholding,
+ * which is what #1913 is about. Without this a "not declared" check would hold either way.
+ */
+async function withShellOptIn<T>(run: () => Promise<T>, dropWithheld = false): Promise<T> {
+  const sdk = await import('@theokit/sdk')
+  const real = sdk.Agent.create.bind(sdk.Agent)
+  const spy = vi.spyOn(sdk.Agent, 'create').mockImplementation(((o: Record<string, unknown>) =>
+    real({
+      ...o,
+      builtinTools: ['shell'],
+      ...(dropWithheld && { withheldBuiltinTools: [] }),
+    } as never)) as never)
+  try {
+    return await run()
+  } finally {
+    spy.mockRestore()
+  }
+}
+
+async function chatAgentToolNames(surface: 'interactive' | 'headless', unwithhold: boolean) {
+  const { buildChatAgent } = await import('../../src/chat/chat.js')
+  const { toAgentFactory } = await import('@theokit/agents')
+  const built = await buildChatAgent({ surface, cwd: tmp('c1913-p-'), home: tmp('c1913-h-') })
+  return withShellOptIn(
+    () =>
+      declaredToolNames(() =>
+        toAgentFactory(built as never, { apiKey: 'sk-test-1913-0000000000', approvals: POSTURE })(
+          `s-${Math.random()}`,
+        ),
+      ),
+    unwithhold,
+  )
+}
+
 describe('#1913 — the builtin shell is not declared to the chat agent', () => {
   it('control_an_agent_that_withholds_nothing_declares_shell', async () => {
-    const { AgentBuilder } = await import('@theokit/agents')
-    const { z } = await import('zod')
-    const def = AgentBuilder.create()
-      .input(z.object({ m: z.string() }))
-      .model('openai/gpt-5')
-      .system('x')
-      .build()
-
-    expect(await declaredToolNames(def)).toContain('shell')
+    // The SDK declares `shell` only on opt-in (`builtinTools`), so the control opts in directly.
+    const { Agent } = await import('@theokit/sdk')
+    const names = await declaredToolNames(() =>
+      Agent.create({
+        apiKey: 'sk-test-1913-0000000000',
+        model: { id: 'openai/gpt-5' },
+        builtinTools: ['shell'],
+        local: { cwd: tmp('c1913-c-') },
+      } as never),
+    )
+    expect(names).toContain('shell')
   })
 
   for (const surface of ['interactive', 'headless'] as const) {
     it(`test_${surface}_surface_does_not_declare_shell_to_the_provider`, async () => {
-      const { buildChatAgent } = await import('../../src/chat/chat.js')
-
-      const def = await buildChatAgent({ surface, cwd: tmp('c1913-p-'), home: tmp('c1913-h-') })
-      const names = await declaredToolNames(def)
+      const names = await chatAgentToolNames(surface, false)
 
       expect(names.length, 'precondition: the chat agent declares other tools').toBeGreaterThan(1)
       expect(names, 'shell is still declared to the model').not.toContain('shell')
+    })
+
+    it(`test_${surface}_surface_would_declare_shell_without_the_withholding`, async () => {
+      // Sensitivity: the same opt-in with the withholding dropped at the SDK does declare `shell`.
+      expect(await chatAgentToolNames(surface, true)).toContain('shell')
     })
   }
 })
