@@ -19776,6 +19776,32 @@
           "references": [],
           "internals": {}
         },
+        "DiscoverSubagentsAcrossRootsOptions": {
+          "tier": "stable",
+          "declaration": "interface DiscoverSubagentsAcrossRootsOptions {\n    readonly cwd: string;\n    readonly homeDir?: string;\n    readonly project: {\n        readonly trustedBy: TrustPosture<'projectSettings'>;\n    } | false;\n    readonly compatSources?: {\n        readonly project?: readonly SubagentCompatSource[];\n        readonly operator?: readonly SubagentCompatSource[];\n    };\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/config.d.ts#SubagentCompatSource"],
+          "internals": {
+            "dist/config.d.ts#SubagentCompatSource": "type SubagentCompatSource = string | {\n    readonly kind: string;\n    readonly import?: readonly string[];\n};"
+          }
+        },
+        "DiscoverSubagentsAcrossRootsResult": {
+          "tier": "stable",
+          "declaration": "interface DiscoverSubagentsAcrossRootsResult {\n    readonly definitions: Record<string, RootedAgentDefinition>;\n    readonly shadowed: Record<string, RootedAgentDefinition>;\n    readonly withheld: readonly WithheldRoot[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/config.d.ts#RootedAgentDefinition",
+            "dist/config.d.ts#SubagentRootOrigin",
+            "dist/config.d.ts#WithheldRoot"
+          ],
+          "internals": {
+            "dist/config.d.ts#RootedAgentDefinition": "type RootedAgentDefinition = AgentDefinition & {\n    readonly origin: SubagentRootOrigin;\n};",
+            "dist/config.d.ts#SubagentRootOrigin": "type SubagentRootOrigin = 'project' | 'operator';",
+            "dist/config.d.ts#WithheldRoot": "interface WithheldRoot {\n    readonly root: string;\n    readonly reason: string;\n}"
+          }
+        },
         "DottedOverrideError": {
           "tier": "stable",
           "declaration": "declare class DottedOverrideError extends TheokitAgentError {\n    readonly name = \"DottedOverrideError\";\n    constructor(pair: string, reason: string);\n}",
@@ -20277,6 +20303,16 @@
           "references": [],
           "internals": {}
         },
+        "RootedAgentDefinition": {
+          "tier": "stable",
+          "declaration": "type RootedAgentDefinition = AgentDefinition & {\n    readonly origin: SubagentRootOrigin;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/config.d.ts#SubagentRootOrigin"],
+          "internals": {
+            "dist/config.d.ts#SubagentRootOrigin": "type SubagentRootOrigin = 'project' | 'operator';"
+          }
+        },
         "SETTINGS_LAYERS": {
           "tier": "stable",
           "declaration": "SETTINGS_LAYERS: readonly [\n    {\n        readonly layer: \"user\";\n        readonly precedence: 10;\n    },\n    {\n        readonly layer: \"project-shared\";\n        readonly precedence: 20;\n    },\n    {\n        readonly layer: \"project-local\";\n        readonly precedence: 30;\n    },\n    {\n        readonly layer: \"command-line\";\n        readonly precedence: 40;\n    },\n    {\n        readonly layer: \"managed\";\n        readonly precedence: 50;\n    }\n]",
@@ -20372,6 +20408,22 @@
         "SkippedDefinition": {
           "tier": "stable",
           "declaration": "interface SkippedDefinition {\n    readonly path: string;\n    readonly reason: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SubagentCompatSource": {
+          "tier": "stable",
+          "declaration": "type SubagentCompatSource = string | {\n    readonly kind: string;\n    readonly import?: readonly string[];\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SubagentRootOrigin": {
+          "tier": "stable",
+          "declaration": "type SubagentRootOrigin = 'project' | 'operator';",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -20572,6 +20624,28 @@
             "dist/config.d.ts#EnvKnobKind": "type EnvKnobKind = 'string' | 'boolean' | 'number';",
             "dist/config.d.ts#ProvenancePerKey": "type ProvenancePerKey = Readonly<Record<string, string>>;",
             "dist/config.d.ts#SecurityFloorSpec": "interface SecurityFloorSpec {\n    readonly permissiveness: readonly string[];\n    readonly restricted: readonly string[];\n    readonly override: string;\n}"
+          }
+        },
+        "discoverSubagentsAcrossRoots": {
+          "tier": "stable",
+          "declaration": "declare function discoverSubagentsAcrossRoots(options: DiscoverSubagentsAcrossRootsOptions): Promise<DiscoverSubagentsAcrossRootsResult>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/config.d.ts#DiscoverSubagentsAcrossRootsOptions",
+            "dist/config.d.ts#DiscoverSubagentsAcrossRootsResult",
+            "dist/config.d.ts#RootedAgentDefinition",
+            "dist/config.d.ts#SubagentCompatSource",
+            "dist/config.d.ts#SubagentRootOrigin",
+            "dist/config.d.ts#WithheldRoot"
+          ],
+          "internals": {
+            "dist/config.d.ts#DiscoverSubagentsAcrossRootsOptions": "interface DiscoverSubagentsAcrossRootsOptions {\n    readonly cwd: string;\n    readonly homeDir?: string;\n    readonly project: {\n        readonly trustedBy: TrustPosture<'projectSettings'>;\n    } | false;\n    readonly compatSources?: {\n        readonly project?: readonly SubagentCompatSource[];\n        readonly operator?: readonly SubagentCompatSource[];\n    };\n}",
+            "dist/config.d.ts#DiscoverSubagentsAcrossRootsResult": "interface DiscoverSubagentsAcrossRootsResult {\n    readonly definitions: Record<string, RootedAgentDefinition>;\n    readonly shadowed: Record<string, RootedAgentDefinition>;\n    readonly withheld: readonly WithheldRoot[];\n}",
+            "dist/config.d.ts#RootedAgentDefinition": "type RootedAgentDefinition = AgentDefinition & {\n    readonly origin: SubagentRootOrigin;\n};",
+            "dist/config.d.ts#SubagentCompatSource": "type SubagentCompatSource = string | {\n    readonly kind: string;\n    readonly import?: readonly string[];\n};",
+            "dist/config.d.ts#SubagentRootOrigin": "type SubagentRootOrigin = 'project' | 'operator';",
+            "dist/config.d.ts#WithheldRoot": "interface WithheldRoot {\n    readonly root: string;\n    readonly reason: string;\n}"
           }
         },
         "effectiveContextWindow": {

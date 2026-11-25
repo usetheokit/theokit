@@ -139,25 +139,32 @@ let operatorRoles: Record<string, unknown> = {}
  * roles regardless would make the untrusted assertion below pass for the wrong reason — it would
  * be asserting that some later validation happened to throw, not that the gate closed.
  *
- * It also honours `cwd`, and that half was added after this mock started lying. #65 made
- * `discoverRoles` call this function TWICE — once for the project and once for the operator's home,
- * both with `settingSources: ['project']`, because that token selects the `<cwd>/.theokit/agents`
- * LAYOUT and the layout is the same in both roots. A mock keyed only on the sources answered the
- * home call with the project's roles, and the untrusted assertion below started passing an
- * untrusted repository's definition off as the operator's own. The real loader keys on the
- * directory; so does this now.
+ * It returns the operator's roles always and the project's only under a grant, as the real
+ * `discoverSubagentsAcrossRoots` does (#2925).
  */
-const discoverSubagents = vi.fn((cwd: string, opts: { settingSources: string[] }) =>
-  Promise.resolve(
-    cwd === '/p' ? (opts.settingSources.includes('project') ? PROJECT_ROLES : {}) : operatorRoles,
-  ),
-)
+const discoverSubagentsAcrossRoots = vi.fn((o: { project: unknown }) => {
+  // Same honesty as before: the project half is returned only when the caller passed a grant.
+  const definitions: Record<string, unknown> = {}
+  for (const [name, def] of Object.entries(operatorRoles)) {
+    definitions[name] = { ...(def as object), origin: 'operator' }
+  }
+  if (o.project !== false) {
+    for (const [name, def] of Object.entries(PROJECT_ROLES)) {
+      definitions[name] = { ...(def as object), origin: 'project' }
+    }
+  }
+  return Promise.resolve({ definitions, shadowed: {}, withheld: [] })
+})
 
 vi.mock('@theokit/agents', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadMcpJson,
   loadMcpScopes: (await import('./helpers/keyed-mcp-scopes.js')).keyedMcpScopes(loadMcpJson),
-  discoverSubagents,
+}))
+
+vi.mock('@theokit/agents/config', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  discoverSubagentsAcrossRoots,
 }))
 
 /** The compiled shape `AgentBuilder.build()` returns — only the members this file asserts on. */
@@ -638,6 +645,10 @@ describe('path 3 — buildRoleAgent composes a delegated team member', () => {
           createAgent: () => Promise.resolve({} as never),
         } as never),
       ).resolves.toBeDefined()
+      // The gate closed at the framework call, not by a later check.
+      expect(discoverSubagentsAcrossRoots).toHaveBeenLastCalledWith(
+        expect.objectContaining({ project: false }),
+      )
     } finally {
       operatorRoles = {}
     }

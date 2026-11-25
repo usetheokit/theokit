@@ -219,6 +219,12 @@ export {
   type OperatorPolicy,
 } from './config/operator-policy.js'
 export {
+  type DiscoverSubagentsAcrossRootsOptions,
+  type DiscoverSubagentsAcrossRootsResult,
+  discoverSubagentsAcrossRoots,
+  type RootedAgentDefinition,
+  type SubagentCompatSource,
+  type SubagentRootOrigin,
   type OperatorDefinition,
   type OperatorOrigin,
   type OperatorInstruction,
