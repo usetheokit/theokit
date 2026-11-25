@@ -234,7 +234,7 @@ const assistant = createChannelAssistant({
   hooks: [appHook], // after the access policy, before `help`
   help: helpHook,
   replyHandler: ({ agentFor, secrets }) =>
-    createAgentHandler({ agentFor, secrets, decorateReply, onTurnEnd }), // from `@theokit/gateway-agent`
+    createAgentHandler({ agentFor, secrets, decorateReply, onTurnEnd }), // createAgentHandler is from `@theokit/gateway-agent`
   maskStreams: [process.stdout, process.stderr], // masked with `secrets`; `assistant.flushMask()` on exit
   transcripts: { start: (heldIds) => startSweeper(heldIds) },
   services: [{ name: 'control-plane', start, stop }], // after the channels, stopped first

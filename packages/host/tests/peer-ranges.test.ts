@@ -27,4 +27,12 @@ describe('the host peer ranges can resolve together under npm', () => {
     )
     expect(sdkCeilingOf(name)).toBeGreaterThanOrEqual(hostSdkCeiling)
   })
+
+  it('does not depend on @theokit/gateway-agent, whose SDK peer cap cannot resolve with the host range', () => {
+    const declared = [
+      ...Object.keys(host.peerDependencies ?? {}),
+      ...Object.keys(host.devDependencies ?? {}),
+    ]
+    expect(declared).not.toContain('@theokit/gateway-agent')
+  })
 })
