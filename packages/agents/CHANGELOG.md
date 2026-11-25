@@ -1,5 +1,13 @@
 # @theokit/agents
 
+## 17.6.1
+
+### Patch Changes
+
+- 6b21aee: Widen the declared `@theokit/sdk` range to `<16`, so these packages install next to SDK 14 and 15 (15.2.0 is the one tested).
+- Updated dependencies [6b21aee]
+  - @theokit/presenter@0.18.3
+
 ## 17.6.0
 
 ### Minor Changes
