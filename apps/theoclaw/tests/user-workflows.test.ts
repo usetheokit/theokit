@@ -45,6 +45,23 @@ describe('workspace workflows', () => {
     expect(lines[0]).toContain('skipped')
   })
 
+  it('skips a malformed file and still loads the valid one beside it', () => {
+    const { load, lines, workspace } = setup(DEF)
+    writeFileSync(join(workspace, 'workflows', 'broken.json'), '{ not json')
+    expect(load().tools.map((t) => t.name)).toEqual(['release', 'release_resume'])
+    expect(lines.some((l) => l.includes('broken.json skipped'))).toBe(true)
+  })
+
+  it('does not run the steps after an approval that is refused, and keeps the earlier result', async () => {
+    const { load } = setup(DEF)
+    const loaded = load()
+    const suspended = JSON.parse(String(await loaded.tools[0]!.handler({ text: 'notes' })))
+    const message = await load().resume(suspended.runId, false)
+    expect(message).toContain('completed')
+    expect(message).toContain('out(Draft)')
+    expect(message).not.toContain('out(Polish)')
+  })
+
   it('surfaces a resume failure with the workflow name and token, not as an unknown token', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'uwf-'))
     mkdirSync(join(workspace, 'workflows'))

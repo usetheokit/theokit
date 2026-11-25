@@ -10,6 +10,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 `theokit-sdk` or the framework packages rather than here. Those carry the repository name.
 
 ## [Unreleased]
+- Tests cover a malformed workflow file skipped beside a valid one, and a refused approval that stops the later steps and keeps the earlier result (#2959).
 - `@theokit/gateway` 0.31.0, `gateway-x` 0.6.0 and `gateway-whatsapp` 0.10.0 are pinned. The channel variables are read with `configFromEnv`'s `rename` and `require` options, and X's credential store and Baileys' QR sink and pairing wait go through the channel entry's `deps`, so the hand-built X and Baileys adapters are gone. `THEOCLAW_IMESSAGE_ENABLED` and `THEOCLAW_RAFT_ENABLED` still count any non-blank value as on (#2898).
 - The proxy test marks its fake local proxy credential `trufflehog:ignore`, so the secret scan passes (#3036).
 - The `theoclaw` vitest project typechecks `tests/**/*.test-d.ts`, so `agent-port.test-d.ts` now runs its type assertions (#3032).
