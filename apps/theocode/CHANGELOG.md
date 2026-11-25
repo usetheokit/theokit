@@ -18,6 +18,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- The withheld-shell test's control opts in to the SDK builtin shell (`builtinTools`), since SDK 15 no longer declares it by default (#3083).
 - The delegation test `parent-withheld-reaches-roles` passes a temporary directory instead of the real working directory, so the ambient-cwd guard (B-161) passes again.
 
 - `/image` checks the 5 MiB cap from `fstat` on one open descriptor before reading, so an oversized file is no longer loaded whole, and only a missing file reports `image not found`; a directory or a permission error reports `image unreadable` (#2955).

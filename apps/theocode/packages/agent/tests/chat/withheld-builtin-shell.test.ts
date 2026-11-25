@@ -29,8 +29,9 @@ const POSTURE = {
  * request the provider receives. The SDK's own tool collection runs, so a builtin it still declares
  * shows up here.
  */
-async function declaredToolNames(def: unknown): Promise<string[]> {
-  const { toAgentFactory } = await import('@theokit/agents')
+async function declaredToolNames(
+  make: () => Promise<unknown>,
+): Promise<string[]> {
   const bodies: { tools?: { name?: string; function?: { name?: string } }[] }[] = []
   const realFetch = globalThis.fetch
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
@@ -44,10 +45,7 @@ async function declaredToolNames(def: unknown): Promise<string[]> {
     return new Response('{"error":{"message":"stubbed"}}', { status: 500 })
   }) as typeof fetch
   try {
-    const agent = await toAgentFactory(def as never, {
-      apiKey: 'sk-test-1913-0000000000',
-      approvals: POSTURE,
-    })(`s-${Math.random()}`)
+    const agent = await make()
     try {
       const run = await (
         agent as never as { send: (m: string) => Promise<{ wait: () => Promise<unknown> }> }
@@ -67,15 +65,17 @@ async function declaredToolNames(def: unknown): Promise<string[]> {
 
 describe('#1913 — the builtin shell is not declared to the chat agent', () => {
   it('control_an_agent_that_withholds_nothing_declares_shell', async () => {
-    const { AgentBuilder } = await import('@theokit/agents')
-    const { z } = await import('zod')
-    const def = AgentBuilder.create()
-      .input(z.object({ m: z.string() }))
-      .model('openai/gpt-5')
-      .system('x')
-      .build()
-
-    expect(await declaredToolNames(def)).toContain('shell')
+    // The SDK declares `shell` only on opt-in (`builtinTools`), so the control opts in directly.
+    const { Agent } = await import('@theokit/sdk')
+    const names = await declaredToolNames(() =>
+      Agent.create({
+        apiKey: 'sk-test-1913-0000000000',
+        model: { id: 'openai/gpt-5' },
+        builtinTools: ['shell'],
+        local: { cwd: tmp('c1913-c-') },
+      } as never),
+    )
+    expect(names).toContain('shell')
   })
 
   for (const surface of ['interactive', 'headless'] as const) {
@@ -83,7 +83,12 @@ describe('#1913 — the builtin shell is not declared to the chat agent', () => 
       const { buildChatAgent } = await import('../../src/chat/chat.js')
 
       const def = await buildChatAgent({ surface, cwd: tmp('c1913-p-'), home: tmp('c1913-h-') })
-      const names = await declaredToolNames(def)
+      const { toAgentFactory } = await import('@theokit/agents')
+      const names = await declaredToolNames(() =>
+        toAgentFactory(def as never, { apiKey: 'sk-test-1913-0000000000', approvals: POSTURE })(
+          `s-${Math.random()}`,
+        ),
+      )
 
       expect(names.length, 'precondition: the chat agent declares other tools').toBeGreaterThan(1)
       expect(names, 'shell is still declared to the model').not.toContain('shell')
