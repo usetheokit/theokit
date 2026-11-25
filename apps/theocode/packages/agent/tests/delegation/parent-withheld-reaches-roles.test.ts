@@ -2,6 +2,10 @@
  * What the parent withholds reaches every team member: the tool passes its `withheldBuiltinTools` to
  * `buildRoleAgent`, and a role built from it withholds those AND `shell`.
  */
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { createDelegateToTeamTool } from '../../src/delegation/squad.js'
@@ -19,16 +23,22 @@ vi.mock('../../src/delegation/roles.js', async (orig) => ({
 describe('the parent withheld builtins reach the roles', () => {
   it('delegate_to_team hands each member the parent list', async () => {
     seen.ctxs = []
-    const tool = createDelegateToTeamTool({
-      model: 'm',
-      reasoning_effort: undefined,
-      sandbox_mode: 'workspace-write',
-      posture: 'trusted',
-      cwd: process.cwd(),
-      withheldBuiltinTools: ['shell', 'memory_search'],
-    } as never) as unknown as { handler: (i: { task: string }) => Promise<string> }
-    await tool.handler({ task: 'x' })
-    expect(seen.ctxs).toHaveLength(2)
-    for (const ctx of seen.ctxs) expect(ctx.withheldBuiltinTools).toEqual(['shell', 'memory_search'])
+    const dir = mkdtempSync(join(tmpdir(), 'theocode-withheld-'))
+    try {
+      const tool = createDelegateToTeamTool({
+        model: 'm',
+        reasoning_effort: undefined,
+        sandbox_mode: 'workspace-write',
+        posture: 'trusted',
+        cwd: dir,
+        withheldBuiltinTools: ['shell', 'memory_search'],
+      } as never) as unknown as { handler: (i: { task: string }) => Promise<string> }
+      await tool.handler({ task: 'x' })
+      expect(seen.ctxs).toHaveLength(2)
+      for (const ctx of seen.ctxs)
+        expect(ctx.withheldBuiltinTools).toEqual(['shell', 'memory_search'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
