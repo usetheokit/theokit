@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 
 import { type HookHandlers, type SDKAgent, Squad, TheokitAgentError, Tool } from '@theokit/agents'
+import type { BuiltinToolName } from '@theokit/sdk'
 import { z } from 'zod'
 
 import { type AgentConfig, type TrustPosture } from '../config/index.js'
@@ -45,6 +46,8 @@ export interface TeamContext {
    */
   cwd: string
   hooks?: HookHandlers
+  /** What the parent withholds; every member withholds it too, with `shell`. */
+  withheldBuiltinTools?: readonly BuiltinToolName[]
 }
 
 export const DELEGATION_CAP_MS = 15 * 60_000
@@ -89,6 +92,9 @@ export function createDelegateToTeamTool(context: TeamContext) {
           sandbox: scope.sandbox,
           writeRoot: scope.writeRoot,
           ...(context.hooks !== undefined ? { hooks: context.hooks } : {}),
+          ...(context.withheldBuiltinTools !== undefined
+            ? { withheldBuiltinTools: context.withheldBuiltinTools }
+            : {}),
         },
         (line) => process.stderr.write(line),
       )
