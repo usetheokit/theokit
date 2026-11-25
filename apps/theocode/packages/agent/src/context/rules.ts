@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative } from 'node:path'
 
-import { loadInstructionTree } from '@theokit/agents/config'
+import { loadInstructionTree, type InstructionBlock } from '@theokit/agents/config'
 
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from '../config/home-dir.js'
 
@@ -60,7 +60,7 @@ const DEFAULT_BUDGET: TraversalBudget = { maxDepth: 32, maxFiles: 2_000 }
 export interface RulesLoad {
   /** The block as it goes into the prompt — already sliced at the ceiling. */
   readonly text: string
-  /** Blocks that CONTRIBUTED to `text`. Unchanged meaning; see `assemble`. */
+  /** Blocks that CONTRIBUTED to `text`. Unchanged meaning; see `loadTree`. */
   readonly count: number
   /** Blocks READ from disk. Equal to `count` when nothing was dropped. */
   readonly read: number
@@ -133,13 +133,13 @@ export function loadUserRules(
   warn: WarnFn = (m) => process.stderr.write(`${m}\n`),
   budget: TraversalBudget = DEFAULT_BUDGET,
 ): RulesLoad {
-  const blocks = [...blocksFrom(home, userRuleRoots(home), warn, budget)]
+  const bases = [{ cwd: home, roots: userRuleRoots(home) }]
 
   // B-171 — the state directory may sit outside the home, and every other consumer follows it there:
   // config, the trust store, MCP scopes all resolve through `homeStateDir`. Rules were the outlier,
   // so one build could serve config from `$THEOKIT_HOME` and instructions from `~/.theokit`.
   //
-  // Collected as blocks and assembled ONCE below, never assembled separately and merged: the ceiling
+  // Loaded as bases of ONE tree walk below, never loaded separately and merged: the ceiling
   // belongs to the PROMPT, so applying it per-load lets two corpora that each fit produce a prompt
   // that does not. The first attempt at this item did exactly that — 126,012 chars against a declared
   // 64,000, with `truncated` reporting false — and was reversed for it.
@@ -154,10 +154,10 @@ export function loadUserRules(
   const stateDir = realPath(homeStateDir(process.env, home))
   const outside = relative(realPath(home), stateDir)
   if (outside.length === 0 || outside.startsWith('..') || isAbsolute(outside)) {
-    blocks.push(...blocksFrom(stateDir, ['rules'], warn, budget))
+    bases.push({ cwd: stateDir, roots: ['rules'] })
   }
 
-  return assemble(blocks, warn)
+  return loadTree(bases, warn, budget)
 }
 
 /**
@@ -179,7 +179,7 @@ function loadRulesFrom(
   warn: WarnFn,
   budget: TraversalBudget,
 ): RulesLoad {
-  return assemble(blocksFrom(cwd, roots, warn, budget), warn)
+  return loadTree([{ cwd, roots }], warn, budget)
 }
 
 /**
@@ -198,82 +198,50 @@ function realPath(candidate: string): string {
 }
 
 /**
- * The blocks under one base, WITHOUT assembling them.
+ * Every base is read under ONE ceiling, so two corpora that each fit cannot together exceed the
+ * prompt's (B-171 measured 126,012 chars against 64,000 when each was cut separately).
  *
- * B-171 — split out so a caller reading two bases assembles ONCE. A first attempt assembled each and
- * merged the results, which defeated the 64,000-char prompt ceiling: two corpora that each fit
- * produced 126,012 chars with `truncated: false`, measured. The ceiling belongs to the prompt, so it
- * has to be applied to everything that reaches it, together.
+ * The framework applies the ceiling to the rendered text (scope prefix and separators included),
+ * counts the files it left out and appends {@link omissionNotice}.
  */
-function blocksFrom(cwd: string, roots: readonly string[], warn: WarnFn, budget: TraversalBudget): readonly string[] {
+function loadTree(
+  bases: readonly { readonly cwd: string; readonly roots: readonly string[] }[],
+  warn: WarnFn,
+  budget: TraversalBudget,
+): RulesLoad {
   requirePositiveBudget(budget)
+  const [first, ...rest] = bases
+  if (first === undefined) throw new RangeError('loadTree: no base to read')
 
   const tree = loadInstructionTree({
-    cwd,
-    roots,
-    budget: { maxDepth: budget.maxDepth, maxFiles: budget.maxFiles, maxChars: Number.MAX_SAFE_INTEGER },
+    cwd: first.cwd,
+    roots: first.roots,
+    also: rest,
+    budget: {
+      maxDepth: budget.maxDepth,
+      maxFiles: budget.maxFiles,
+      maxChars: MAX_CHARS,
+      omissionNotice,
+    },
     onWarn: (message) => {
       warn(`[rules] ${message}`)
     },
     fileNames: (entry) => entry.endsWith('.md'),
     order: 'lexicographic',
+    render: scopedBlock,
+    separator: SEPARATOR,
   })
 
-  return tree.blocks.map(scopedBlock).filter((block) => block.length > 0)
-}
-
-/**
- * Join the blocks that fit, and say what did not.
- *
- * ## Whole blocks only
- *
- * This used to slice the joined text at the ceiling, mid-block on purpose — the argument being that
- * "filling the budget beats stopping short of it, because the rules a user wrote are worth more to
- * the model than a tidy boundary."
- *
- * B-157 measured what the trade actually costs. In this repository's own checkout the block ended:
- *
- *   "## Modes\n\nEvery mode measures **our** system. They differ in what counts as a measure"
- *
- * Mid-word. The price is not a tidy boundary — it is a rule the model reads as complete when it is
- * a fragment, with nothing in the text marking where the author stopped and the cut began. A rule
- * that is absent is one the model cannot follow; a rule that is half-present is one it follows
- * wrongly while believing it has the whole thing.
- *
- * ## The omission is announced, to the MODEL
- *
- * `/status` reports the loss to the operator (#91). Nothing reported it inside the prompt, so the
- * model reasoned as though it held the whole corpus — and an agent that believes its instructions
- * are complete draws conclusions from their silence. One line changes what an absence can mean.
- *
- * `count` remains the number of blocks that CONTRIBUTED, which is now exactly the number that fit.
- */
-function assemble(blocks: readonly string[], warn: WarnFn): RulesLoad {
-  const full = blocks.join(SEPARATOR)
-  const read = blocks.length
-  if (full.length <= MAX_CHARS) {
-    return { text: full, count: read, read, chars: full.length, kept: full.length, truncated: false }
+  const text = tree.blocks.map((block) => block.content).join(SEPARATOR)
+  return {
+    text,
+    count: tree.count,
+    read: tree.found,
+    chars: tree.chars,
+    kept: text.length,
+    truncated: tree.count < tree.found,
   }
-
-  // Reserve room for the notice before choosing what fits, so adding it can never be what pushes
-  // the block over — a marker that itself caused a further drop would be its own small lie.
-  const budget = MAX_CHARS - OMISSION_MAX
-  const kept: string[] = []
-  let used = 0
-  for (const block of blocks) {
-    const cost = block.length + (kept.length > 0 ? SEPARATOR.length : 0)
-    if (used + cost > budget) break
-    kept.push(block)
-    used += cost
-  }
-
-  warn(`[rules] rules block truncated to ${String(MAX_CHARS)} chars (was ${String(full.length)})`)
-  const text = [...kept, omissionNotice(read - kept.length, read)].join(SEPARATOR)
-  return { text, count: kept.length, read, chars: full.length, kept: text.length, truncated: true }
 }
-
-/** Bounded so the reservation above is a fact rather than an estimate. */
-const OMISSION_MAX = 200
 
 function omissionNotice(dropped: number, read: number): string {
   return (
@@ -291,11 +259,7 @@ function omissionNotice(dropped: number, read: number): string {
  * every file, silently. A dropped rule is one the author notices missing; a widened one is one
  * nobody sees widen.
  */
-function scopedBlock(block: {
-  readonly content: string
-  readonly scopes: readonly string[]
-  readonly scopesUnreadable: boolean
-}): string {
+function scopedBlock(block: InstructionBlock): string {
   if (block.scopesUnreadable) return ''
 
   const body = block.content.trim()

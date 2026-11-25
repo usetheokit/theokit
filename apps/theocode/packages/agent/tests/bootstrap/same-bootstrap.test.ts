@@ -33,13 +33,24 @@ it('the CLI, the TUI and the ACP entry all call the same bootstrapSurface, await
   }
 })
 
-it('one awaited call has installed the home and the project dir when it resolves', async () => {
+it('one awaited call has installed the home, and left CLAUDE_PROJECT_DIR alone, when it resolves', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'once-'))
   try {
     const env: Record<string, string | undefined> = {}
     await bootstrapSurface({ env, cwd: dir, home: dir, onWarn: () => {} })
-    expect(env.CLAUDE_PROJECT_DIR).toBe(dir)
+    expect(env.CLAUDE_PROJECT_DIR).toBeUndefined()
     expect(env.THEOKIT_HOME).toBeDefined()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('a CLAUDE_PROJECT_DIR already in the environment is left as it was', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'once-'))
+  try {
+    const env: Record<string, string | undefined> = { CLAUDE_PROJECT_DIR: '/operator/own' }
+    await bootstrapSurface({ env, cwd: dir, home: dir, onWarn: () => {} })
+    expect(env.CLAUDE_PROJECT_DIR).toBe('/operator/own')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

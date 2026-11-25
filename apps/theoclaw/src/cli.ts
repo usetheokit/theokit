@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 
+import { exitAfterFlush } from '@theokit/agents/commands'
 import type { DockerRunner } from '@theokit/agents/sandbox'
 import {
   SkillsRegistryError,
@@ -31,7 +32,6 @@ import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
 import { InstanceLockedError } from '@theokit/sdk/persistence'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonRestart, daemonStatus, daemonUninstall } from './daemon.js'
-import { exitAfterFlush } from './exit-after-flush.js'
 import { runCommand, type Runner } from './run-command.js'
 import { parseCall, parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'

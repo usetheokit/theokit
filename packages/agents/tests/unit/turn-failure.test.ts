@@ -19,6 +19,18 @@ describe('turn failure', () => {
     expect(f.code).toBe('unknown')
   })
 
+  it('a top-level status or statusCode, on the error or a cause, is read', () => {
+    expect(classifyTurnFailure(Object.assign(new Error('x'), { status: 503 })).transient).toBe(true)
+    const cause = Object.assign(new Error('inner'), { statusCode: 429 })
+    expect(classifyTurnFailure(new Error('x', { cause })).transient).toBe(true)
+    expect(classifyTurnFailure(Object.assign(new Error('x'), { status: 401 })).transient).toBe(
+      false,
+    )
+    expect(classifyTurnFailure(Object.assign(new Error('x'), { status: '503' })).transient).toBe(
+      false,
+    )
+  })
+
   it('a typed code in the cause chain wins over the message text', () => {
     const f = classifyTurnFailure(
       new Error('rate limit hit', { cause: provider('auth_failed', 401) }),

@@ -5,9 +5,10 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { startMcpRelayConnector } from '../src/mcp-relay/connector.js'
-import { GrantStore, grantsPath } from '../src/mcp-relay/grants.js'
-import { createMcpRelay } from '../src/mcp-relay/relay-server.js'
+import { createMcpRelayServer, startMcpRelayConnector } from '@theokit/agents/mcp-relay'
+import { createGrantStore } from '@theokit/http/guards'
+
+import { DEFAULT_GRANT_TOOLS, grantsPath, mcpRelayDispatch } from '../src/mcp-relay/command.js'
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
@@ -25,17 +26,17 @@ async function setup() {
   const toolSettings = resolveToolSettings({}, h.io.cwd)
   writeFileSync(join(toolSettings.toolRoot, 'hello.txt'), 'hi')
   const path = grantsPath(h.io.env, h.io.homeDir)
-  const store = new GrantStore(path).load()
-  const chatgpt = (await store.create('chatgpt')).token
-  const relay: Server = createMcpRelay({ instanceToken: INSTANCE_TOKEN, grantsPath: path, pollMs: 50, timeoutMs: 5000 })
+  const store = createGrantStore(path)
+  const chatgpt = (await store.create('chatgpt', DEFAULT_GRANT_TOOLS)).credential
+  const relay: Server = createMcpRelayServer({ instanceToken: INSTANCE_TOKEN, grants: store, pollMs: 50, timeoutMs: 5000 })
   await new Promise<void>((r) => relay.listen(0, '127.0.0.1', r))
   closers.push(() => new Promise((r) => (relay.closeAllConnections(), relay.close(() => r()))))
   const url = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`
   const connector = startMcpRelayConnector({
-    settings: { url, token: INSTANCE_TOKEN },
-    controlTools: () => buildTools(toolSettings),
-    toolSettings,
-    log: () => undefined,
+    url,
+    token: INSTANCE_TOKEN,
+    tools: () => buildTools(toolSettings),
+    dispatch: mcpRelayDispatch(toolSettings),
     backoffMs: { min: 5, max: 20 },
   })
   closers.push(() => connector.stop())
@@ -69,7 +70,7 @@ describe('the MCP relay end to end', () => {
     expect(denied.error ?? denied.result?.isError).toBeTruthy()
 
     expect((await rpc('wrong-token', call('list_dir'))).status).toBe(401)
-    await new GrantStore(path).load().revoke('chatgpt')
+    await createGrantStore(path).revoke('chatgpt')
     expect((await rpc(chatgpt, call('list_dir'))).status).toBe(401)
   })
 })

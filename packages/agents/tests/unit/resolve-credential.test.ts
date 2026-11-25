@@ -596,3 +596,37 @@ describe('resolveAgentCredential with customProviders', () => {
     ).toThrow(/PARTICLE_API_KEY/)
   })
 })
+
+describe('the ChatGPT subscription route', () => {
+  const cfg = () => ({ home, dirName: '.theokit', fileName: 'auth.json' })
+  const env = { OPENAI_API_KEY: 'sk-secret-value' }
+
+  it('uses_the_stored_openai_login_over_an_api_key', () => {
+    writeOAuthStore('openai', Date.now() + 3_600_000)
+    const resolution = resolveAgentCredential({ env, model: 'openai-chatgpt/gpt-5', store: cfg() })
+    expect(resolution.kind).toBe('oauth')
+    expect(resolution.provider).toBe('openai')
+  })
+
+  it('rejects_without_a_stored_login_and_never_names_the_key', () => {
+    const attempt = () =>
+      resolveAgentCredential({ env, model: 'openai-chatgpt/gpt-5', store: cfg() })
+    expect(attempt).toThrow(CredentialNotFoundError)
+    expect(attempt).toThrow(/login/)
+    expect(attempt).not.toThrow(/sk-secret-value/)
+  })
+
+  it('rejects_a_stored_login_of_another_provider', () => {
+    writeOAuthStore('anthropic', Date.now() + 3_600_000)
+    expect(() =>
+      resolveAgentCredential({ env, model: 'openai-chatgpt/gpt-5', store: cfg() }),
+    ).toThrow(CredentialNotFoundError)
+  })
+
+  it('leaves_the_ordinary_openai_route_on_the_api_key', () => {
+    writeOAuthStore('openai', Date.now() + 3_600_000)
+    const resolution = resolveAgentCredential({ env, model: 'openai/gpt-5', store: cfg() })
+    expect(resolution.kind).toBe('api-key')
+    expect(resolution.apiKey).toBe('sk-secret-value')
+  })
+})

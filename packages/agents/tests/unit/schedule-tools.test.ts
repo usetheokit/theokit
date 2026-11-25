@@ -60,6 +60,37 @@ describe('createScheduleTools', () => {
     ])
   })
 
+  it('lists a described platform in the description and applies its channelId hint', async () => {
+    const described = createScheduleTools({
+      scheduler,
+      platforms: [
+        'telegram',
+        {
+          name: 'inbox',
+          description: 'local, read back with read_schedule_inbox',
+          channelIdHint: 'a free label',
+        },
+      ],
+    })
+    const schedule = described.find((entry) => entry.name === 'schedule_job')!
+    expect(schedule.description).toContain('telegram, inbox')
+    expect(schedule.description).toContain('"inbox" is local, read back with read_schedule_inbox')
+    const channel = (
+      schedule.inputSchema as { properties: Record<string, { description: string }> }
+    ).properties.channelId
+    expect(channel?.description).toContain('The channel, chat or conversation id')
+    expect(channel?.description).toContain('For "inbox": a free label')
+    const out = JSON.parse(
+      String(
+        await schedule.handler(
+          { ...valid, platform: 'inbox', channelId: 'main' },
+          undefined as never,
+        ),
+      ),
+    ) as { ok: boolean }
+    expect(out.ok).toBe(true)
+  })
+
   it('schedules a job the store keeps', async () => {
     const answer = await call('schedule_job', { ...valid, name: 'news', timezone: 'Europe/Lisbon' })
     expect(answer.ok).toBe(true)

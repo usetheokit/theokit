@@ -19,7 +19,7 @@
  *
  * Every guarantee the class-based version encoded is still asserted here: abandon settles, other
  * threads are undisturbed, answering resolves, a second question on a live thread is refused, and
- * the single listener slot refuses a second occupant rather than silently replacing it.
+ * observers attach and dispose independently.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,7 +34,13 @@ import { ConcurrentQuestionError } from '@theokit/agents/ask'
 // check it is: what `@theocode/agent/ask` hands a consumer IS the framework's class.
 import { ConcurrentQuestionError as entrypointConcurrentQuestionError } from '../../src/ask/index.js'
 
-import { abandonQuestion, answerQuestion, ask, currentQuestion, setListener } from '../../src/ask/ask-bridge.js'
+import {
+  abandonQuestion,
+  answerQuestion,
+  ask,
+  currentQuestion,
+  setListener,
+} from '../../src/ask/ask-bridge.js'
 
 /** Releases the singleton's listener slot so the next case can attach its own. */
 let release: (() => void) | undefined
@@ -180,52 +186,45 @@ describe('B-004 — the concurrent-question error is reachable and readable', ()
   })
 })
 
-describe('B-035 — the single slot is named for what it is, and a second set fails loudly', () => {
-  /**
-   * B-035 — the test that used to live here was VACUOUS, and it carried the name of the guarantee it
-   * failed to encode. It asserted `first.calls + second.calls > 0` and that `second` was called.
-   * Both hold PRECISELY when the first listener is silently replaced; `first` was never asserted on.
-   * The comment above it said "losing a subscriber without a trace is not one of them" and the
-   * assertions permitted exactly that.
-   *
-   * Only the TUI ever subscribes, so building a multicast nobody asked for is the YAGNI failure. It
-   * is `setListener` now, and setting a second one over a live one throws rather than winning
-   * silently.
-   */
-  it('test_setting_a_second_listener_over_a_live_one_throws', () => {
-    withSurface()
-
-    expect(
-      () => setListener(vi.fn()),
-      'a second setListener() replaced a live one, so a surface stopped being notified with no ' +
-        'error and no warning',
-    ).toThrow(/listener/i)
-  })
-
-  it('test_the_first_listener_keeps_receiving_after_a_rejected_second', async () => {
-    // The assertion the old test should have made: `first` is still the one notified.
+describe('observers of the pending set', () => {
+  it('test_more_than_one_observer_may_attach_and_each_is_notified', async () => {
     const first = withSurface()
-    try {
-      setListener(vi.fn())
-    } catch {
-      // expected — asserted above
-    }
+    const second = vi.fn()
+    const disposeSecond = setListener(second)
 
-    const pending = ask('anything?', 'slot-1')
-    answerQuestion('done', 'slot-1')
+    const pending = ask('anything?', 'observers-1')
+    expect(first).toHaveBeenCalled()
+    expect(second).toHaveBeenCalled()
 
-    expect(first, 'the surviving listener was not the first one').toHaveBeenCalled()
+    disposeSecond()
+    second.mockClear()
+    first.mockClear()
+    answerQuestion('done', 'observers-1')
+
+    expect(first, 'the surviving observer was not notified of the answer').toHaveBeenCalled()
+    expect(second, 'a disposed observer was still notified').not.toHaveBeenCalled()
     await expect(pending).resolves.toBe('done')
   })
 
-  it('test_disposing_frees_the_slot_for_a_new_listener', () => {
-    // Anti-vacuity floor: throwing on every second call would make the bridge unusable across a
-    // surface restart, which is a real flow (the TUI unmounts and remounts).
-    const dispose = setListener(vi.fn())
-    dispose()
+  it('test_an_observer_reads_the_settled_state', async () => {
+    const seen: Array<string | undefined> = []
+    release = setListener(() => seen.push(currentQuestion('observers-2')))
 
-    expect(() => {
-      release = setListener(vi.fn())
-    }).not.toThrow()
+    const pending = ask('which?', 'observers-2')
+    answerQuestion('this', 'observers-2')
+    await pending
+
+    expect(seen[0]).toBe('which?')
+    expect(seen.at(-1)).toBeUndefined()
+  })
+
+  it('test_answering_after_the_bridge_settled_it_another_way_is_refused', async () => {
+    withSurface()
+    const pending = ask('which?', 'observers-3')
+    const settled = expect(pending).rejects.toBeInstanceOf(Error)
+    abandonQuestion('observers-3')
+    await settled
+
+    expect(answerQuestion('late', 'observers-3')).toBe(false)
   })
 })

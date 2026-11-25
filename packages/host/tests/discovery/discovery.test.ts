@@ -74,3 +74,70 @@ describe('announceService', () => {
     }
   })
 })
+
+describe('announceService onError', () => {
+  function subscribable(): {
+    publisher: ServicePublisher
+    emit: (error: unknown) => void
+    order: string[]
+  } {
+    const listeners = new Set<(error: unknown) => void>()
+    const order: string[] = []
+    const publisher = fake({
+      unpublishAll: vi.fn(() => {
+        order.push('unpublishAll')
+        return Promise.resolve()
+      }),
+      destroy: vi.fn(() => {
+        order.push('destroy')
+        return Promise.resolve()
+      }),
+      onError: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    })
+    return { publisher, order, emit: (error) => listeners.forEach((listener) => listener(error)) }
+  }
+
+  it('stops the announcement, then reports the first failure once', async () => {
+    const { publisher, emit, order } = subscribable()
+    const onError = vi.fn((error: unknown) => order.push(`onError:${String(error)}`))
+    announceService({ type: 'x', name: 'n', port: 1, host: '10.0.0.2', publisher, onError })
+    emit('first')
+    emit('second')
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    expect(order).toEqual(['unpublishAll', 'destroy', 'onError:first'])
+  })
+
+  it('works with a publisher that has no error subscription', async () => {
+    const publisher = fake()
+    const result = announceService({
+      type: 'x',
+      name: 'n',
+      port: 1,
+      host: '10.0.0.2',
+      publisher,
+      onError: vi.fn(),
+    })
+    await result.stop()
+    expect(publisher.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not report after stop()', async () => {
+    const { publisher, emit } = subscribable()
+    const onError = vi.fn()
+    const result = announceService({
+      type: 'x',
+      name: 'n',
+      port: 1,
+      host: '10.0.0.2',
+      publisher,
+      onError,
+    })
+    await result.stop()
+    emit('late')
+    await Promise.resolve()
+    expect(onError).not.toHaveBeenCalled()
+  })
+})

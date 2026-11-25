@@ -1,7 +1,7 @@
 /**
  * B-143 — one unreadable pointer stopped collection for the whole tree.
  *
- * `readPointerId` fails fast on any errno but ENOENT, and its docblock gives the reason: what it
+ * the framework's pointer read fails fast on any errno but ENOENT, for this reason: what it
  * returns is a deletion decision, so swallowing an EACCES would drop a live session from the
  * protected set. "Refusing to GC is the safe direction" — correct, and it is an argument about THAT
  * PROJECT.
@@ -68,7 +68,7 @@ describe('a failing pointer read is isolated to its project', () => {
 
   it('test_the_broken_project_is_skipped_rather_than_collected', async () => {
     // The safe direction the pointer docblock argues for, kept — for that project only. Collecting
-    // it would be the outcome `readPointerId` refuses to allow.
+    // it would be the outcome the pointer read refuses to allow.
     const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
 
     expect(plan.candidates.map((c) => c.target)).not.toContain('/s/projects/broken/old.jsonl')

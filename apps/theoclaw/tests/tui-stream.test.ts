@@ -4,17 +4,13 @@
  * TheoClaw adds and where they sit in the turn. Unit tests, no socket and no terminal.
  */
 import { type AgentStreamEvent, agentStreamReducer, initialAgentStreamState } from '@theokit/tui'
-import { createControlStreamSource } from '@theokit/agents/control'
+import { createControlStreamInbox, createControlStreamSource } from '@theokit/agents/control'
 import { describe, expect, it } from 'vitest'
 
 import { deferred, waitFor } from './fakes.js'
 
 import { type ControlClient, type ControlFrame, nextArrival } from '../src/control-client/control-client.js'
-import {
-  createTurnInbox,
-  nextSessionId,
-  type TuiNotice,
-} from '../src/tui/frames.js'
+import { nextSessionId, type TuiNotice } from '../src/tui/frames.js'
 
 const SESSION = 'owner'
 
@@ -25,7 +21,7 @@ function controlStream(
   session: string,
   onNotice: (n: TuiNotice) => void,
   onEnd: () => void,
-  inbox = createTurnInbox(),
+  inbox = createControlStreamInbox({ stamp: nextArrival }),
 ) {
   return createControlStreamSource(client, session, text, { inbox, onNotice, onEnd })()
 }
@@ -264,7 +260,7 @@ describe('controlStream: notices from the app', () => {
         yield DONE
       },
     } as unknown as ControlClient
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const notices: TuiNotice[] = []
     const events: AgentStreamEvent[] = []
     const consume = (async () => {
@@ -310,7 +306,7 @@ describe('controlStream: notices from the app', () => {
           yield DONE
         },
       } as unknown as ControlClient
-      const inbox = createTurnInbox()
+      const inbox = createControlStreamInbox({ stamp: nextArrival })
       const notices: TuiNotice[] = []
       const stream = controlStream(
         client,
@@ -344,7 +340,7 @@ describe('controlStream: notices from the app', () => {
         yield DONE
       },
     } as unknown as ControlClient
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const notices: TuiNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
@@ -373,7 +369,7 @@ describe('controlStream: notices from the app', () => {
         yield DONE
       },
     } as unknown as ControlClient
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const notices: TuiNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
@@ -402,7 +398,7 @@ describe('controlStream: notices from the app', () => {
         yield { type: 'interrupted', session: SESSION, arrivedAt } as ControlFrame
       },
     } as unknown as ControlClient
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const below: TuiNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => below.push(n), () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
@@ -427,7 +423,7 @@ describe('controlStream: notices from the app', () => {
         yield { type: 'interrupted', session: SESSION } as ControlFrame
       },
     } as unknown as ControlClient
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
     inbox.post({ variant: 'warning', text: 'queued' })
@@ -450,7 +446,7 @@ describe('controlStream: notices from the app', () => {
         yield { type: 'interrupted', session: SESSION } as ControlFrame
       },
     } as unknown as ControlClient
-    const inbox = createTurnInbox()
+    const inbox = createControlStreamInbox({ stamp: nextArrival })
     const below: TuiNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => below.push(n), () => undefined, inbox)
     await stream.next()

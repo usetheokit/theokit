@@ -20,13 +20,15 @@ export type InProcessAwaitApproval = (
 ) => Promise<boolean | ApprovalDecision>
 
 /** The input the injected runner receives (structurally compatible with `StreamAgentTurnInProcessInput`). */
-export interface InProcessRunInput {
+export interface InProcessRunInput<TBody = unknown> {
   message: string
   sessionId?: string
   signal?: AbortSignal
   awaitApproval?: InProcessAwaitApproval
   /** M43 — per-request context (from `sendMessages`'s `metadata`) — tenant / provider / auth for the runner. */
   context?: unknown
+  /** The object passed to `send(input)`, as HttpTransport sends it. Absent for a primitive input. */
+  body?: TBody
 }
 
 /**
@@ -185,7 +187,7 @@ export class InProcessTransport implements AgentTransport {
   sendMessages(
     options: Parameters<ChatTransport['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
-    const { messages, abortSignal, metadata } = options
+    const { messages, abortSignal, metadata, body } = options
     // M92 — a new `send()` sweeps the previous turn: approvals from that turn will never be decided
     // again, and leaving them in the `Map` is a leak with a promise hanging off each one.
     this.#sweepTurn(this.#turn, 'a new turn started')
@@ -214,6 +216,7 @@ export class InProcessTransport implements AgentTransport {
       awaitApproval: this.#createAwaitApproval(currentTurn, abortSignal ?? undefined),
       // M43 — forward per-request context (the seam's `metadata`) to the runner.
       context: metadata,
+      ...(body === undefined ? {} : { body }),
     })
     return Promise.resolve(generatorToStream(generator))
   }

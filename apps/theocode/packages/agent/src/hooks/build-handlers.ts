@@ -120,6 +120,9 @@ export function buildHookHandlers(
 
   return buildInFramework(translated, {
     cwd: opts.cwd ?? process.cwd(),
+    // A hook copied from `.claude/settings.json` reads `$CLAUDE_PROJECT_DIR`; set it for hook
+    // processes only, not on the whole process environment.
+    projectDirEnv: 'CLAUDE_PROJECT_DIR',
     trusted: opts.trusted,
     approved: opts.approved,
     continuationBudget: DEFAULT_CONTINUATION_BUDGET,

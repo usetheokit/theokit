@@ -4,17 +4,17 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 
-import { type ForeignSetup, readForeignSetup } from '@theokit/agents/foreign-setup'
+import { type ForeignSetup, plannedForeignImportFiles, readForeignSetup, writeForeignImport } from '@theokit/agents/foreign-setup'
 
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { applyInstance, resolveInstance } from './instance.js'
-import { plannedImportFiles, writeImport } from './migration/import-store.js'
+import { asConfigError } from './migration/import-start.js'
 
 /**
  * The import entry (FR-006, FR-007): `node dist/import-main.js --from claude-code|hermes`
  * (`theoclaw import <kind> [--dry-run]`, which runs it; `pnpm --filter theoclaw run import`). The instance is resolved and applied as `src/main.ts` does
  * it, so a profiled instance's import lands in its own state directory (B-514); then a reader
- * copies the source and `writeImport` validates and replaces `<THEOCLAW_STATE_DIR>/import`. Every
+ * copies the source and `writeForeignImport` validates and replaces `<THEOCLAW_STATE_DIR>/import`. Every
  * failure is one `TheoClawConfigError` line and exit 1; nothing printed carries an MCP value.
  * `--dry-run` reads the source and lists the files it would write, writing none. Only `src/cli.ts` runs this file, as a child.
  */
@@ -107,12 +107,17 @@ try {
     const target = join(stateDir, 'import')
     const lines = [
       ...summary(setup, []).map((line) => line.replace(/^imported /, 'would import ')),
-      ...plannedImportFiles(setup).map((file) => `would write ${join(target, file)}`),
+      ...plannedForeignImportFiles(setup).map((file) => `would write ${join(target, file)}`),
       'dry run: nothing was written',
     ]
     process.stdout.write(`${lines.join('\n')}\n`)
   } else {
-    const { notes } = writeImport(stateDir, setup, { now: new Date() })
+    let notes: string[]
+    try {
+      ;({ notes } = writeForeignImport(stateDir, setup, { now: new Date() }))
+    } catch (error) {
+      throw asConfigError(error)
+    }
     process.stdout.write(`${summary(setup, notes).join('\n')}\n`)
   }
   process.exitCode = 0

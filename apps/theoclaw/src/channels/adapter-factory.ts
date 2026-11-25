@@ -1,12 +1,9 @@
 import { createChannels, createFileCredentialStore } from '@theokit/gateway'
-import type { BasePlatformAdapter, ChannelDescriptor } from '@theokit/gateway'
-import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
-import { XAdapter } from '@theokit/gateway-x'
-import type { XAdapterOptions } from '@theokit/gateway-x'
+import type { BasePlatformAdapter, CredentialStore } from '@theokit/gateway'
 
 import type { PlatformBuild } from './channel-loop.js'
 import { descriptorFor, isBaileys } from './platforms.js'
-import type { ConfiguredPlatform, PlatformSettings } from './platforms.js'
+import type { ConfiguredPlatform } from './platforms.js'
 
 /** Options that apply to every build, from the authorization policy. */
 export interface AdapterBuildOptions {
@@ -28,47 +25,6 @@ function mention(options: AdapterBuildOptions): { readonly requireMention?: bool
   return options.requireMention === undefined ? {} : { requireMention: options.requireMention }
 }
 
-/**
- * The QR-linked WhatsApp Web backend (`THEOCLAW_WHATSAPP_BACKEND=baileys`): no Meta app, no webhook.
- * The QR goes to `options.onQr`, else stderr (the package default). The descriptor has no field for
- * the QR sink or the pairing wait, so this one backend is built here rather than by the descriptor.
- */
-export function whatsappBaileysAdapter(sessionDir: string, options: AdapterBuildOptions): WhatsAppAdapter {
-  return WhatsAppAdapter.from(
-    {
-      backend: 'baileys',
-      baileys: {
-        sessionDir,
-        ...(options.onQr === undefined ? {} : { onQr: options.onQr }),
-        ...(options.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: options.connectTimeoutMs }),
-      },
-    },
-    mention(options),
-  )
-}
-
-/**
- * The X adapter's options. X rotates the refresh token on every refresh, so the new one is kept by
- * the gateway's file credential store as `x-refresh-token` under `THEOCLAW_STATE_DIR` (mode 0600)
- * and wins over the environment's on the next start. Without a state directory the rotated token
- * is lost on restart. The descriptor has no field for the store, so X is built here.
- */
-export function xOptions(settings: PlatformSettings, stateDir = process.env.THEOCLAW_STATE_DIR): XAdapterOptions {
-  const dir = (stateDir ?? '').trim()
-  const limit = settings.guestDailyLimit
-  return {
-    userId: settings.userId ?? '',
-    username: settings.username ?? '',
-    clientId: settings.clientId ?? '',
-    clientSecret: settings.clientSecret ?? '',
-    refreshToken: settings.refreshToken ?? '',
-    allowFrom: (settings.allowFrom ?? '').split(',').map((entry) => entry.trim()).filter((entry) => entry !== ''),
-    ...(settings.bearerToken === undefined ? {} : { bearerToken: settings.bearerToken }),
-    ...(limit === undefined ? {} : { guest: { dailyLimit: Number(limit) } }),
-    ...(dir === '' ? {} : { credentialStore: createFileCredentialStore(dir), credentialKey: 'x-refresh-token' }),
-  }
-}
-
 /** What the descriptor is given besides the environment's settings. */
 function configFor(entry: ConfiguredPlatform, options: AdapterBuildOptions): Readonly<Record<string, unknown>> {
   return {
@@ -84,14 +40,36 @@ function configFor(entry: ConfiguredPlatform, options: AdapterBuildOptions): Rea
   }
 }
 
-/** The descriptor, with `create` replaced for the two channels whose build needs more than its config can say. */
-function descriptorOf(entry: ConfiguredPlatform, options: AdapterBuildOptions): ChannelDescriptor {
-  const descriptor = descriptorFor(entry.platform, entry.settings)
-  if (entry.platform === 'x') return { ...descriptor, create: () => new XAdapter(xOptions(entry.settings)) }
-  if (entry.platform === 'whatsapp' && isBaileys(entry.settings)) {
-    return { ...descriptor, create: () => whatsappBaileysAdapter(entry.settings.sessionDir ?? '', options) }
+/** The file the rotated X refresh token has always been kept in; the descriptor's own key adds the user id. */
+const X_TOKEN_KEY = 'x-refresh-token'
+
+/** A store that keeps every key it is asked for under one key, so an existing deployment's token file is still read. */
+function singleKey(store: CredentialStore, key: string): CredentialStore {
+  return { get: () => store.get(key), set: (_key, value) => store.set(key, value) }
+}
+
+/**
+ * What `create` is given besides the config. X rotates the refresh token on every refresh, so the new
+ * one is kept by the gateway's file credential store as `x-refresh-token` under `THEOCLAW_STATE_DIR`
+ * (mode 0600) and wins over the environment's on the next start; without a state directory the rotated
+ * token is lost on restart. Baileys gets the QR sink (else stderr) and the pairing wait.
+ */
+export function depsFor(
+  entry: ConfiguredPlatform,
+  options: AdapterBuildOptions,
+  stateDir = process.env.THEOCLAW_STATE_DIR,
+): Readonly<Record<string, unknown>> | undefined {
+  if (entry.platform === 'x') {
+    const dir = (stateDir ?? '').trim()
+    return dir === '' ? undefined : { credentialStore: singleKey(createFileCredentialStore(dir), X_TOKEN_KEY) }
   }
-  return descriptor
+  if (entry.platform === 'whatsapp' && isBaileys(entry.settings)) {
+    return {
+      ...(options.onQr === undefined ? {} : { onQr: options.onQr }),
+      ...(options.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: options.connectTimeoutMs }),
+    }
+  }
+  return undefined
 }
 
 /**
@@ -99,8 +77,13 @@ function descriptorOf(entry: ConfiguredPlatform, options: AdapterBuildOptions): 
  * configuration the descriptor refuses throws, which fails only that platform.
  */
 function buildAdapter(entry: ConfiguredPlatform, options: AdapterBuildOptions): BasePlatformAdapter {
+  const deps = depsFor(entry, options)
   const { adapters, rejected } = createChannels([
-    { descriptor: descriptorOf(entry, options), config: configFor(entry, options), envPrefix: 'THEOCLAW_' },
+    { descriptor: descriptorFor(entry.platform, entry.settings),
+      config: configFor(entry, options),
+      envPrefix: 'THEOCLAW_',
+      ...(deps === undefined ? {} : { deps }),
+    },
   ])
   const [adapter] = adapters
   const [rejection] = rejected

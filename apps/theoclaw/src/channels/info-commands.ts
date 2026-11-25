@@ -18,7 +18,7 @@ export const CHAT_COMMANDS = [
 
 /** The command a message names (a Telegram `/model@bot` accepted) and its argument; `undefined` for any other text. */
 export function commandOf(text: string, commands: readonly CommandDefinition[]): { readonly name: string; readonly arg: string } | undefined {
-  const routed = routeCommand(text.trim().replace(/^(\/\w+)@\S+/, '$1'), commands)
+  const routed = routeCommand(text.trim(), commands, { stripBotSuffix: true })
   return routed.kind === 'command' ? { name: routed.command.name, arg: routed.arg } : undefined
 }
 

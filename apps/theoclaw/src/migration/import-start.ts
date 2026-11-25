@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 
+import { ForeignImportError, type StoredForeignImport, readForeignImport } from '@theokit/agents/foreign-setup'
+
 import type { AgentImport } from '../agent/create-agent.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { secretsOf } from '../tools/external-tools.js'
 import type { ProtectedPath } from '../tools/tool-settings.js'
-import { type ImportedSetup, readImport } from './import-store.js'
 
 /**
  * What the process entry does with an import at start (FR-010, FR-011): read it once the instance
@@ -21,19 +22,31 @@ export function requireImportedMcp(env: NodeJS.ProcessEnv): boolean {
   throw new TheoClawConfigError('THEOCLAW_IMPORTED_MCP must be on or unset', { variable: 'THEOCLAW_IMPORTED_MCP' })
 }
 
+/** A stored-import failure as the app reports it: a lock or an unreadable directory names `THEOCLAW_STATE_DIR`. */
+export function asConfigError(error: unknown): unknown {
+  if (!(error instanceof ForeignImportError)) return error
+  return error.reason === 'refused'
+    ? new TheoClawConfigError(error.message)
+    : new TheoClawConfigError(`THEOCLAW_STATE_DIR: ${error.message}`, { variable: 'THEOCLAW_STATE_DIR' })
+}
+
 /**
  * The import under `THEOCLAW_STATE_DIR`, or `undefined` with the variable unset or no import. Each
  * `loadMcpJson` warning is written to `stderr` as a note (EC-10); those messages name a server and a
  * variable, never a value.
  */
-export function readImportAtStart(env: NodeJS.ProcessEnv, stderr: (line: string) => void): ImportedSetup | undefined {
+export function readImportAtStart(env: NodeJS.ProcessEnv, stderr: (line: string) => void): StoredForeignImport | undefined {
   const stateDir = (env.THEOCLAW_STATE_DIR ?? '').trim()
   if (stateDir === '') return undefined
-  return readImport(stateDir, { onWarn: (warning) => stderr(`theoclaw: import note: ${warning}`), env })
+  try {
+    return readForeignImport(stateDir, { onWarn: (warning) => stderr(`theoclaw: import note: ${warning}`), env })
+  } catch (error) {
+    throw asConfigError(error)
+  }
 }
 
 /** The start's line naming the import, written after the instance line. */
-export function importedSetupLine(imported: ImportedSetup, mcp: boolean): string {
+export function importedSetupLine(imported: StoredForeignImport, mcp: boolean): string {
   const { instructions, memories, skills, mcpServers } = imported.counts
   return (
     `theoclaw: imported ${imported.kind} setup: ${instructions} instruction files, ${memories} memory files, ` +
@@ -41,7 +54,7 @@ export function importedSetupLine(imported: ImportedSetup, mcp: boolean): string
   )
 }
 
-type StdioServer = Extract<ImportedSetup['mcpServers'][string], { readonly command: string }>
+type StdioServer = Extract<StoredForeignImport['mcpServers'][string], { readonly command: string }>
 
 /** The path an argument names: itself, or the value of a `--flag=value`; never a flag, a URL or an empty value. */
 function pathOf(arg: string): string | undefined {

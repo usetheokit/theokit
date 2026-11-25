@@ -82,9 +82,26 @@ describe('skillsInventory', () => {
     expect(row.status).toBe('warn')
     expect(row.detail).toContain('on disk, not declared: stray')
     expect(row.detail).toContain('declared, not on disk: gone')
+    expect(row.undeclared).toEqual(['stray'])
+    expect(row.missing).toEqual(['gone'])
     expect(checks.skillsInventory({ declared: ['alpha', 'stray'], roots: [root] }).status).toBe(
       'ok',
     )
+  })
+
+  it('returns the names themselves, even when they hold punctuation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-'))
+    for (const n of ['a, b', 'x; y: z']) {
+      mkdirSync(join(root, n))
+      writeFileSync(join(root, n, 'SKILL.md'), '# s')
+    }
+    const row = checks.skillsInventory({ declared: ['gone; one', 'q, r'], roots: [root] })
+    expect(row.undeclared).toEqual(['a, b', 'x; y: z'])
+    expect(row.missing).toEqual(['gone; one', 'q, r'])
+    const clean = checks.skillsInventory({ declared: ['a, b', 'x; y: z'], roots: [root] })
+    expect(clean.status).toBe('ok')
+    expect(clean.undeclared).toEqual([])
+    expect(clean.missing).toEqual([])
   })
 })
 

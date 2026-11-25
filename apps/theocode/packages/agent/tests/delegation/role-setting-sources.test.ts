@@ -19,10 +19,20 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { buildRoleAgent } from '../../src/delegation/roles.js'
 
-vi.mock('@theokit/agents', async (orig) => ({
+vi.mock('@theokit/agents/config', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  discoverSubagents: vi.fn(async () => ({
-    explorer: { name: 'explorer', prompt: 'explore', description: 'x', sandbox: true },
+  discoverSubagentsAcrossRoots: vi.fn(async () => ({
+    definitions: {
+      explorer: {
+        name: 'explorer',
+        prompt: 'explore',
+        description: 'x',
+        sandbox: true,
+        origin: 'project',
+      },
+    },
+    shadowed: {},
+    withheld: [],
   })),
 }))
 

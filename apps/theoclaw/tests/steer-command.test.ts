@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest'
 
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
-import { createReplyHandler, STEER_IDLE_REPLY, STEER_USAGE_REPLY, STEERED_REPLY } from '../src/channels/reply-handler.js'
+import {
+  createReplyHandler,
+  NEW_CONVERSATION_REPLY,
+  STEER_IDLE_REPLY,
+  STEER_USAGE_REPLY,
+  STEERED_REPLY,
+} from '../src/channels/reply-handler.js'
 import type { SessionLease } from '../src/sessions/session-agents.js'
 import { FakeAgent, assistant, finished, messageEvent } from './fakes.js'
 
@@ -14,18 +20,27 @@ function setup() {
   const sends: { text: string; queueMode?: string }[] = []
   const agent = {
     send: async (text: string, options?: { queueMode?: string }) => {
-      sends.push({ text, ...(options?.queueMode === undefined ? {} : { queueMode: options.queueMode }) })
+      sends.push({
+        text,
+        ...(options?.queueMode === undefined ? {} : { queueMode: options.queueMode }),
+      })
       return fake.send(text)
     },
   } as never
   const handler = createReplyHandler({
     reset: async () => undefined,
-    withAgent: async <R>(_e: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> => work({ agent, release: () => undefined }),
+    withAgent: async <R>(
+      _e: MessageEvent,
+      work: (lease: SessionLease) => R | Promise<R>,
+    ): Promise<R> => work({ agent, release: () => undefined }),
   })
   const replies: string[] = []
   const call = (text: string) => {
     const event = messageEvent('telegram', text)
-    const ctx: GatewayContext = { event, reply: async (reply) => (replies.push(reply), { ok: true, messageId: 'm' }) }
+    const ctx: GatewayContext = {
+      event,
+      reply: async (reply) => (replies.push(reply), { ok: true, messageId: 'm' }),
+    }
     return handler(event, ctx)
   }
   return { call, sends, replies, release: () => release() }
@@ -43,6 +58,28 @@ describe('/steer', () => {
     await turn
   })
 
+  it('matches the name without regard to case or a bot suffix, keeping the text', async () => {
+    const t = setup()
+    await t.call('/STEER@theobot Only The First')
+    await t.call('/Steer')
+    expect(t.sends).toEqual([])
+    expect(t.replies).toEqual([STEER_IDLE_REPLY, STEER_USAGE_REPLY])
+  })
+
+  it('reads every channel command without regard to case, as the issue asks', async () => {
+    const t = setup()
+    await t.call('/NEW')
+    await t.call('/Reset@theobot')
+    expect(t.replies).toEqual([NEW_CONVERSATION_REPLY, NEW_CONVERSATION_REPLY])
+  })
+
+  it('reads a newline after the name as the separator', async () => {
+    const t = setup()
+    await t.call('/steer\nonly the first')
+    expect(t.sends).toEqual([])
+    expect(t.replies).toEqual([STEER_IDLE_REPLY])
+  })
+
   it('says so when nothing runs, and without text', async () => {
     const t = setup()
     await t.call('/steer stop')
@@ -54,14 +91,23 @@ describe('/steer', () => {
   it('still steers while the reply is being sent, and is idle again once the turn failed', async () => {
     const fail = { status: 'error', error: { code: 'MODEL_DOWN' } }
     for (const result of [undefined, fail]) {
-      const fake = new FakeAgent({ frames: [assistant('an answer'), finished()], ...(result === undefined ? {} : { result }) })
+      const fake = new FakeAgent({
+        frames: [assistant('an answer'), finished()],
+        ...(result === undefined ? {} : { result }),
+      })
       const sends: (string | undefined)[] = []
       const agent = {
-        send: async (text: string, options?: { queueMode?: string }) => (sends.push(options?.queueMode), fake.send(text)),
+        send: async (text: string, options?: { queueMode?: string }) => (
+          sends.push(options?.queueMode),
+          fake.send(text)
+        ),
       } as never
       const handler = createReplyHandler({
         reset: async () => undefined,
-        withAgent: async <R>(_e: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> => work({ agent, release: () => undefined }),
+        withAgent: async <R>(
+          _e: MessageEvent,
+          work: (lease: SessionLease) => R | Promise<R>,
+        ): Promise<R> => work({ agent, release: () => undefined }),
       })
       const replies: string[] = []
       let during: Promise<void> | undefined

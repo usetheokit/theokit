@@ -12,3 +12,17 @@ export {
   type CodingAgentPresetOptions,
   type CodingAgentTools,
 } from './capability/coding-agent-preset.js'
+export {
+  assistantAgentPreset,
+  assistantAgentTools,
+  assistantWorkerTools,
+  type AssistantAgentPresetOptions,
+  type AssistantAgentProfile,
+  type AssistantAgentTools,
+} from './capability/assistant-agent-preset.js'
+export {
+  changedPathsOf,
+  type ChangedPathsOptions,
+  type ChangedPathsTool,
+} from './capability/changed-paths.js'
+export { turnDiff, type GitRun, type TurnDiffOptions } from './capability/turn-diff.js'

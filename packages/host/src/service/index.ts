@@ -14,6 +14,13 @@ export { runCommand, type Runner, type RunResult } from './runner.js'
 export type { ServiceBackend, ServiceBackendOptions, ServiceSpec, ServiceState } from './spec.js'
 export type { LogsOptions } from './logs.js'
 export { teeOutput, type TeeOutputOptions } from './tee-output.js'
+export {
+  daemonCommands,
+  lingerEnabled,
+  type DaemonCommands,
+  type DaemonCommandsIo,
+  type DaemonTarget,
+} from './daemon-commands.js'
 export { launchdPlist } from './launchd.js'
 export { scheduledTaskXml } from './schtasks.js'
 export { systemdUnit } from './systemd.js'

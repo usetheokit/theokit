@@ -19,7 +19,7 @@ import {
 } from "../src/control-plane/agent-factory.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
 import { theoClawAgentOptions, type AgentImport } from "../src/agent/create-agent.js";
-import type { ImportedSetup } from "../src/migration/import-store.js";
+import type { StoredForeignImport } from "@theokit/agents/foreign-setup";
 import { hookFingerprint } from "@theokit/agents/hooks";
 import { hookIdentity } from "../src/agent/hook-approval.js";
 import { agentToolOptions } from "../src/tools/tool-registry.js";
@@ -305,7 +305,7 @@ describe("sessionAgentOptions", () => {
 /** The SDK explains the `<untrusted-tool-output>` frame; TheoClaw adds no notice of its own. */
 describe("the system prompt TheoClaw composes", () => {
   const importOf = (instructions: string, memory: string): AgentImport => ({
-    setup: { kind: "hermes", instructions, memory, mcpServers: {}, skills: [], counts: { instructions: 0, memories: 0, skills: 0, mcpServers: 0 } } satisfies ImportedSetup,
+    setup: { kind: "hermes", instructions, memory, mcpServers: {}, skills: [], counts: { instructions: 0, memories: 0, skills: 0, mcpServers: 0 } } satisfies StoredForeignImport,
     mcp: false,
   });
 

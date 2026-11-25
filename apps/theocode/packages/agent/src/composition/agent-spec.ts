@@ -32,12 +32,10 @@
  * contributed which field, inspectable as data) and `CapabilityConflictError` instead of last-wins
  * when two members declare the same scalar differently.
  */
-import { approvalModeFor } from '../config/sandbox-policy.js'
 import type { ApprovalPolicy } from '../config/config.js'
-import { createPermissionsPlugin } from '@theokit/agents'
+import { createPermissionsPlugin, onAskForPolicy } from '@theokit/agents'
 import { permissionRulesFromLayers } from '@theokit/agents/config'
 import type { PermissionRule } from '@theokit/sdk'
-import type { PermissionsPluginOptions } from '@theokit/agents'
 import { settingsReport } from '../config/settings-load.js'
 import type { Plugin } from '@theokit/agents'
 import {
@@ -147,43 +145,14 @@ export function reviewerShape(ctx: SpecContext): AgentShape {
  * in `@theokit/sdk`, which is published from another repository, and is tracked on #736 with the
  * measurement. Nothing here pretends otherwise.
  */
-/**
- * What an `ask` verdict resolves to for THIS run, derived from the approval policy the operator set.
- *
- * #826 — `ask` is the verdict `PermissionEngine` returns for a tool no rule matches, and it is the
- * one verdict the rules do not answer. Leaving it to the SDK's default made it a hard block, so the
- * first `permissions` block an operator wrote killed every tool they had not enumerated.
- *
- * Derived rather than chosen, and the derivation is the existing one: `approvalModeFor` already maps
- * the policy to a mode, and `full-auto` is precisely "the operator said do not ask me". A second
- * mapping here would be a second source of truth for one decision.
- *
- * `suggest` hands a tool that HAS an approval card to that card, and refuses the rest with what
- * would change it. #945 — measured in the TUI on 2026-10-02: the refusal used to cover every tool,
- * so a `permissions.allow` list without `ApplyPatch` meant no file could be written and no card was
- * shown, while the same request with no `permissions` block got the card. The card is keyed by the
- * build-time `.approvals({...})` map (`humanGated`), and letting `ask` through for those tools is
- * what reaches it: the TUI shows it, and a headless run answers it with its approval posture. A tool
- * outside that map has no asker, and for it the refusal below is still the honest answer.
- */
-export function askGateFor(
-  policy: ApprovalPolicy,
-  humanGated: ReadonlySet<string>,
-): PermissionsPluginOptions['onAsk'] {
-  if (approvalModeFor(policy) === 'full-auto') return (_toolName, _input) => ({ behavior: 'allow' })
-  return (toolName, _input) =>
-    humanGated.has(toolName) ? { behavior: 'allow' } : refusal(toolName, policy)
-}
-
-function refusal(toolName: string, policy: ApprovalPolicy) {
-  return {
-    behavior: 'deny' as const,
-    message:
-      `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
-      `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
-      `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
-      `unmatched tools run.`,
-  }
+/** The text a tool no `permissions` rule matched is refused with: names `permissions.allow` and `approval_policy="never"`. */
+export function refusalMessage(toolName: string, policy: ApprovalPolicy): string {
+  return (
+    `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
+    `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
+    `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
+    `unmatched tools run.`
+  )
 }
 
 /**
@@ -223,13 +192,31 @@ export function orderedPermissionRules(
   )
 }
 
-
+/**
+ * The `permissions` rules as a plugin, with the `ask` verdict answered by `onAskForPolicy`.
+ *
+ * #826 — `ask` is the verdict `PermissionEngine` returns for a tool no rule matches, and it is the
+ * one verdict the rules do not answer. Leaving it to the SDK's default made it a hard block, so the
+ * first `permissions` block an operator wrote killed every tool they had not enumerated.
+ *
+ * The decision comes from the approval policy: `never` (`full-auto`) is "the operator said do not
+ * ask me", so it allows. Otherwise a tool that HAS an approval card (`humanGated`) is handed to that
+ * card, and any other tool is refused with `refusalMessage`. #945 — measured in the TUI on
+ * 2026-10-02: the refusal used to cover every tool, so a `permissions.allow` list without
+ * `ApplyPatch` meant no file could be written and no card was shown, while the same request with no
+ * `permissions` block got the card. The card is keyed by the build-time `.approvals({...})` map, and
+ * letting `ask` through for those tools is what reaches it: the TUI shows it, and a headless run
+ * answers it with its approval posture. A tool outside that map has no asker, and for it the
+ * refusal is still the honest answer.
+ */
 export function permissionsPluginsFor(
   cwd: string,
   operatorHome: string,
   approvalPolicy: ApprovalPolicy,
   humanGated: ReadonlySet<string>,
 ): readonly Plugin[] {
-  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), { onAsk: askGateFor(approvalPolicy, humanGated) })
+  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), {
+    onAsk: onAskForPolicy(approvalPolicy, humanGated, { refusal: refusalMessage }),
+  })
   return plugin === undefined ? [] : [plugin]
 }

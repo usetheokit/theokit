@@ -7,11 +7,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   SessionInUseError,
+  SessionPointerUnreadableError,
   deleteSession,
   listSessions,
   protectedTranscriptPaths,
 } from '../../src/session/session-lifecycle.js'
-import { loadOrCreateSessionId, persistSessionId } from '../../src/session/session-pointer.js'
+import {
+  loadOrCreateSessionId,
+  persistSessionId,
+  sessionPointerPath,
+} from '../../src/session/session-pointer.js'
 import {
   projectDirFor,
   projectsRoot,
@@ -641,5 +646,39 @@ describe('protectedTranscriptPaths — legacy name of the pointer (#2746)', () =
     const got = await protectedTranscriptPaths(CWD, root)
     expect(got.has(legacyTranscriptPath(root, CWD, 'ghost'))).toBe(true)
     expect(got.has(transcriptPath(root, CWD, 'ghost'))).toBe(true)
+  })
+})
+
+describe('an unreadable last-session pointer fails closed (#2896)', () => {
+  /** A directory where the pointer file belongs: reading it fails with EISDIR, not ENOENT. */
+  function breakPointer(): void {
+    mkdirSync(sessionPointerPath(CWD, root), { recursive: true })
+  }
+
+  it('protectedTranscriptPaths throws, naming the file and keeping the cause', async () => {
+    writeTranscriptFile('older', 100)
+    writeTranscriptFile('newer', 0)
+    breakPointer()
+    const err = await protectedTranscriptPaths(CWD, root).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SessionPointerUnreadableError)
+    expect((err as SessionPointerUnreadableError).path).toBe(sessionPointerPath(CWD, root))
+    expect((err as Error).cause).toBeDefined()
+  })
+
+  it('deleteSession rejects and leaves the older transcript', async () => {
+    const older = writeTranscriptFile('older', 100)
+    writeTranscriptFile('newer', 0)
+    breakPointer()
+    await expect(deleteSession('older', { cwd: CWD, root })).rejects.toBeInstanceOf(
+      SessionPointerUnreadableError,
+    )
+    expect(existsSync(older)).toBe(true)
+  })
+
+  it('a missing pointer is still "no pointer"', async () => {
+    writeTranscriptFile('older', 100)
+    writeTranscriptFile('newer', 0)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect([...got.values()]).toEqual(['most recent session'])
   })
 })

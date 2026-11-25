@@ -6,7 +6,7 @@ import {
   translateTimelineEvent,
 } from '@theokit/agents/bridge'
 
-import { toSdkMessage, toSdkTimelineEvent, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
+import { type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
 import { maskSecrets } from '@theokit/gateway'
 import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
@@ -38,12 +38,12 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
   }
   if (run.events === undefined) {
     // A run with no timeline (a port implementer older than B-376) still answers, without deltas.
-    for await (const message of run.stream()) forward(typedEvents(translateSdkEvent(toSdkMessage(message), options.runId)))
+    for await (const message of run.stream()) forward(typedEvents(translateSdkEvent(message, options.runId)))
     return streamedError
   }
   const seen = createToolSeen()
   for await (const event of run.events()) {
-    forward(typedEvents(translateTimelineEvent(toSdkTimelineEvent(event), options.runId, seen)))
+    forward(typedEvents(translateTimelineEvent(event, options.runId, seen)))
   }
   forward(typedEvents(flushPendingToolResults(seen)))
   return streamedError

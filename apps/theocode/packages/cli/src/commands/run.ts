@@ -16,7 +16,6 @@ import {
 } from '@theokit/agents/commands'
 import { sessionHasWriter, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
 import { streamTurnForkingIfBusy } from '@theokit/agents/session'
-import type { WireChunk } from '@theokit/presenter/wire'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -82,7 +81,7 @@ export function createDiffGit(
  * the sole production consumer wired two: `startTurn` had a test and no caller. That is not inert
  * here — the fork-if-busy retry opens a SECOND stream on the same hooks when the session is contended,
  * so a `rate_limit` spent on the first pass was still being counted into the second turn's error
- * text. "After 3 attempts" on a turn that made one is the false attribution `RetryRecord.startTurn`
+ * text. "After 3 attempts" on a turn that made one is the false attribution `TurnRetries.startTurn`
  * exists to prevent.
  *
  * Wrapping the opener rather than calling `startTurn()` once before the consume: the fork is opened
@@ -260,45 +259,33 @@ interface DrivenTurn {
  * turn; `format` hands each canonical event to the processor, which is what writes to stdout and
  * stderr, so this product's output formats are untouched.
  */
-async function driveTurn(
+export async function driveTurn(
   sessionId: string,
   openStream: ReturnType<typeof openTurnStream>,
   processor: ExecProcessor,
 ): Promise<DrivenTurn> {
-  let error: string | undefined
-  let processorFailed = false
   const forked = streamTurnForkingIfBusy(sessionId, openStream as never, {
     onFork: (from, to) =>
       process.stderr.write(
         `[exec] session ${from} is being written by another process — forking to ${to}\n`,
       ),
   })
-  // `runHeadlessTurn` turns a thrown stream into an `error` outcome without its message; this
-  // wrapper only keeps the message for the `[exec]` line and the JSONL `turn.failed`.
-  async function* keepStreamError(chunks: AsyncIterable<WireChunk>): AsyncGenerator<WireChunk> {
-    try {
-      yield* chunks
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err)
-      throw err
-    }
-  }
-  const turn = await runHeadlessTurn(keepStreamError(forked.chunks), {
+  // An `error` event is already printed by the processor; passing its message to `finish` too
+  // would print it twice and change the JSONL `turn.failed` text.
+  let errorEventSeen = false
+  const turn = await runHeadlessTurn(forked.chunks, {
     io: { out: () => {}, err: () => {} },
+    // A processor that throws is a failed run.
+    onFormatError: 'fail',
     format: (event) => {
-      try {
-        processor.event(event)
-      } catch (err) {
-        // The framework swallows a `format` that throws; a processor that failed is a failed run.
-        processorFailed = true
-        error ??= err instanceof Error ? err.message : String(err)
-      }
+      if (event.type === 'error') errorEventSeen = true
+      processor.event(event)
       return undefined
     },
   })
   return {
-    status: turn.outcome === 'error' || processorFailed ? 'error' : 'finished',
-    error,
+    status: turn.outcome === 'error' ? 'error' : 'finished',
+    error: errorEventSeen ? undefined : turn.errorMessage,
     finish: {
       finalText: turn.finalText,
       ...(turn.stopReason === undefined ? {} : { stopReason: turn.stopReason }),
