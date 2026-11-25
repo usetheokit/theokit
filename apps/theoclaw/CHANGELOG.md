@@ -10,7 +10,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 `theokit-sdk` or the framework packages rather than here. Those carry the repository name.
 
 ## [Unreleased]
-- The live OC-88 prompt tells the model to fetch the page with its web fetch tool, so a turn that answers without fetching no longer fails the fetch count, and the live OC-60 prompt asks for a snapshot after navigating (#3086).
+- The live OC-88 prompt tells the model to fetch the page with its web fetch tool: that fetch is the precondition of the check (a turn that never reads the page measures nothing, and the fetch count of 5 asserts it). The live OC-60 failure now prints every tool call's name, status and full output instead of a 2000-character prefix, so the next failure shows what the browser returned (#3086).
 - The state-directory veto test accepts the SDK's protected-path floor refusal as a refusal, beside the plugin veto and the tool's own error (#3083).
 - The live computer test accepts the screen code when the model spaces its characters, and the live shell test checks the digest in the shell tool's output instead of the model's transcription of it (#3068).
 - The live LAN withdrawal test expects the shared adapter's `DiscoveryError` (code and route) from `unpublishAll`, not `TheoClawDiscoveryError`; an offline test covers the same rejection (#3061).
