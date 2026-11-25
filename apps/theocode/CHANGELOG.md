@@ -18,6 +18,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- The delegation test `parent-withheld-reaches-roles` passes a temporary directory instead of the real working directory, so the ambient-cwd guard (B-161) passes again.
+
 - `/image` checks the 5 MiB cap from `fstat` on one open descriptor before reading, so an oversized file is no longer loaded whole, and only a missing file reports `image not found`; a directory or a permission error reports `image unreadable` (#2955).
 
 - `composition.test.ts` is split in two: the reviewer and delegated-role cases moved to `composition-review-role.test.ts`, with every test name kept, which brings the file back under `max-lines` (#3054).
