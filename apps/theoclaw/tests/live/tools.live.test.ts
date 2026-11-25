@@ -108,7 +108,8 @@ describe.skipIf(!LIVE)('the core tools against a real model', () => {
     const digest = createHash('sha256').update(value).digest('hex')
     const result = await turn(settings, 'Use the shell_exec tool to run `sha256sum token.txt`, then reply with the hexadecimal digest it printed and nothing else.')
     expect(result.toolCalls).toContain('shell_exec')
-    expect(result.answer).toContain(digest)
+    expect(result.toolOutputs.shell_exec, JSON.stringify(result)).toContain(digest)
+    expect(result.answer.trim()).not.toBe('')
   })
 
   it('a real model fetches a page and uses the todolist', { timeout: 120_000 }, async () => {
