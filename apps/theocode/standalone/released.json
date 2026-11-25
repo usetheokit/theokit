@@ -2,6 +2,6 @@
   "@theokit/agents": "17.0.0",
   "@theokit/agents-pty": "0.2.1",
   "@theokit/presenter": "0.15.0",
-  "@theokit/sdk": "13.0.0",
+  "@theokit/sdk": "15.2.0",
   "create-theokit": "3.3.1"
 }
