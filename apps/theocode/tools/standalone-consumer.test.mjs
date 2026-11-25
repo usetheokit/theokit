@@ -172,9 +172,7 @@ describe('the standalone lockfile is one pnpm would accept frozen', () => {
   })
 
   it('names in each snapshot the same version of a package its key resolves against', () => {
-    const stale = [
-      ...lock.matchAll(/^ {2}'[^']+\(@theokit\/sdk@(\S+?)\(ws[^\n]*\n(?: {4}.*\n)*/gm),
-    ]
+    const stale = [...lock.matchAll(/^ {2}'[^']+\(@theokit\/sdk@(\S+?)\(ws[^\n]*\n(?: {4}.*\n)*/gm)]
       .filter(([block, keyed]) => {
         const named = /'@theokit\/sdk': (\S+?)\(/.exec(block)?.[1]
         return named !== undefined && named !== keyed
@@ -192,4 +190,34 @@ describe('the standalone lockfile is one pnpm would accept frozen', () => {
       }
     }
   })
+
+  it('fails the frozen install, naming the lockfile, when the agent pins another @theokit/sdk', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'standalone-frozen-'))
+    try {
+      cpSync(join(app, 'standalone'), dir, {
+        recursive: true,
+        filter: (src) => !src.includes('node_modules'),
+      })
+      const pkg = join(dir, 'packages/agent/package.json')
+      const m = JSON.parse(readFileSync(pkg, 'utf8'))
+      m.dependencies['@theokit/sdk'] = '1.0.0'
+      writeFileSync(pkg, JSON.stringify(m, null, 2))
+      let out = ''
+      let status = 0
+      try {
+        execFileSync('pnpm', ['install', '--frozen-lockfile', '--lockfile-only'], {
+          cwd: dir,
+          encoding: 'utf8',
+          stdio: 'pipe',
+        })
+      } catch (e) {
+        status = e.status
+        out = `${e.stdout}${e.stderr}`
+      }
+      expect(status).not.toBe(0)
+      expect(out).toContain('pnpm-lock.yaml')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
