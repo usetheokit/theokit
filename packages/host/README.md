@@ -72,7 +72,8 @@ const { path } = await config.onboard(
 ```ts
 config.watch(path, process.env, {
   onEvent: (event) => {
-    if (event.kind === 'applied' && event.restartRequired.length > 0) void restartSelf({ startEnv: originalEnv })
+    if (event.kind === 'applied' && event.restartRequired.length > 0)
+      void restartSelf({ startEnv: originalEnv })
   },
 })
 ```
@@ -82,7 +83,12 @@ config.watch(path, process.env, {
 Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`), macOS (launchd LaunchAgent) and Windows (Task Scheduler) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
 
 ```ts
-import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
+import {
+  serviceBackend,
+  isSupervised,
+  restartSelf,
+  waitForPredecessor,
+} from '@theokit/host/service'
 
 const backend = serviceBackend() // linux -> systemd
 await backend.install({
@@ -160,7 +166,10 @@ Keep backups in named places, optionally encrypted at rest with AES-256-GCM.
 ```ts
 import { createStorageRegistry } from '@theokit/host/backup'
 
-const storage = createStorageRegistry({ file: '/srv/app/config/storage.json', defaultRoot: '/srv/app/backups' })
+const storage = createStorageRegistry({
+  file: '/srv/app/config/storage.json',
+  defaultRoot: '/srv/app/backups',
+})
 await storage.init('offsite', { root: '/mnt/shared/backups', encrypted: true }) // names: [A-Za-z0-9][A-Za-z0-9_-]{0,63}
 const archive = await storage.store('offsite', '/srv/backups/2026-11-19') // verifies the manifest first
 await storage.fetchLatest('offsite', '/srv/restore-from') // into must be absent or empty; then `restore`
@@ -191,8 +200,16 @@ const host = createAppHost({
   onError: (step, error) => console.error(step, error),
   stopTimeoutMs: 10_000,
 })
-const store = host.service('store', () => openStore(), (s) => s.close())
-const server = host.service('server', () => listen(store()), (s) => s.close())
+const store = host.service(
+  'store',
+  () => openStore(),
+  (s) => s.close(),
+)
+const server = host.service(
+  'server',
+  () => listen(store()),
+  (s) => s.close(),
+)
 await host.start() // a failure stops the started services in reverse, then rejects with AppHostStartError
 // later: const result = await host.close() // { ok: true } or { ok: false, failed, timedOut }
 ```
@@ -206,7 +223,7 @@ Use `createAppHost` for a supervised service (systemd, a container), where a cle
 
 ## `createChannelAssistant` (`@theokit/host/channel-assistant`)
 
-Turns channels, an agent factory and an access policy into a running chat assistant. Needs the optional peers `@theokit/gateway` and `@theokit/gateway-agent`.
+Turns channels, an agent factory and an access policy into a running chat assistant. Needs the optional peer `@theokit/gateway`. The host does not import `@theokit/gateway-agent`: with owned sessions, pass `replyHandler` (or `handler`) yourself.
 
 ```ts
 const assistant = createChannelAssistant({
@@ -216,7 +233,8 @@ const assistant = createChannelAssistant({
   preHooks: [emailHook], // before the access policy
   hooks: [appHook], // after the access policy, before `help`
   help: helpHook,
-  reply: { decorateReply, onTurnEnd },
+  replyHandler: ({ agentFor, secrets }) =>
+    createAgentHandler({ agentFor, secrets, decorateReply, onTurnEnd }), // from `@theokit/gateway-agent`
   maskStreams: [process.stdout, process.stderr], // masked with `secrets`; `assistant.flushMask()` on exit
   transcripts: { start: (heldIds) => startSweeper(heldIds) },
   services: [{ name: 'control-plane', start, stop }], // after the channels, stopped first
@@ -236,7 +254,10 @@ Hook order is `preHooks`, access policy, `hooks`, `help`. An assistant with no a
 import { applyOutboundProxy, validateProxy } from '@theokit/host'
 
 const { installed } = applyOutboundProxy(process.env, { variable: 'APP_PROXY' })
-const check = await validateProxy(process.env.APP_PROXY!, { target: 'api.openai.com:443', timeoutMs: 5000 })
+const check = await validateProxy(process.env.APP_PROXY!, {
+  target: 'api.openai.com:443',
+  timeoutMs: 5000,
+})
 if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' | 'timeout' | 'connection_error' | 'invalid_proxy_url'
 ```
 
@@ -254,7 +275,14 @@ Announces a running service on the local network (DNS-SD) through a publisher yo
 ```ts
 import { announceService } from '@theokit/host/discovery'
 
-const announcement = announceService({ type: 'myagent', name: 'My agent', port: 8080, txt: { path: '/api' }, host, publisher })
+const announcement = announceService({
+  type: 'myagent',
+  name: 'My agent',
+  port: 8080,
+  txt: { path: '/api' },
+  host,
+  publisher,
+})
 // announcement.announced is false (reason 'loopback') when host is loopback
 await announcement.stop()
 ```

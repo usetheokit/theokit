@@ -80,8 +80,7 @@
   "peerDependencies": {
     "@theokit/sdk": ">=12.0.0 <14",
     "bonjour-service": "1.4.4",
-    "@theokit/gateway": ">=0.33.0 <1",
-    "@theokit/gateway-agent": ">=0.5.0 <1"
+    "@theokit/gateway": ">=0.33.0 <1"
   },
   "peerDependenciesMeta": {
     "bonjour-service": {
@@ -89,14 +88,10 @@
     },
     "@theokit/gateway": {
       "optional": true
-    },
-    "@theokit/gateway-agent": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@theokit/gateway": "0.33.0",
-    "@theokit/gateway-agent": "0.5.0",
     "@theokit/sdk": ">=12.0.0 <14",
     "bonjour-service": "1.4.4",
     "tsup": "^8.5.1",
