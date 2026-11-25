@@ -23,6 +23,8 @@ import {
 } from '@theokit/sdk/auth'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
+import { isSubscriptionRoute } from './model-route.js'
+
 /**
  * M79 — "given an env, a home and a model, WHICH credential do I use, and WHERE did it come from?"
  *
@@ -357,8 +359,29 @@ function pinnedProvider(
   return descriptor
 }
 
+/**
+ * The ChatGPT subscription route (`openai-chatgpt/…`) runs on the stored OpenAI OAuth login and on
+ * nothing else: an API key in the environment, or a provider pin, must not win over it.
+ *
+ * @throws CredentialNotFoundError naming the missing login; it lists no key value.
+ */
+function subscriptionResolution(
+  input: ResolveCredentialInput,
+  providers: readonly ProviderDescriptor[],
+): CredentialResolution {
+  const stored = storedOAuthResolution(input, providers)
+  if (stored?.kind === 'oauth' && stored.provider === 'openai') return stored
+  throw new CredentialNotFoundError([
+    `a stored OpenAI OAuth login (the "${input.model ?? ''}" route needs one; run \`login\`)`,
+  ])
+}
+
 export function resolveCredential(input: ResolveCredentialInput): CredentialResolution | undefined {
   const byPriority = [...input.providers].sort((a, b) => a.priority - b.priority)
+
+  if (input.model !== undefined && isSubscriptionRoute(input.model)) {
+    return subscriptionResolution(input, byPriority)
+  }
 
   // The pin is evaluated FIRST and is absolute: if the named provider has no credential, this
   // throws rather than falling back. Falling back would send the request — and the bill, and the

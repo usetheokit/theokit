@@ -6,10 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { expansionDeps, handleCustomCommand } from '../../src/commands/config-commands.js'
-import {
-  resetWorkingDirectoryForTest,
-  setWorkingDirectory,
-} from '../../src/working-directory.js'
+import { resetWorkingDirectoryForTest, setWorkingDirectory } from '../../src/working-directory.js'
 
 let base: string
 let project: string
@@ -32,12 +29,17 @@ afterEach(() => {
 async function run(template: string, arg = '') {
   const send = vi.fn()
   const setToast = vi.fn()
-  handleCustomCommand('t', arg, `/t ${arg}`, { name: 't', template, hints: [] }, {
-    send,
-    setLastSent: vi.fn(),
-    setPendingModel: vi.fn(),
-    setToast,
-  })
+  handleCustomCommand(
+    't',
+    arg,
+    `/t ${arg}`,
+    { name: 't', template, hints: [] },
+    {
+      send,
+      setLastSent: vi.fn(),
+      setToast,
+    },
+  )
   await vi.waitFor(() => {
     expect(send.mock.calls.length + setToast.mock.calls.length).toBeGreaterThan(0)
   })
@@ -80,5 +82,28 @@ describe('custom command templates', () => {
     expect(readFile('../outside.txt')).toBeUndefined()
     expect(readFile(join(base, 'outside.txt'))).toBeUndefined()
     expect(readFile('ok.txt')).toBe('INSIDE')
+  })
+})
+
+describe('custom command model override', () => {
+  it('passes the command model with its message and not with a plain one', async () => {
+    const send = vi.fn()
+    handleCustomCommand(
+      't',
+      '',
+      '/t',
+      { name: 't', template: 'hello', hints: [], model: 'm1' },
+      {
+        send,
+        setLastSent: vi.fn(),
+        setToast: vi.fn(),
+      },
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalled()
+    })
+    expect(send.mock.calls[0]?.[1]).toBe('m1')
+    handleCustomCommand('x', '', '/x', undefined, { send, setLastSent: vi.fn(), setToast: vi.fn() })
+    expect(send.mock.calls[1]?.[1]).toBeUndefined()
   })
 })

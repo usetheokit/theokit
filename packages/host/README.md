@@ -72,7 +72,8 @@ const { path } = await config.onboard(
 ```ts
 config.watch(path, process.env, {
   onEvent: (event) => {
-    if (event.kind === 'applied' && event.restartRequired.length > 0) void restartSelf({ startEnv: originalEnv })
+    if (event.kind === 'applied' && event.restartRequired.length > 0)
+      void restartSelf({ startEnv: originalEnv })
   },
 })
 ```
@@ -82,7 +83,12 @@ config.watch(path, process.env, {
 Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`), macOS (launchd LaunchAgent) and Windows (Task Scheduler) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
 
 ```ts
-import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
+import {
+  serviceBackend,
+  isSupervised,
+  restartSelf,
+  waitForPredecessor,
+} from '@theokit/host/service'
 
 const backend = serviceBackend() // linux -> systemd
 await backend.install({
@@ -103,6 +109,8 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 ### Windows (Task Scheduler)
 
 `serviceBackend('win32')` registers a logon-triggered scheduled task named by `label` (least privilege, no time limit, restart after failure every minute) from a UTF-16 XML file kept in a fresh private temporary directory and removed afterwards. `scheduledTaskXml(spec, { user })` returns the definition.
+
+`daemonCommands(backend, { stdout, stderr, env, runner?, prefix? })` gives `install`, `uninstall`, `status`, `restart` and `logs` over a backend, for values the app already parsed (argv parsing stays in the app). `install(target)` takes `{ label, command, args, env?, workingDirectory?, description?, entryArgs? }`; on Windows the task carries no environment, so `entryArgs()` (such as `instanceConfig.entryArgs`) is appended to `args` and `env` is not passed (a non-empty `env` without `entryArgs` throws `ServiceDefinitionError`). On Linux `install` prints a `loginctl enable-linger` notice when `lingerEnabled(user, runner?)` answers `false`. `status` resolves 0 when running and 3 otherwise. Backend failures throw; the commands resolve the exit code.
 
 - **A task carries no environment.** `install` with a non-empty `spec.env` throws `ServiceDefinitionError`: pass the values as `args` instead. Every argument is quoted per the `CommandLineToArgvW` rules.
 - The task runs as `USERDOMAIN\USERNAME` from `options.env`; without `USERNAME`, `install` throws `ServiceDefinitionError`. `command` and `workingDirectory` must be Windows absolute paths.
@@ -158,7 +166,10 @@ Keep backups in named places, optionally encrypted at rest with AES-256-GCM.
 ```ts
 import { createStorageRegistry } from '@theokit/host/backup'
 
-const storage = createStorageRegistry({ file: '/srv/app/config/storage.json', defaultRoot: '/srv/app/backups' })
+const storage = createStorageRegistry({
+  file: '/srv/app/config/storage.json',
+  defaultRoot: '/srv/app/backups',
+})
 await storage.init('offsite', { root: '/mnt/shared/backups', encrypted: true }) // names: [A-Za-z0-9][A-Za-z0-9_-]{0,63}
 const archive = await storage.store('offsite', '/srv/backups/2026-11-19') // verifies the manifest first
 await storage.fetchLatest('offsite', '/srv/restore-from') // into must be absent or empty; then `restore`
@@ -189,8 +200,16 @@ const host = createAppHost({
   onError: (step, error) => console.error(step, error),
   stopTimeoutMs: 10_000,
 })
-const store = host.service('store', () => openStore(), (s) => s.close())
-const server = host.service('server', () => listen(store()), (s) => s.close())
+const store = host.service(
+  'store',
+  () => openStore(),
+  (s) => s.close(),
+)
+const server = host.service(
+  'server',
+  () => listen(store()),
+  (s) => s.close(),
+)
 await host.start() // a failure stops the started services in reverse, then rejects with AppHostStartError
 // later: const result = await host.close() // { ok: true } or { ok: false, failed, timedOut }
 ```
@@ -202,13 +221,43 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `createChannelAssistant` (`@theokit/host/channel-assistant`)
+
+Turns channels, an agent factory and an access policy into a running chat assistant. Needs the optional peer `@theokit/gateway`. The host does not import `@theokit/gateway-agent`: with owned sessions, pass `replyHandler` (or `handler`) yourself.
+
+```ts
+const assistant = createChannelAssistant({
+  channels: [{ platform: 'telegram', build: () => adapter, descriptor }],
+  sessions: { agent: ({ key, agentId, context }) => buildAgent(key) }, // feeds Agent.sessionPool; or `{ pool }` with your own `handler`
+  access: { owners, dm: 'pairing', pairing, isAuthenticated }, // or `accessHook`; exactly one is required
+  preHooks: [emailHook], // before the access policy
+  hooks: [appHook], // after the access policy, before `help`
+  help: helpHook,
+  replyHandler: ({ agentFor, secrets }) =>
+    createAgentHandler({ agentFor, secrets, decorateReply, onTurnEnd }), // createAgentHandler is from `@theokit/gateway-agent`
+  maskStreams: [process.stdout, process.stderr], // masked with `secrets`; `assistant.flushMask()` on exit
+  transcripts: { start: (heldIds) => startSweeper(heldIds) },
+  services: [{ name: 'control-plane', start, stop }], // after the channels, stopped first
+  events: { agent: () => toolLessAgent() }, // assistant.withEventAgent(work)
+  secrets: [token], // masked in every reply and written line
+})
+await assistant.start() // `background: true` returns before the platforms connect
+assistant.router // webhook routes
+await assistant.close() // channels stop, then session agents are disposed; once
+```
+
+Hook order is `preHooks`, access policy, `hooks`, `help`. An assistant with no access policy is refused; to serve everyone, say `access: { dm: 'open', owners: new Set(), isAuthenticated: () => false }`. `close()` stops the services, the channels, the sweeper, then the sessions.
+
 ## `applyOutboundProxy` and `validateProxy`
 
 ```ts
 import { applyOutboundProxy, validateProxy } from '@theokit/host'
 
 const { installed } = applyOutboundProxy(process.env, { variable: 'APP_PROXY' })
-const check = await validateProxy(process.env.APP_PROXY!, { target: 'api.openai.com:443', timeoutMs: 5000 })
+const check = await validateProxy(process.env.APP_PROXY!, {
+  target: 'api.openai.com:443',
+  timeoutMs: 5000,
+})
 if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' | 'timeout' | 'connection_error' | 'invalid_proxy_url'
 ```
 
@@ -226,12 +275,20 @@ Announces a running service on the local network (DNS-SD) through a publisher yo
 ```ts
 import { announceService } from '@theokit/host/discovery'
 
-const announcement = announceService({ type: 'myagent', name: 'My agent', port: 8080, txt: { path: '/api' }, host, publisher })
+const announcement = announceService({
+  type: 'myagent',
+  name: 'My agent',
+  port: 8080,
+  txt: { path: '/api' },
+  host,
+  publisher,
+})
 // announcement.announced is false (reason 'loopback') when host is loopback
 await announcement.stop()
 ```
 
-- `publisher` is `{ publish({ name, type, port, txt }), unpublishAll(): Promise<void>, destroy(): Promise<void> }`, for example a wrapper over `bonjour-service`. You create it, so a loopback `host` avoids using it but not building it.
+- `publisher` is `{ publish({ name, type, port, txt }), unpublishAll(): Promise<void>, destroy(): Promise<void>, onError?(listener): () => void }`. `@theokit/host/discovery-bonjour` exports `createBonjourPublisher({ onError?, interface?, ip? })`, an adapter over `bonjour-service`, an optional peer dependency pinned to `1.4.4`. It reports socket, answer-path, send and name-conflict errors as `DiscoveryError` instead of letting the library exit the process.
+- `onError` (optional) is called once, after the announcement has stopped, for the first error a publisher with `onError` reports after `publish`. You create it, so a loopback `host` avoids using it but not building it.
 - A loopback `host` (`localhost`, `::1`, `127.0.0.0/8`) announces nothing; the result has `announced: false` and `reason: 'loopback'`.
 - `name` is trimmed to 63 UTF-8 bytes (RFC 6763) on a character boundary; the result's `name` is what was published.
 - `stop()` calls `unpublishAll` then `destroy`, each waited for at most one second, so it resolves within about two seconds even if the publisher never answers. It is idempotent and never rejects.

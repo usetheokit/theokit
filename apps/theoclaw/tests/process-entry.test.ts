@@ -179,6 +179,27 @@ describe('the process entry', () => {
     expect(harness.lines).toEqual(['theoclaw: SIGTERM ignored, already stopping'])
   })
 
+  it('names the repeated signal, not the first', async () => {
+    const gate = deferred<void>()
+    const harness = shutdownHarness(() => gate.promise)
+
+    harness.signals.emit('SIGTERM')
+    harness.signals.emit('SIGINT')
+    gate.resolve()
+
+    await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
+    expect(harness.lines).toEqual(['theoclaw: SIGINT ignored, already stopping'])
+  })
+
+  it('a signal right after install still stops the runners', async () => {
+    const harness = shutdownHarness(async () => undefined)
+
+    harness.signals.emit('SIGINT')
+
+    await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGINT')
+    expect(harness.stopAll).toHaveBeenCalledTimes(1)
+  })
+
   it('a runner that fails to stop still closes the server and exits 1', async () => {
     const harness = shutdownHarness(async () => {
       throw new Error('drain failed')
@@ -326,6 +347,7 @@ describe('the process entry', () => {
       write: () => undefined,
     })
 
+    remove()
     remove()
 
     expect(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM')).toBe(0)

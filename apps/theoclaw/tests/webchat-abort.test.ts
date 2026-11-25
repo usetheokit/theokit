@@ -9,7 +9,7 @@ import type { RunningTheoClaw } from '../src/composition.js'
 import { startTheoClaw } from '../src/composition.js'
 import type { TurnAgent, TurnRun } from '../src/control-plane/turn.js'
 import { capturingStream, fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
-import { assistant, waitFor } from './fakes.js'
+import { assistant, waitFor, sdkMessage } from './fakes.js'
 
 const TOKEN = 'webchat-token-value-0123456789abcdef'
 
@@ -30,7 +30,7 @@ function silentAgentFactory() {
       async send(): Promise<TurnRun> {
         return {
           async *stream() {
-            yield assistant('first words')
+            yield sdkMessage(assistant('first words'))
             await new Promise(() => undefined)
           },
           wait: async () => ({ status: 'finished' }),

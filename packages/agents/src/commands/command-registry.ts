@@ -1,7 +1,7 @@
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { routeCommand } from './command-router.js'
-import type { CommandDefinition, RoutedInput } from './command-router.js'
+import type { CommandDefinition, RouteOptions, RoutedInput } from './command-router.js'
 
 /** Thrown at creation when two definitions or aliases claim the same name. */
 export class CommandRegistryError extends TheokitAgentError {
@@ -32,18 +32,21 @@ export interface CommandRegistry<Ctx> {
 
 export function createCommandRegistry<Ctx>(
   definitions: readonly CommandDefinition<Ctx>[],
+  options: RouteOptions = {},
 ): CommandRegistry<Ctx> {
+  const key = (name: string): string =>
+    options.caseInsensitive === true ? name.toLowerCase() : name
   const owners = new Map<string, string>()
   for (const definition of definitions) {
     for (const name of [definition.name, ...(definition.aliases ?? [])]) {
-      const owner = owners.get(name)
+      const owner = owners.get(key(name))
       if (owner !== undefined) throw new CommandRegistryError(name, owner, definition.name)
-      owners.set(name, definition.name)
+      owners.set(key(name), definition.name)
     }
   }
   const list = [...definitions]
 
-  const route = (input: string): RoutedInput<Ctx> => routeCommand(input, list)
+  const route = (input: string): RoutedInput<Ctx> => routeCommand(input, list, options)
   return {
     palette: () =>
       list

@@ -3,7 +3,7 @@
  *
  * Every test in this directory injects its own `unlink`, which proves the PLANNER calls the seam and
  * says nothing about what the seam is bound to. `runAllProjectsOnDisk` is where the real bindings
- * live — `fsp.unlink`, `fsp.rmdir`, `Agent.delete`, `sessionHasWriter`, `readPointerId` — and it had
+ * live — `fsp.unlink`, `fsp.rmdir`, `Agent.delete`, `sessionHasWriter` — and it had
  * NO test at all. Measured 2026-09-03 by mutation: replacing `unlink: (path) => fsp.unlink(path)`
  * with a no-op left every case in this directory green.
  *

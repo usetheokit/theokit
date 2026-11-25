@@ -82,6 +82,11 @@ describe('the entry-point gate reaches every publishable package', () => {
     expect(output).toMatch(/\btheokit: \d+ entry point\(s\) probed/)
   })
 
+  it('the host is probed, with an SDK its peer range of 12 admits', () => {
+    expect(output).toMatch(/@theokit\/host: \d+ entry point\(s\) probed/)
+    expect(output).not.toMatch(/@theokit\/host: npm install/)
+  })
+
   it('the total is at least what a working run already reached', () => {
     // 60 on 2026-09-16. A floor rather than an equality: adding an entry point should not fail a
     // test, and losing 28 of them silently is the failure this file exists for.

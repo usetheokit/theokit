@@ -16,6 +16,7 @@ import { controlAgentToolOptions } from '../../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from '../host-tools-workspace.js'
 import { stopProcessGroup } from '../stop-process-group.js'
+import { namesScreenCode } from './support/screen-code.js'
 
 /**
  * OC-62 (B-676): the `computer` tool on a real model, on a virtual display. Xvfb runs with
@@ -242,7 +243,7 @@ describe.skipIf(!LIVE)('the computer tool against a real model', () => {
       )
       expect(actions).toEqual(expect.arrayContaining(['screenshot', 'mouse_move', 'type']))
       expect(page.typed()).toContain(word)
-      expect(answer).toContain(token)
+      expect(namesScreenCode(answer, token), answer).toBe(true)
     },
   )
 })

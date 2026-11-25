@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createBonjourPublisher } from '../../src/discovery/bonjour-publisher.js'
+import { createBonjourPublisher } from '../../src/discovery/lan-publisher.js'
 import type { ServicePublisher, TheoClawDiscoveryError } from '../../src/discovery/publisher.js'
 
 /**
@@ -67,6 +67,6 @@ describe.skipIf(!LIVE)('the adapter observes every send', () => {
     // A goodbye is sent only for a service the library marked active, after its first announcement.
     await firstAnnouncement
 
-    await expect(publisher?.unpublishAll()).rejects.toMatchObject({ name: 'TheoClawDiscoveryError', code: 'EACCES' })
+    await expect(publisher?.unpublishAll()).rejects.toMatchObject({ name: 'DiscoveryError', code: 'EACCES', route: 'send-respond' })
   })
 })

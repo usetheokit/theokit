@@ -1,11 +1,11 @@
 import { homedir } from 'node:os'
 
-import { discoverSubagents } from '@theokit/agents'
+import { resolveTrustPosture } from '@theokit/agents'
 // `applySubagentMemory` is on the `./config` subpath, not the root: it lives in
 // `src/config/agent-memory.ts` and the root barrel does not re-export it. Importing it from
 // the root type-checks — the bundled `.d.ts` declares it — and throws at RUNTIME with
 // `does not provide an export named`. Measured 2026-09-16, and the types never said a word.
-import { applySubagentMemory } from '@theokit/agents/config'
+import { applySubagentMemory, discoverSubagentsAcrossRoots } from '@theokit/agents/config'
 
 import { FOREIGN_SURFACES } from '../setting-sources.js'
 import { applyMemoryToRoles } from './role-memory.js'
@@ -23,18 +23,11 @@ import type { SubagentDefinition } from '@theokit/agents'
  * rules and `AGENTS.md` that DO load are read by `context/rules.ts` and `context/user-agents-md.ts`,
  * this product's own code. Two surfaces got a user layer; two fell through to nothing.
  *
- * ## Why this reuses the SDK's reader instead of listing a directory
+ * ## Why the framework does the merge
  *
- * `discoverSubagents(cwd)` reads `<cwd>/.theokit/agents/*.md`, so handing it the home directory
- * reaches the operator's root through the SAME parser the project root goes through. Writing our own
- * reader was the alternative, and the SDK exposed this function precisely to end one: two readers of
- * one convention disagree eventually, and the disagreement surfaces as a command that lists a role
- * the runtime cannot find.
- *
- * The `settingSources: ['project']` on the operator call is not a mistake. That token selects the
- * `<cwd>/.theokit/agents` LAYOUT, and the layout is the same in both roots; what changes is which
- * directory is handed in. The SDK has no `'user'` member to pass — that is the absence this function
- * works around.
+ * `discoverSubagentsAcrossRoots` (`@theokit/agents`) reads both roots through the SDK's one parser,
+ * gates the project root by trust, leaves the operator's alone, and labels each definition with the
+ * root it came from. The SDK itself has no user-configuration layer; the framework adds it.
  *
  * ## Trust
  *
@@ -53,35 +46,42 @@ export async function discoverRoles(opts: {
   readonly projectAllowed: boolean
 }): Promise<Record<string, SubagentDefinition>> {
   const home = opts.home ?? homedir()
-  const [mine, theirs] = await Promise.all([
-    discoverSubagents(home, { settingSources: ['project'] }),
-    opts.projectAllowed
-      ? // #83 — the foreign dialect, on the PROJECT root only. Without it a role in
-        // `.claude/agents/` is invisible while the identical file in `.theokit/agents/` resolves:
-        // one dialect, two answers, depending on which selector asks. Measured with four arms, arm N
-        // proving the foreign root was live in the same build (a rule from `.claude/rules/` reached
-        // the model) — so the dialect was admitted and only the agents were not read.
-        //
-        // Deliberately NOT on the operator call above. `~/.claude/agents/` on a machine that also
-        // runs Claude Code holds that kit's roles, and importing them would hand this product a team
-        // nobody declared for it — the same effect that forced `skills-on-disk.ts` to scope
-        // `presentButUndeclared` to the native root when dogfooding surfaced 39 foreign skills.
-        // A repository's `.claude/` is the one the operator has in front of them; their home root
-        // is shared with every other tool that speaks the dialect.
-        discoverSubagents(opts.cwd, {
-          settingSources: ['project'],
-          // #188 — the same declaration the builder carries, so this call stops being a fourth
-          // independent answer to "which surfaces of `.claude/` do we admit". Before this it passed
-          // the wide form and the list could name `subagents` while governing nothing here.
-          compatSources: [{ kind: 'claude-code' as const, import: FOREIGN_SURFACES }],
-        })
-      : Promise.resolve({}),
-  ])
-  // The root travels with each half, and that is the whole decision here. `project` and `local`
-  // resolve against the root the agent came FROM; `user` resolves against home. Applying after the
-  // merge would lose it — by then both halves share a key space and the origin is gone.
+  const { definitions, shadowed } = await discoverSubagentsAcrossRoots({
+    cwd: opts.cwd,
+    homeDir: home,
+    project: opts.projectAllowed
+      ? {
+          // A pass-through, not a decision: TheoCode's own `posture.allows.subagents` already
+          // chose, and `projectAllowed` is that answer. The framework wants a posture, so this
+          // one always allows. Pass a real posture here once callers hold one.
+          trustedBy: resolveTrustPosture({
+            capabilities: ['projectSettings'] as const,
+            isTrusted: () => true,
+          }),
+        }
+      : false,
+    // #83 — the foreign dialect, on the PROJECT root only. `~/.claude/agents/` on a machine that
+    // also runs Claude Code holds that kit's roles, and importing them would hand this product a team
+    // nobody declared for it. A repository's `.claude/` is in front of the operator; their home root
+    // is shared with every other tool that speaks the dialect.
+    compatSources: { project: [{ kind: 'claude-code' as const, import: FOREIGN_SURFACES }] },
+  })
+  // The origin travels with each definition: `project` and `local` memory resolve against the root
+  // the agent came FROM, `user` against home. Applied per origin, after the merge.
+  // A project role dropped for bad memory must leave the operator's same-named role standing, as
+  // when each root was applied on its own — so the shadowed operator roles join the operator half.
+  const byOrigin: Record<'operator' | 'project', Record<string, SubagentDefinition>> = {
+    operator: {},
+    project: {},
+  }
+  for (const [name, { origin: _origin, ...definition }] of Object.entries(shadowed)) {
+    byOrigin.operator[name] = definition
+  }
+  for (const [name, { origin, ...definition }] of Object.entries(definitions)) {
+    byOrigin[origin][name] = definition
+  }
   return {
-    ...applyMemoryToRoles(mine, home, home, applySubagentMemory),
-    ...applyMemoryToRoles(theirs, opts.cwd, home, applySubagentMemory),
+    ...applyMemoryToRoles(byOrigin.operator, home, home, applySubagentMemory),
+    ...applyMemoryToRoles(byOrigin.project, opts.cwd, home, applySubagentMemory),
   }
 }

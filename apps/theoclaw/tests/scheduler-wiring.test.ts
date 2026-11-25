@@ -21,7 +21,7 @@ import {
   wireScheduler,
 } from '../src/scheduler/scheduler-wiring.js'
 import { fakeBuilders, signedLinePost } from './composition-fixtures.js'
-import { FakeAdapter, FakeAgent, waitFor } from './fakes.js'
+import { FakeAdapter, FakeAgent, waitFor, sdkMessage } from './fakes.js'
 import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 
 const SCHEDULE_TOOLS = [
@@ -44,7 +44,7 @@ class AnsweringAgent implements TurnAgent {
     const answer = this.answer
     return Promise.resolve({
       async *stream() {
-        yield { type: 'assistant' }
+        yield sdkMessage({ type: 'assistant' })
       },
       cancel: () => Promise.resolve(),
       wait: () =>
@@ -244,9 +244,9 @@ describe('wireScheduler inbox', () => {
     ['an error with a code', { status: 'error', error: { code: 'rate_limited' } }, 'failed: run ended with error: rate_limited'],
     ['a cancelled run', { status: 'cancelled' }, 'failed: run ended with status cancelled'],
     ['a finished run with no answer', { status: 'finished' }, 'failed: run finished without a result'],
-  ])('names why %s failed, and never reads its stream', async (_name, outcome, text) => {
+  ])('names why %s failed, after draining its stream', async (_name, outcome, text) => {
     const stream = vi.fn(async function* () {
-      yield { type: 'assistant' }
+      yield sdkMessage({ type: 'assistant' })
     })
     const agent: TurnAgent = {
       send: () => Promise.resolve({ stream, cancel: () => Promise.resolve(), wait: () => Promise.resolve(outcome) }),
@@ -255,7 +255,7 @@ describe('wireScheduler inbox', () => {
     await scheduler.add(inboxJob)
     expect(await scheduler.fire('job-1')).toBe('failed')
     expect((await readInbox(scheduleTools)).messages?.[0]?.text).toContain(text)
-    expect(stream).not.toHaveBeenCalled()
+    expect(stream).toHaveBeenCalledTimes(1)
   })
 
   it('refuses the inbox target without a workspace', async () => {
@@ -276,11 +276,10 @@ describe('wireScheduler inbox', () => {
   it('tells the model the inbox is local and its channel id is a free label', async () => {
     const { scheduleTools } = await start(new AnsweringAgent('x'), [], [], dir)
     const schedule = scheduleTools.find((tool) => tool.name === 'schedule_job')!
-    expect(schedule.description).toContain('do not ask the user for an id')
     expect(schedule.description).toContain('read_schedule_inbox')
     const channel = (schedule.inputSchema as { properties: { channelId: { description: string } } })
       .properties.channelId
-    expect(channel.description).toContain('any label')
+    expect(channel.description).toContain('do not ask the user for an id')
   })
 
   it('accepts the inbox target through schedule_job when a workspace is given', async () => {

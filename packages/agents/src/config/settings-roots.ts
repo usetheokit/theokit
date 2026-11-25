@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import type { PermissionRule } from '@theokit/sdk'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { FOREIGN_KEY_DECISIONS } from './settings-file.js'
 import { permissionRulesFromSettings } from './settings-permissions.js'
@@ -219,9 +220,41 @@ export interface ReadSettingsFileOptions {
   readonly throwOnMalformed?: boolean
 }
 
-/** A `permissions` value that is not an object is treated as absent, not cast. */
+/** A settings file that exists and cannot be read or parsed; thrown under `throwOnMalformed`. */
+export class SettingsFileError extends TheokitAgentError {
+  override readonly name = 'SettingsFileError'
+  constructor(
+    readonly path: string,
+    /** `unreadable`: the file could not be read; `malformed`: it was read and is not JSON. */
+    readonly kind: 'unreadable' | 'malformed',
+    readonly detail: string,
+  ) {
+    super(
+      kind === 'malformed'
+        ? `malformed JSON at ${path}: ${detail}`
+        : `cannot read ${path}: ${detail}`,
+      { code: `settings_file_${kind}`, isRetryable: false },
+    )
+  }
+}
+
+/**
+ * A `permissions` value that is not an object is treated as absent, not cast. Within it, each of
+ * `allow`/`deny`/`ask` is kept only when every entry is a string; any other list is dropped whole.
+ */
 function asPermissionsBlock(value: unknown): PermissionsBlock | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const block = value as Record<string, unknown>
+  const strings = (v: unknown): string[] | undefined =>
+    Array.isArray(v) && v.every((e) => typeof e === 'string') ? [...v] : undefined
+  const allow = strings(block.allow)
+  const deny = strings(block.deny)
+  const ask = strings(block.ask)
+  return {
+    ...(allow === undefined ? {} : { allow }),
+    ...(deny === undefined ? {} : { deny }),
+    ...(ask === undefined ? {} : { ask }),
+  }
 }
 
 function isConvention(key: string): boolean {
@@ -241,12 +274,20 @@ function parseFile(
 ): Record<string, unknown> | undefined {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- path built from the caller's roots and a fixed filename
   if (!existsSync(path)) return undefined
-  let parsed: unknown
+  let text: string
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, existence-checked above
-    parsed = JSON.parse(readFileSync(path, 'utf8'))
+    text = readFileSync(path, 'utf8')
   } catch (error) {
-    if (throwOnMalformed) throw new Error(`malformed JSON at ${path}: ${(error as Error).message}`)
+    if (throwOnMalformed) throw new SettingsFileError(path, 'unreadable', (error as Error).message)
+    warn(`${path} could not be parsed (${(error as Error).message}) — it is NOT being applied.`)
+    return undefined
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    if (throwOnMalformed) throw new SettingsFileError(path, 'malformed', (error as Error).message)
     warn(`${path} could not be parsed (${(error as Error).message}) — it is NOT being applied.`)
     return undefined
   }
@@ -270,7 +311,18 @@ export function readSettingsFile(
     options.throwOnMalformed,
   )
   if (raw === undefined) return undefined
+  return translateSettingsDocument(raw, candidate, options)
+}
 
+/**
+ * Translate an already-parsed settings document the way `readSettingsFile` does a file: the same
+ * rename, permission and own/ignored/unrecognised split, for a caller that holds the JSON in memory.
+ */
+export function translateSettingsDocument(
+  raw: Record<string, unknown>,
+  candidate: SettingsCandidate,
+  options: ReadSettingsFileOptions,
+): SettingsFileRead {
   const own = new Set(options.ownKeys)
   const values: Record<string, unknown> = {}
   const ignored: string[] = []

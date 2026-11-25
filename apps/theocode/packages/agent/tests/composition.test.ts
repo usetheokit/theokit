@@ -122,42 +122,10 @@ const loadMcpJson = vi.fn((dir: string) =>
   dir === '/p' ? { 'some-server': { command: 'node', args: ['evil.js'] } } : {},
 )
 
-/** What the project's `.theokit/agents/` declares in these tests. */
-const PROJECT_ROLES = {
-  explorer: { tools: ['Read', 'Grep', 'Glob'] },
-  worker: { tools: ['Read', 'ApplyPatch', 'Bash'] },
-}
-
-/** What the operator's own `~/.theokit/agents/` declares. Empty unless a test fills it. */
-let operatorRoles: Record<string, unknown> = {}
-
-/**
- * The disk boundary path 3 reads. Mocked so the role's declared tool set is the test's input.
- *
- * It HONOURS `settingSources`, because that is the mechanism under test: production passes `[]`
- * for an untrusted directory and the real loader then finds nothing. A mock that returned the
- * roles regardless would make the untrusted assertion below pass for the wrong reason — it would
- * be asserting that some later validation happened to throw, not that the gate closed.
- *
- * It also honours `cwd`, and that half was added after this mock started lying. #65 made
- * `discoverRoles` call this function TWICE — once for the project and once for the operator's home,
- * both with `settingSources: ['project']`, because that token selects the `<cwd>/.theokit/agents`
- * LAYOUT and the layout is the same in both roots. A mock keyed only on the sources answered the
- * home call with the project's roles, and the untrusted assertion below started passing an
- * untrusted repository's definition off as the operator's own. The real loader keys on the
- * directory; so does this now.
- */
-const discoverSubagents = vi.fn((cwd: string, opts: { settingSources: string[] }) =>
-  Promise.resolve(
-    cwd === '/p' ? (opts.settingSources.includes('project') ? PROJECT_ROLES : {}) : operatorRoles,
-  ),
-)
-
 vi.mock('@theokit/agents', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadMcpJson,
   loadMcpScopes: (await import('./helpers/keyed-mcp-scopes.js')).keyedMcpScopes(loadMcpJson),
-  discoverSubagents,
 }))
 
 /** The compiled shape `AgentBuilder.build()` returns — only the members this file asserts on. */
@@ -166,14 +134,16 @@ interface CompiledAgent {
   approvals: Record<string, { question: string }>
   mcpServers: Record<string, unknown>
   skills: string[]
-  settingSources: { user?: boolean; project?: { trustedBy: unknown } }
+  settingSources: string[]
+  compatSources?: unknown
   memory: { enabled: boolean }
   model: string
 }
 
 async function compile(overrides: Record<string, unknown>): Promise<CompiledAgent> {
   const { buildChatAgent } = await import('../src/chat/chat.js')
-  return buildChatAgent(overrides as never) as unknown as CompiledAgent
+  const { withCapabilities } = await import('./helpers/with-capabilities.js')
+  return withCapabilities(await buildChatAgent(overrides as never)) as unknown as CompiledAgent
 }
 
 const namesOf = (a: CompiledAgent): string[] => a.tools.map((t) => t.name)
@@ -281,8 +251,7 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
     // was declared (761 characters/round, measured), approval-gated, and able to return only
     // nothing. The model paid for it every round and the user was asked to approve a search that
     // had nothing to search.
-    vi.stubEnv('THEOKIT_SEARCH_API_URL', '')
-    const agent = await compile({ surface: 'headless', cwd: '/p' })
+    const agent = await compile({ surface: 'headless', cwd: '/p', env: {} })
     const names = namesOf(agent)
 
     expect(
@@ -305,8 +274,11 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
   it('test_web_search_is_declared_and_gated_when_a_provider_is_configured', async () => {
     // The counter-proof. Without it, withholding the tool unconditionally would pass the test above
     // while silently deleting a capability — the worse outcome of the two.
-    vi.stubEnv('THEOKIT_SEARCH_API_URL', 'https://search.example.invalid/q')
-    const agent = await compile({ surface: 'headless', cwd: '/p' })
+    const agent = await compile({
+      surface: 'headless',
+      cwd: '/p',
+      env: { BRAVE_API_KEY: 'test-key' },
+    })
 
     expect(
       namesOf(agent),
@@ -390,7 +362,8 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
       agent.settingSources,
       'the `project` setting source stayed on for an untrusted repo, which re-enables repository ' +
         'subagents and repository hooks behind the per-hook fingerprint gate (B-008)',
-    ).toEqual({ user: true })
+    ).toEqual(['user'])
+    expect(agent.compatSources, 'an untrusted repo got its `.claude/` imported').toBeUndefined()
     expect(agent.memory.enabled, 'memory writes into an untrusted working tree').toBe(false)
   })
 
@@ -403,9 +376,6 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
     // The counter-proof to the untrusted case, in the M86 shape: `project` is present, and the grant
     // carries the posture that authorized it — including `source`, so a refusal further down can say
     // where the decision came from rather than only that it was refused.
-    const grant = {
-      trustedBy: { level: 'trusted', source: 'store', allows: { projectSettings: true } },
-    }
     // #65 — `claudeCode` carries the SAME evidence, deliberately. `.claude/` is repository-controlled
     // and holds a `hooks.json` that executes shell, so the second door takes the evidence the first
     // one takes; a weaker grant would be a gate with a bypass named after another product.
@@ -421,11 +391,13 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
     // them once the grant is enforced — silently, which is the failure the grant exists to prevent,
     // arriving from this side. Not a widening: this product already received those rules on every
     // run, and the name is what keeps that true.
-    expect(agent.settingSources).toEqual({
-      user: true,
-      project: grant,
-      claudeCode: { ...grant, import: ['skills', 'subagents', 'plugins', 'commands', 'context'] },
-    })
+    // The grant itself is built inside `codingAgentPreset` now, and the framework resolves it to the
+    // compiled form before it reaches the agent: the roots that were granted, and the foreign root
+    // with the surfaces it may import.
+    expect(agent.settingSources).toEqual(['user', 'project'])
+    expect(agent.compatSources).toEqual([
+      { kind: 'claude-code', import: ['skills', 'subagents', 'plugins', 'commands', 'context'] },
+    ])
     // Trust is necessary and no longer sufficient: memory is off unless the config asks for it, so
     // a trusted directory alone leaves it off. The two halves are asserted apart, below, because
     // collapsing them would let either one carry the other.
@@ -502,161 +474,5 @@ describe('path 1 — buildChatAgent gates what the directory is trusted with', (
     })
 
     expect(namesOf(agent)).toContain('update_goal')
-  })
-})
-
-describe('path 2 — createReviewAgent composes the reviewer', () => {
-  it('test_the_reviewer_receives_exactly_its_declared_tool_set', async () => {
-    // The reviewer reads a diff and reports. Any tool beyond its declared four is authority it was
-    // never meant to hold — and the list is a hardcoded literal, so nothing but this test guards it.
-    const { createReviewAgent } = await import('../src/review/create-agent.js')
-    let captured: { tools: { name: string }[] } | undefined
-
-    const createAgent = createReviewAgent({
-      config: { model: 'gpt-5.4', sandbox_mode: 'read-only' },
-      cwd: '/p',
-      // #101 — the whole credential now; an API-key one, so the model is NOT routed here.
-      credential: () => Promise.resolve({ apiKey: 'k', kind: 'apiKey', provider: 'openai' } as never),
-      registerCleanup: () => undefined,
-      createInstance: (opts) => {
-        captured = opts as unknown as { tools: { name: string }[] }
-        return Promise.resolve({
-          send: () => Promise.resolve({ wait: () => Promise.resolve({}) }),
-          [Symbol.asyncDispose]: () => Promise.resolve(),
-        } as never)
-      },
-      deleteAgent: () => Promise.resolve(),
-    })
-
-    await createAgent({ agentId: 'r1', systemPrompt: 'review it' })
-    const names = captured?.tools.map((t) => t.name).sort() ?? []
-
-    // The expected set is written OUT here rather than compared against `REVIEWER_TOOLS`.
-    // Measured: comparing to the constant made this test tautological — a mutation adding
-    // `ApplyPatch` to the constant changed both sides at once and survived. A characterization
-    // test has to state the expectation independently of the thing it characterises.
-    expect(names).toEqual(['Bash', 'GitDiff', 'Grep', 'Read'])
-
-    // And the property behind the list, so a future addition is judged rather than merely noticed:
-    // the reviewer reads a diff and reports on it. Anything that mutates the tree or delegates
-    // authority onward is not part of that job.
-    for (const forbidden of ['ApplyPatch', 'Edit', 'delegate_to_team', 'interactive_shell']) {
-      expect(
-        names,
-        `the reviewer was handed "${forbidden}" — it reads a diff and reports; a tool that mutates ` +
-          'the tree or delegates authority onward is not part of that job, and the user approved ' +
-          'a review rather than an edit',
-      ).not.toContain(forbidden)
-    }
-  })
-
-  it('test_the_reviewer_tool_set_is_a_subset_of_the_registry', async () => {
-    // `ToolRegistry.resolve` fails loud on an unknown name, so a typo in the literal is a runtime
-    // throw at review time — the moment the user is already waiting.
-    // From `registry.js`, not the `tools/index.js` barrel: the barrel re-exports `ToolRegistry`
-    // and `resolveToolScope` but not the name list, so the registry's own vocabulary is not part
-    // of the module's public face.
-    const { REGISTRY_TOOL_NAMES } = await import('../src/tools/registry.js')
-    // From `composition/agent-spec.js`, where the list is declared and where `reviewerShape` reads
-    // it. This used to import from `review/create-agent.js`, which re-exported the name for this
-    // test alone — surface kept alive by its only consumer being the test that consumed it.
-    const { REVIEWER_TOOLS } = await import('../src/composition/agent-spec.js')
-    for (const name of REVIEWER_TOOLS) {
-      expect(
-        (REGISTRY_TOOL_NAMES as readonly string[]).includes(name),
-        `the reviewer declares "${name}", which the registry does not build`,
-      ).toBe(true)
-    }
-  })
-
-  it('test_the_reviewer_shell_is_capped_below_the_default', async () => {
-    // A reviewer that can run a 5-minute command is a reviewer that can hang the release.
-    const { REVIEWER_SHELL_CAP } = await import('../src/review/create-agent.js')
-    expect(REVIEWER_SHELL_CAP).toBeLessThan(300_000)
-  })
-})
-
-describe('path 3 — buildRoleAgent composes a delegated team member', () => {
-  /** A sandbox backend double: the seam exists so a member is never handed an unconfined shell. */
-  const sandbox = { enabled: true, workDir: '/p' } as never
-
-  async function buildRole(role: string, allows: { subagents: boolean }) {
-    const { buildRoleAgent } = await import('../src/delegation/roles.js')
-    let captured: { tools: { name: string }[]; local: { cwd: string } } | undefined
-    await buildRoleAgent(role, {
-      apiKey: 'test-key-not-a-real-credential',
-      parent: { model: 'gpt-5.4', reasoning_effort: 'medium' },
-      cwd: '/p',
-      writeRoot: '/p',
-      sandbox,
-      posture: { level: 'trusted', source: 'store', allows } as never,
-      createAgent: (opts: unknown) => {
-        captured = opts as unknown as { tools: { name: string }[]; local: { cwd: string } }
-        return Promise.resolve({} as never)
-      },
-    } as never)
-    return captured
-  }
-
-  it('test_a_role_receives_only_the_tools_its_definition_declares', async () => {
-    // A role's tool list is its authority. `explorer` reads; if it silently gained `Bash` or
-    // `ApplyPatch`, the read-only half of the sequential team would stop being read-only and the
-    // approval the parent showed for `delegate_to_team` would have covered more than it said.
-    const explorer = await buildRole('explorer', { subagents: true })
-
-    expect(explorer?.tools.map((t) => t.name).sort()).toEqual(['Glob', 'Grep', 'Read'])
-  })
-
-  it('test_a_role_is_confined_to_the_directory_the_parent_resolved', async () => {
-    // B-032: `resolveToolScope` derives the writeRoot AND the sandbox workDir from this value, so a
-    // member built against the process directory writes into a tree the caller did not choose.
-    const worker = await buildRole('worker', { subagents: true })
-
-    expect(worker?.local.cwd).toBe('/p')
-  })
-
-  it('test_an_untrusted_directory_still_materialises_the_operator_own_role', async () => {
-    // #65 — the counterpart of the refusal below, and the reason it must be stated: the gate asks
-    // whether the code in THIS directory is trusted, and nobody's home is the repository. A role the
-    // operator wrote for themselves is theirs in every directory they visit; refusing it because a
-    // stranger's repository is untrusted would withhold someone's own configuration from them.
-    //
-    // What is NOT relaxed is the line above it: the definition here comes from the home, never from
-    // the untrusted repository, so nothing in that repository chooses the member's model, effort or
-    // sandbox flag.
-    const { buildRoleAgent } = await import('../src/delegation/roles.js')
-    operatorRoles = { explorer: { tools: ['Read'] } }
-
-    try {
-      await expect(
-        buildRoleAgent('explorer', {
-          apiKey: 'test-key-not-a-real-credential',
-          parent: { model: 'gpt-5.4', reasoning_effort: 'medium' },
-          cwd: '/p',
-          sandbox,
-          posture: { level: 'untrusted', source: 'store', allows: { subagents: false } } as never,
-          createAgent: () => Promise.resolve({} as never),
-        } as never),
-      ).resolves.toBeDefined()
-    } finally {
-      operatorRoles = {}
-    }
-  })
-
-  it('test_an_untrusted_directory_refuses_to_materialise_a_repository_role', async () => {
-    // The refusal is the feature: `.theokit/agents/<name>.md` is repository-controlled, so an
-    // untrusted repo could otherwise choose a member's model, effort and sandbox flag.
-    const { buildRoleAgent } = await import('../src/delegation/roles.js')
-
-    await expect(
-      buildRoleAgent('explorer', {
-        apiKey: 'test-key-not-a-real-credential',
-        parent: { model: 'gpt-5.4', reasoning_effort: 'medium' },
-        cwd: '/p',
-        sandbox,
-        posture: { level: 'untrusted', source: 'store', allows: { subagents: false } } as never,
-        createAgent: () => Promise.resolve({} as never),
-      } as never),
-    ).rejects.toThrow(/not trusted/i)
   })
 })

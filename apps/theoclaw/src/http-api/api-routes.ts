@@ -8,7 +8,6 @@ import {
   type OpenAICompletion,
   renderTranscript,
 } from '@theokit/agents/bridge'
-import { z } from 'zod'
 
 import { bearerCheck } from '@theokit/http/guards'
 import type { PartialHandler } from '../control-plane/http-dispatch.js'
@@ -45,23 +44,9 @@ function unauthorized(): Response {
 }
 
 /**
- * What is wrong with `args` for `tool`, judged against the tool's own `inputSchema` (plan D4): the
- * SDK checks a model's arguments before dispatch, and a direct call skips that. The first issue,
- * as `<path>: <message>` (`(root)` for the object itself). A schema `z.fromJSONSchema` cannot
- * compile throws: that is the tool's defect, which the route answers 500 `tool_error`.
- */
-export function validateToolArgs(tool: CustomTool, args: Record<string, unknown>): string | undefined {
-  const parsed = z.fromJSONSchema(tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0]).safeParse(args)
-  if (parsed.success) return undefined
-  const issue = parsed.error.issues[0]
-  if (issue === undefined) return 'the arguments do not match the tool schema'
-  const path = issue.path.map(String).join('.')
-  return `${path === '' ? '(root)' : path}: ${issue.message}`
-}
-
-/**
  * The `complete` port over one TheoClaw turn: the transcript as the message, the text of every
- * `text_delta` joined. A failed turn's reason goes to stderr only; the client gets 502.
+ * `text_delta` joined. It stays beside the bridge's `completeFromTurn`: `runTheoClawTurn` masks the
+ * model id and records usage. A failed turn's reason goes to stderr only; the client gets 502.
  */
 function completeWith(options: TheoClawApiOptions): (
   request: OpenAIChatRequest,
@@ -93,14 +78,13 @@ function completeWith(options: TheoClawApiOptions): (
 /**
  * The tool route of one request (plan D5): a fresh `/control` tool list, as each `/control` agent gets, so a
  * todolist is never shared between two callers; the path veto the plugin applies (D2); the schema
- * check (D4).
+ * check (D4) is the route's default, which names the first issue as `<path>: <message>`.
  */
 function toolRouteFor(options: TheoClawApiOptions): PartialHandler {
   const settings = options.toolSettings
   return createToolInvokeRoute({
     tools: options.controlTools(),
     veto: (name, args) => vetoToolCall(name, args, settings),
-    validate: validateToolArgs,
   })
 }
 

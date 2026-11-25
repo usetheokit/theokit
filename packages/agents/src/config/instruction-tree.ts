@@ -160,6 +160,23 @@ export interface InstructionTreeBudget {
   readonly maxChars: number
   /** Cut each file at this many characters (marker '[truncated]'), before maxChars is applied. */
   readonly maxCharsPerFile?: number
+  /**
+   * Appended as the last block when `maxChars` cut the tree; receives `(omitted, found)`.
+   *
+   * Room for it is reserved: whole blocks are dropped until it fits, so the total stays within
+   * `maxChars`. A notice longer than `maxChars` itself is cut to `maxChars`. Opt-in: without it the
+   * model is not told that rules are missing. The block's `path` is `'[omission-notice]'`.
+   */
+  readonly omissionNotice?: (omitted: number, found: number) => string
+}
+
+/** `path` of the synthetic block {@link InstructionTreeBudget.omissionNotice} appends. */
+const OMISSION_NOTICE_PATH = '[omission-notice]'
+
+/** More directories to walk under the SAME budget, each contained to its own `cwd`. */
+export interface InstructionTreeBase {
+  readonly cwd: string
+  readonly roots: readonly string[]
 }
 
 export interface LoadInstructionTreeInput {
@@ -201,6 +218,18 @@ export interface LoadInstructionTreeInput {
    * half-built.
    */
   readonly order?: 'outward-in' | 'lexicographic' | 'as-listed'
+  /**
+   * Walked after `cwd`/`roots`, in order, sharing the budget and the cycle guard. For a caller whose
+   * instructions live under two directories that cannot contain each other but share one ceiling.
+   */
+  readonly also?: readonly InstructionTreeBase[]
+  /**
+   * Turns a parsed block into the text that will reach the prompt; an empty result drops the block.
+   * The ceiling is measured on this text, so it bounds what the model reads, not the raw file.
+   */
+  readonly render?: (block: InstructionBlock) => string
+  /** What the caller puts between blocks. Its length counts against `maxChars`. Default none. */
+  readonly separator?: string
   // 'as-listed': only valid with `fileNames` as an array; within each directory, files follow the
   // array order (directories after the files, alphabetically).
 }
@@ -209,7 +238,12 @@ export interface InstructionTree {
   readonly blocks: readonly InstructionBlock[]
   /** True when a ceiling stopped the walk — the caller is seeing a partial tree. */
   readonly truncated: boolean
+  /** Blocks that are files and were kept; the omission notice is not counted. */
   readonly count: number
+  /** Files admitted, including those the character ceiling left out. */
+  readonly found: number
+  /** Characters of all admitted files (and separators) before the ceiling. */
+  readonly chars: number
 }
 
 /**
@@ -277,7 +311,8 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
     typeof fileNames === 'function'
       ? fileNames
       : (entry: string): boolean => fileNames.includes(entry)
-  const cwd = resolve(input.cwd)
+  let cwd = resolve(input.cwd)
+  const separator = input.separator ?? ''
 
   const blocks: InstructionBlock[] = []
   const seenInodes = new Set<string>()
@@ -285,6 +320,7 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
   // budgets: otherwise a root `B.md` would use up `maxFiles` ahead of a listed-first nested `A.md`.
   let candidates: string[] | undefined
   let chars = 0
+  const render = input.render
 
   /**
    * Why the walk RETURNS its stop reason instead of setting a flag.
@@ -310,12 +346,11 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
     const parsed = parseInstructionFile(path, cwd, warn, input.budget.maxCharsPerFile)
     if (parsed === undefined) return false
 
-    if (chars + parsed.content.length > input.budget.maxChars) {
-      warn(`instruction budget: stopped at ${String(input.budget.maxChars)} characters`)
-      return true
-    }
-    chars += parsed.content.length
-    blocks.push(parsed)
+    // The character ceiling is applied once, after the walk, so the files it leaves out can be counted.
+    const content = render === undefined ? parsed.content : render(parsed)
+    if (render !== undefined && content.length === 0) return false
+    chars += content.length + (blocks.length > 0 ? separator.length : 0)
+    blocks.push(render === undefined ? parsed : { ...parsed, content })
     return false
   }
 
@@ -388,25 +423,88 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
   }
 
   let truncated = false
-  for (const root of input.roots) {
-    if (input.order === 'as-listed') candidates = []
-    truncated = visit(resolve(cwd, root), 0)
-    if (candidates !== undefined) {
-      const listed = input.fileNames as readonly string[]
-      const found = candidates
-      candidates = undefined
-      found.sort((x, y) => listed.indexOf(basename(x)) - listed.indexOf(basename(y)))
-      for (const path of found) {
-        if (admit(path)) {
-          truncated = true
-          break
+  const bases: readonly InstructionTreeBase[] = [
+    { cwd: input.cwd, roots: input.roots },
+    ...(input.also ?? []),
+  ]
+  for (const base of bases) {
+    cwd = resolve(base.cwd)
+    for (const root of base.roots) {
+      if (input.order === 'as-listed') candidates = []
+      truncated = visit(resolve(cwd, root), 0)
+      if (candidates !== undefined) {
+        const listed = input.fileNames as readonly string[]
+        const found = candidates
+        candidates = undefined
+        found.sort((x, y) => listed.indexOf(basename(x)) - listed.indexOf(basename(y)))
+        for (const path of found) {
+          if (admit(path)) {
+            truncated = true
+            break
+          }
         }
       }
+      if (truncated) break
     }
     if (truncated) break
   }
 
-  return { blocks, truncated, count: blocks.length }
+  return cutAtCeiling(blocks, chars, input.budget, separator, truncated, warn)
+}
+
+/**
+ * Keep the whole blocks that fit under `maxChars` and, when asked, say what was left out.
+ *
+ * The walk reads on past the first file that does not fit so that `found` is a count and not a
+ * guess; the cut itself still stops at the first block that does not fit, so a smaller later file
+ * never takes the place of an earlier one.
+ */
+function cutAtCeiling(
+  all: readonly InstructionBlock[],
+  total: number,
+  budget: InstructionTreeBudget,
+  separator: string,
+  stoppedByFiles: boolean,
+  warn: (message: string) => void,
+): InstructionTree {
+  const found = all.length
+  if (total <= budget.maxChars) {
+    return { blocks: all, truncated: stoppedByFiles, count: found, found, chars: total }
+  }
+
+  warn(`instruction budget: stopped at ${String(budget.maxChars)} characters`)
+  const used = (n: number): number =>
+    all
+      .slice(0, n)
+      .reduce((sum, block, i) => sum + block.content.length + (i > 0 ? separator.length : 0), 0)
+  let kept = 0
+  while (kept < found && used(kept + 1) <= budget.maxChars) kept++
+
+  const blocks = all.slice(0, kept)
+  if (budget.omissionNotice === undefined) {
+    return { blocks, truncated: true, count: kept, found, chars: total }
+  }
+  let text = budget.omissionNotice(found - kept, found)
+  while (
+    kept > 0 &&
+    used(kept) + (kept > 0 ? separator.length : 0) + text.length > budget.maxChars
+  ) {
+    kept--
+    text = budget.omissionNotice(found - kept, found)
+  }
+  const notice: InstructionBlock = {
+    path: OMISSION_NOTICE_PATH,
+    content: text.slice(0, budget.maxChars),
+    scopes: [],
+    scopesUnreadable: false,
+  }
+  return {
+    blocks: [...all.slice(0, kept), notice],
+    truncated: true,
+    count: kept,
+    found,
+    chars: total,
+  }
 }
 
 /** One `readdir` entry that survived `stat`. */
@@ -685,5 +783,11 @@ export async function loadInstructionWalk(
     keep.add(block)
   }
   const blocks = parsed.filter((block) => keep.has(block))
-  return { blocks, truncated, count: blocks.length }
+  return {
+    blocks,
+    truncated,
+    count: blocks.length,
+    found: parsed.length,
+    chars: parsed.reduce((sum, block) => sum + block.content.length, 0),
+  }
 }

@@ -2,6 +2,7 @@ import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 
+import type { OffTool } from '@theokit/agents'
 import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
@@ -63,6 +64,13 @@ export interface ToolSettings {
   readonly secrets: readonly string[]
   /** One line each for what is off, or what the start changed, written at start. */
   readonly offLines: readonly string[]
+  /** The tools left off and why; `offLines` carries each one as its start line. */
+  readonly offTools: readonly OffTool[]
+}
+
+/** The start line of a tool that is off: `tools: <name> is off (<reason>)`. */
+export function offToolLine(tool: OffTool): string {
+  return `tools: ${tool.name === 'web_search' ? 'web search' : tool.name} is off (${tool.reason})`
 }
 
 /** A DNS lookup shaped as `dns/promises.lookup` with `{ all: true }` (B-398 FR-003). */
@@ -155,7 +163,7 @@ function nonBlank(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
-const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const SEARCH_OFF_REASON = 'no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL'
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
 /**
@@ -246,14 +254,20 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const sandbox = buildBackend(backend, mode, toolRoot, deps)
   const sandboxEnforced = isEnforced(sandbox)
   const gitRepository = isRepository(toolRoot)
+  const offTools: OffTool[] = []
+  // The start lines keep their order: a tool's line sits where the tool's check is.
   const offLines = [...lines]
+  const off = (tool: OffTool): void => {
+    offTools.push(tool)
+    offLines.push(offToolLine(tool))
+  }
   if (gitRepository && !sandboxEnforced) {
     const { detail } = resolveSandboxPosture({ mode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
-    offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
+    off({ name: 'git_diff', reason: `sandbox not enforced: ${detail}` })
   }
-  if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
+  if (search.kind === 'off') off({ name: 'web_search', reason: SEARCH_OFF_REASON })
   if (isSubscriptionRoute(nonBlank(env.THEOCLAW_MODEL) ?? '')) {
-    offLines.push('tools: view_image is off (the openai-chatgpt/ route carries tool results as text only)')
+    off({ name: 'view_image', reason: 'the openai-chatgpt/ route carries tool results as text only' })
   }
   if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
   offLines.push(browserLine(browser), computerLine(computer))
@@ -280,6 +294,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
       ...external.secrets,
     ],
     offLines,
+    offTools,
   }
 }
 

@@ -1,10 +1,14 @@
+import type { TurnBody } from '../agent-session/chat-transport.js'
+import type { TurnInput } from '../agent-session/turn-body.js'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
+import { asGoalLoopAgent } from '@theokit/agents/client'
 import { useAgent } from '@theokit/agents/client/react'
 
 import type { ResolvedCredential } from '@theocode/agent/auth'
 import { resolveEffectiveConfig } from '@theocode/agent/config'
 import type { ToastPayload } from '../screen-types.js'
+import { noteTurnStart } from '../persistence/fork-session.js'
 import { workingDirectory } from '../working-directory.js'
 
 export interface GoalRunState {
@@ -16,7 +20,12 @@ export interface GoalRunState {
   tokens?: number
 }
 
-type TuiAgent = ReturnType<typeof useAgent<{ message: string }>>
+type TuiAgent = Omit<ReturnType<typeof useAgent<TurnBody>>, 'send' | 'sendAndWait'> & {
+  send: (input: TurnInput) => void
+  sendAndWait: (
+    input: TurnInput,
+  ) => ReturnType<ReturnType<typeof useAgent<TurnBody>>['sendAndWait']>
+}
 
 export interface RunGoalDeps {
   agentRef: MutableRefObject<TuiAgent>
@@ -71,13 +80,15 @@ async function driveGoal(
 ): Promise<RaceOutcome> {
   const { agentRef, setGoalFeed, setToast, credential } = deps
   const { GOAL_DEFAULTS, routeGoalModel, runGoal } = await import('@theocode/agent/goal')
-  const { createStoreGoalAgent } = await import('./goal-store-agent.js')
   const cfg = resolveEffectiveConfig({ cwd: workingDirectory() })
   const cred = credential()
   if ('error' in cred) throw cred.error
-  const storeAgent = createStoreGoalAgent({
-    send: (t) => agentRef.current.send({ message: t }),
-    snapshot: () => agentRef.current,
+  const goalAgent = asGoalLoopAgent({
+    sendAndWait: (text: string) => {
+      // Autonomous turns bypass handleSubmit: invalidate any fork still copying before sending.
+      noteTurnStart()
+      return agentRef.current.sendAndWait({ message: text })
+    },
   })
   const lines = openingWarnings(objective, cfg)
   setGoalFeed(lines.join('\n'))
@@ -91,7 +102,7 @@ async function driveGoal(
     return { status: 'budget_limited', turnsUsed: 0, tokensUsed: 0 }
   }
   const result = await runGoal(
-    storeAgent as never,
+    goalAgent,
     objective,
     {
       maxTurns: remainingTurns,

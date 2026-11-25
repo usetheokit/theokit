@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { type RunResult, runCommand, type Runner } from '../../src/run-command.js'
 import { definitionPath } from '../../src/daemon.js'
@@ -64,7 +65,7 @@ export interface Harness {
   readonly stderr: () => string
 }
 
-export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; installStdout?: string; restartExit?: number[]; platform?: NodeJS.Platform; uid?: number } = {}): Harness {
+export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; installStdout?: string; restartExit?: number[]; platform?: NodeJS.Platform; uid?: number; taskInstalled?: boolean } = {}): Harness {
   let installs = 0
   const restarts: string[] = []
   const installExit = [...(options.installExit ?? [])]
@@ -81,8 +82,14 @@ export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExi
       installs += 1
       return step(installExit, () => writeFileSync(join(w.dist, '.installed-commit'), `${git(w.checkout, 'rev-parse', 'HEAD')}\n`), 'install')
     }
-    if (command === 'systemctl' && args[1] === 'restart') return step(restartExit, () => restarts.push(args[2]!), 'restart')
+    const ok = (stdout = ''): RunResult => ({ code: 0, stdout, stderr: '' })
+    if (command === 'systemctl' && args[1] === 'is-active') return ok('active\n')
+    if (command === 'systemctl' && args[1] === 'restart') return step(restartExit, () => restarts.push(args[3]!), 'restart')
+    if (command === 'launchctl' && args[0] === 'print') return existsSync(definitionPath('darwin', args[1]!.split('/').pop()!, w.home)) ? ok('state = running') : { code: 113, stdout: '', stderr: '' }
     if (command === 'launchctl' && args[0] === 'kickstart') return step(restartExit, () => restarts.push(args[2]!), 'kickstart')
+    if (command.toLowerCase().includes('powershell') && args.join(' ').includes('Get-ScheduledTask')) return ok(options.taskInstalled ? 'Running\n' : '')
+    if (command === 'schtasks' && args[0] === '/End') return ok()
+    if (command === 'schtasks' && args[0] === '/Run') return step(restartExit, () => restarts.push(args[2]!), 'run')
     throw new Error(`unexpected command ${command} ${args.join(' ')}`)
   }
   let out = ''

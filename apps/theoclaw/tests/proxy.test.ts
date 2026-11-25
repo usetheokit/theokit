@@ -4,10 +4,11 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { getGlobalDispatcher, setGlobalDispatcher } from 'undici'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
-import { readCaptures, startCaptureProxy, validateProxy } from '../src/ops/proxy.js'
+import { applyProxyEnvironment, readCaptures, startCaptureProxy } from '../src/ops/proxy.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 
 afterEach(cleanScratch)
@@ -28,8 +29,10 @@ describe('theoclaw proxy', () => {
     const proxy = await startCaptureProxy(file, 0)
     try {
       const target = `127.0.0.1:${port(origin)}`
-      const result = await validateProxy(`http://127.0.0.1:${port(proxy)}`, target)
-      expect(result.ok).toBe(true)
+      const v = harness()
+      const code = await runCli(['proxy', 'validate', '--proxy-url', `http://127.0.0.1:${port(proxy)}`, '--target', target], { ...v.io, env: {} })
+      expect(code).toBe(0)
+      expect(v.stdout()).toContain('ok:')
       expect(readCaptures(file).map((c) => `${c.method} ${c.target}`)).toEqual([`CONNECT ${target}`])
     } finally {
       proxy.close()
@@ -76,8 +79,51 @@ describe('theoclaw proxy', () => {
     }
   })
 
-  it('validate reports an unreachable proxy', async () => {
-    expect((await validateProxy('http://127.0.0.1:1', 'a:443')).ok).toBe(false)
-    expect((await validateProxy('nonsense', 'a:443')).ok).toBe(false)
+  it('validate sends Proxy-Authorization from the URL user info without printing it', async () => {
+    const seen: Array<string | undefined> = []
+    const auth = http.createServer()
+    auth.on('connect', (req, socket) => {
+      seen.push(req.headers['proxy-authorization'])
+      socket.end(
+        req.headers['proxy-authorization'] === `Basic ${Buffer.from('user:pass').toString('base64')}`
+          ? 'HTTP/1.1 200 OK\r\n\r\n'
+          : 'HTTP/1.1 407 Proxy Authentication Required\r\n\r\n',
+      )
+    })
+    await new Promise<void>((r) => auth.listen(0, '127.0.0.1', r))
+    try {
+      const v = harness()
+      const code = await runCli(['proxy', 'validate', '--proxy-url', `http://user:pass@127.0.0.1:${port(auth)}`], { ...v.io, env: {} }) // trufflehog:ignore -- fake proxy credential for a local test proxy
+      expect(code).toBe(0)
+      expect(v.stdout()).not.toContain('pass')
+      const bad = harness()
+      expect(await runCli(['proxy', 'validate', '--proxy-url', `http://127.0.0.1:${port(auth)}`], { ...bad.io, env: {} })).toBe(1)
+      expect(bad.stdout()).toContain('failed:')
+      expect(seen[1]).toBeUndefined()
+    } finally {
+      auth.close()
+    }
+  })
+
+  it('validate reports an unreachable or invalid proxy', async () => {
+    for (const url of ['http://127.0.0.1:1', 'nonsense']) {
+      const v = harness()
+      expect(await runCli(['proxy', 'validate', '--proxy-url', url], { ...v.io, env: {} })).toBe(1)
+      expect(v.stdout()).toContain('failed:')
+    }
+  })
+})
+
+describe('applyProxyEnvironment', () => {
+  it('prefers the debug proxy, falls back when it is blank, and does nothing when unset', () => {
+    const before = getGlobalDispatcher()
+    try {
+      expect(applyProxyEnvironment({})).toBeUndefined()
+      expect(applyProxyEnvironment({ THEOCLAW_PROXY_URL: ' http://127.0.0.1:1 ' })).toBe('http://127.0.0.1:1')
+      expect(applyProxyEnvironment({ THEOCLAW_DEBUG_PROXY_URL: 'http://127.0.0.1:2', THEOCLAW_PROXY_URL: 'http://127.0.0.1:1' })).toBe('http://127.0.0.1:2')
+      expect(applyProxyEnvironment({ THEOCLAW_DEBUG_PROXY_URL: '  ', THEOCLAW_PROXY_URL: 'http://127.0.0.1:1' })).toBe('http://127.0.0.1:1')
+    } finally {
+      setGlobalDispatcher(before)
+    }
   })
 })

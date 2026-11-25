@@ -52,39 +52,11 @@ function runAgentToolOptions(tools: ToolSettings): AgentToolOptions {
  * Run one prompt on a fresh worker agent inside its own request boundary, which disposes it. A run
  * that ends `error` or `cancelled`, or with no answer, is a failure naming its status or code.
  */
-/**
- * The slice of the SDK handle `agentRunPort` uses, over a worker agent. The turn has no `stream`, so
- * the port only waits for it, as the run port here always did. `dispose` is a no-op: the container's
- * `withAgent` owns the agent's lifetime and disposes it when the run settles.
- */
-function handleOf(agent: TurnAgent): Parameters<Parameters<typeof agentRunPort>[0]>[0] extends (a: infer H) => unknown ? H : never {
-  return {
-    agentId: 'theoclaw-scheduled-run',
-    send: async (message, options) => {
-      if (typeof message !== 'string') throw new Error('a scheduled run sends its prompt as text')
-      const run = await agent.send(message, options)
-      return {
-        wait: async () => {
-          const outcome = await run.wait()
-          return {
-            status: outcome.status,
-            ...(outcome.result === undefined ? {} : { result: outcome.result }),
-            ...(outcome.error === undefined
-              ? {}
-              : { error: { message: outcome.error.code ?? 'unknown', ...outcome.error } }),
-          }
-        },
-      }
-    },
-    dispose: () => Promise.resolve(),
-  }
-}
-
 function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPort {
   const { withAgent } = createContainer<TurnAgent>({
     factory: () => buildRunAgent(runAgentToolOptions(tools)),
   })
-  return agentRunPort((work) => withAgent((agent) => work(handleOf(agent))))
+  return agentRunPort((work) => withAgent((agent) => work(agent)))
 }
 
 /**
@@ -108,33 +80,11 @@ function createDeliverPort(
   }
 }
 
-const INBOX_GUIDANCE =
-  `The platform "${INBOX_PLATFORM}" is local, not a chat: the answer is stored in the instance and read back with read_schedule_inbox, ` +
-  'so a user with no chat platform (web only) can use it. For it, channelId is just a free label you choose (for example "main"): do not ask the user for an id.'
-
-/** Tell the model what the inbox target is: the framework's own text only knows chat platforms. */
-function withInboxGuidance(tool: CustomTool): CustomTool {
-  if (tool.name !== 'schedule_job') return tool
-  const schema = tool.inputSchema as { properties?: Record<string, Record<string, unknown>> }
-  const channel = schema.properties?.channelId
-  return {
-    ...tool,
-    description: `${tool.description} ${INBOX_GUIDANCE}`,
-    inputSchema: {
-      ...schema,
-      properties: {
-        ...schema.properties,
-        ...(channel === undefined
-          ? {}
-          : {
-              channelId: {
-                ...channel,
-                description: `${String(channel.description)} For platform "${INBOX_PLATFORM}", any label such as "main".`,
-              },
-            }),
-      },
-    },
-  }
+const INBOX_TARGET = {
+  name: INBOX_PLATFORM,
+  description:
+    'local, not a chat: the answer is stored in the instance and read back with read_schedule_inbox, so a user with no chat platform (web only) can use it',
+  channelIdHint: 'a free label you choose, such as "main"; do not ask the user for an id',
 }
 
 /** A transient job the scheduler runs beside the stored ones (the heartbeat, T2.2). */
@@ -198,8 +148,8 @@ export function wireScheduler(options: WireSchedulerOptions): RunningScheduler {
     scheduleTools: [
       ...createScheduleTools({
         scheduler,
-        platforms: inbox === undefined ? options.platforms : [...options.platforms, INBOX_PLATFORM],
-      }).map((tool) => (inbox === undefined ? tool : withInboxGuidance(tool))),
+        platforms: inbox === undefined ? options.platforms : [...options.platforms, INBOX_TARGET],
+      }),
       ...(inbox === undefined ? [] : [createInboxTool(inbox)]),
     ],
     async start() {

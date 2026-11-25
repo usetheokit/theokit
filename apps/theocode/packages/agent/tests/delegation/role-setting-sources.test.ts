@@ -19,10 +19,20 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { buildRoleAgent } from '../../src/delegation/roles.js'
 
-vi.mock('@theokit/agents', async (orig) => ({
+vi.mock('@theokit/agents/config', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  discoverSubagents: vi.fn(async () => ({
-    explorer: { name: 'explorer', prompt: 'explore', description: 'x', sandbox: true },
+  discoverSubagentsAcrossRoots: vi.fn(async () => ({
+    definitions: {
+      explorer: {
+        name: 'explorer',
+        prompt: 'explore',
+        description: 'x',
+        sandbox: true,
+        origin: 'project',
+      },
+    },
+    shadowed: {},
+    withheld: [],
   })),
 }))
 
@@ -138,5 +148,24 @@ describe('#74 — what a delegated role is allowed to read', () => {
   it('test_the_cwd_is_still_there', async () => {
     // Anti-vacuity: a `local` that lost its other fields would satisfy the assertions above.
     expect((await localOf({ subagents: true, hooks: true })).cwd).toBe('/p')
+  })
+})
+
+describe('withheld builtins cross from the parent to the role', () => {
+  it('withholds shell and what the parent withholds besides', async () => {
+    let seen: Record<string, unknown> = {}
+    await buildRoleAgent('explorer', {
+      cwd: '/p',
+      posture: posture({ subagents: true }),
+      apiKey: 'k',
+      parent: { model: 'openai/gpt-5', reasoning_effort: 'medium' },
+      sandbox: { kind: 'none' } as never,
+      withheldBuiltinTools: ['memory_search'],
+      createAgent: async (opts) => {
+        seen = opts as unknown as Record<string, unknown>
+        return {} as never
+      },
+    })
+    expect([...(seen.withheldBuiltinTools as string[])].sort()).toEqual(['memory_search', 'shell'])
   })
 })

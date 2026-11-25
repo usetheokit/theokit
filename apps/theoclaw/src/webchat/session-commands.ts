@@ -11,7 +11,7 @@ export interface WebchatCommandOptions {
   /** The chat's model turn: a runner over its session agent. */
   readonly runnerFor: (chatId: string) => TurnRunner
   readonly withChatAgent: ChatBoundary
-  /** Sets the session's thinking level (`SessionAgents.think` of the chat path). */
+  /** Sets the session's thinking level (`ChatSessionPool` of the chat path). */
   readonly think: (event: ReturnType<typeof webchatEvent>, level: ThinkingLevel) => void
   readonly compact: CompactSettings
 }

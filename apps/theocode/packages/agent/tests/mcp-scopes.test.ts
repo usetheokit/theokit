@@ -50,6 +50,22 @@ function declare(dir: string, name: string, command: string): void {
 
 const noWarn = (): void => {}
 
+describe('#2895 — a malformed project .mcp.json', () => {
+  it.each([TRUSTED, UNTRUSTED])('keeps the personal servers without false collision warnings', (posture) => {
+    declare(join(home, '.theokit'), 'mine', 'my-server')
+    writeFileSync(join(project, '.mcp.json'), '{')
+    const warnings: string[] = []
+
+    const r = mcpServersFor({ posture, cwd: project, home, env: {}, onWarn: (w) => warnings.push(w) })
+
+    expect(Object.keys(r.servers)).toEqual(['mine'])
+    expect(r.personal).toEqual(['mine'])
+    expect(r.projectWithheld).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(warnings.join('\n')).not.toContain('also declares')
+  })
+})
+
 describe('#72 — the personal MCP scope', () => {
   it('test_a_personal_server_is_started_in_a_project_that_declares_none', () => {
     declare(join(home, '.theokit'), 'mine', 'my-server')

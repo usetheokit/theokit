@@ -1,4 +1,5 @@
 import { request } from "node:http";
+import { sdkMessage } from './fakes.js'
 import { createServer, connect as tcpConnect, type Server } from "node:net";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -54,7 +55,7 @@ function stubAgent(script: StubScript): TurnAgent {
         async *stream() {
           for (const [index, message] of script.messages.entries()) {
             if (index === 0) script.onFirstYield?.();
-            yield message;
+            yield sdkMessage(message);
             if (index === 0 && script.gate !== undefined) await script.gate.promise;
           }
         },

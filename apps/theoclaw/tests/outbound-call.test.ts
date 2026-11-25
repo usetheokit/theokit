@@ -24,7 +24,7 @@ describe('placeCall', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe(
       `Basic ${Buffer.from('ACabc:tok-secret').toString('base64')}`,
     )
-    const form = init.body as URLSearchParams
+    const form = new URLSearchParams(init.body as string)
     expect(form.get('To')).toBe('+15550100')
     expect(form.get('From')).toBe('+15550199')
     expect(form.get('Twiml')).toBe('<Response><Say>a &lt; b &amp; c</Say></Response>')
@@ -50,6 +50,7 @@ describe('placeCall', () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ message: 'bad tok-secret' }), { status: 401 }))
     const error = await placeCall({ env, to: '+15550100', message: 'x', fetch }).catch((e: Error) => e)
     expect((error as Error).message).toContain('401')
+    expect((error as Error).message).toContain('Twilio')
     expect((error as Error).message).toContain('bad')
     expect((error as Error).message).not.toContain('tok-secret')
   })

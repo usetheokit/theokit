@@ -36,8 +36,6 @@ export interface ControlClient {
   close(): Promise<void>
 }
 
-const ANSWERS = new Set(['interrupt_ok', 'steer_ok', 'no_turn'])
-
 /** The framework's refusal as the app's error, which no message of ever carries the token. */
 async function guarded<T>(work: () => Promise<T>): Promise<T> {
   try {
@@ -56,7 +54,7 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
  * connection is gone.
  */
 export async function connectControlClient(options: { readonly url: string; readonly token: string }): Promise<ControlClient> {
-  const client = await guarded(() => openClient({ url: options.url, authorization: `Bearer ${options.token}`, stamp: nextArrival }))
+  const client = await guarded(() => openClient({ url: options.url, authorization: `Bearer ${options.token}`, stamp: nextArrival, dropAcknowledgements: true }))
   return {
     async *chat(message, session) {
       const frames = client.chat(message, session)[Symbol.asyncIterator]()
@@ -64,7 +62,6 @@ export async function connectControlClient(options: { readonly url: string; read
         for (;;) {
           const next = await guarded(() => frames.next())
           if (next.done === true) return
-          if (ANSWERS.has(next.value.type)) continue
           yield next.value as ControlFrame
         }
       } finally {

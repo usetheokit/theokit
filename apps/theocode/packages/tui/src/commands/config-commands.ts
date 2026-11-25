@@ -107,9 +107,9 @@ export function handleApprovalMode(arg: string, deps: ApprovalDeps): void {
 }
 
 export interface CustomCommandDeps {
-  send: (message: string) => void
+  /** `model` is this turn's override from the command; it travels with the message. */
+  send: (message: string, model?: string) => void
   setLastSent: (message: string) => void
-  setPendingModel: (model: string | undefined) => void
   setToast: SetToast
 }
 
@@ -120,10 +120,7 @@ export interface CustomCommandDeps {
  * `shellTimeoutMs` is a parameter rather than a read inside, so the caller decides when config is
  * resolved and the test can drive both sides of the bound without writing a `config.toml`.
  */
-export function expansionDeps(
-  warn: (m: string) => void,
-  shellTimeoutMs: number,
-): TemplateDeps {
+export function expansionDeps(warn: (m: string) => void, shellTimeoutMs: number): TemplateDeps {
   return {
     shell: (cmd) =>
       new Promise((resolveShell) => {
@@ -196,7 +193,7 @@ export function handleCustomCommand(
   command: CustomCommand | undefined,
   deps: CustomCommandDeps,
 ): void {
-  const { send, setLastSent, setPendingModel, setToast } = deps
+  const { send, setLastSent, setToast } = deps
   if (command === undefined) {
     setLastSent(rawText.trim())
     send(rawText.trim())
@@ -218,12 +215,11 @@ export function handleCustomCommand(
         ),
       )
       const message = withDelegationInstruction(name, command, expanded, setToast)
-      if (command.model !== undefined) setPendingModel(command.model)
       process.stderr.write(`[custom-command] executed ${name}\n`)
       setLastSent(message)
-      send(message)
+      if (command.model === undefined) send(message)
+      else send(message, command.model)
     } catch (err) {
-      setPendingModel(undefined)
       setToast({
         message: `/${name} failed: ${err instanceof Error ? err.message : String(err)}`,
         variant: 'error',
