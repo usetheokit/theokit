@@ -1,1 +1,0 @@
-^apps/theoclaw/tests/proxy\.test\.ts$

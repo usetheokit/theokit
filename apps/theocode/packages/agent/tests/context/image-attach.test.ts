@@ -8,7 +8,7 @@
  *
  * A contract that holds on most paths is a contract callers will trust on all of them.
  */
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -48,7 +48,25 @@ describe('B-051 — the typed-error contract holds on every path', () => {
     expect(
       () => readImageAttachment(path),
       'the read failure escaped the declared ImageAttachError contract',
-    ).toThrow(ImageAttachError)
+    ).toThrow(expect.objectContaining({ code: 'unreadable' }))
+  })
+
+  it('test_a_missing_file_is_not_found', () => {
+    expect(() => readImageAttachment(join(dir, 'nope.png'))).toThrow(
+      expect.objectContaining({ code: 'not_found' }),
+    )
+  })
+
+  it('test_the_cap_is_inclusive_and_one_byte_over_is_refused', () => {
+    const cap = 5 * 1024 * 1024
+    const ok = join(dir, 'ok.png')
+    writeFileSync(ok, '')
+    truncateSync(ok, cap)
+    expect(readImageAttachment(ok).mimeType).toBe('image/png')
+    const big = join(dir, 'big.png')
+    writeFileSync(big, '')
+    truncateSync(big, cap + 1)
+    expect(() => readImageAttachment(big)).toThrow(expect.objectContaining({ code: 'too_large' }))
   })
 
   it('test_an_unreadable_file_is_the_typed_error', () => {
