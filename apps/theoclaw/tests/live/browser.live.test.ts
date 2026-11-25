@@ -126,7 +126,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
       // The page shows one value. The question names what a person sees, not the element's id: the
       // browser's snapshot is the accessibility tree, which carries no ids, so a model asked for
       // "the element with id v" waited for the text "v" and never matched it (run 42781665117).
-      const run = await agent.send(`Open ${page.url} in the browser and tell me the exact text the page shows.`)
+      const run = await agent.send(`Open ${page.url} in the browser, look at the page once its script has run (take a snapshot after navigating), and tell me the exact text the page shows.`)
       for await (const event of run.stream()) {
         if (event.type === 'tool_call') toolEvents.push(JSON.stringify(event).slice(0, 2000))
         if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
