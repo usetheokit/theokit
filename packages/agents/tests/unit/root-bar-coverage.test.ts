@@ -133,6 +133,10 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // does not export it until 5.8.0. Nothing here is 5.9.0, which is what guessing would have
   // produced from the bump that prompted the work.
   // ── Arrived by 8.0.1 (the SDK the workspace now installs); each decided `out`, none has a consumer here.
+  // Added by `@theokit/sdk` 15.1.0 (absent from 15.0.0's `.d.ts`, present in 15.1.0's). No `src` here uses them.
+  isSecretEnvName: { since: '15.1.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  mergeAgentOptions: { since: '15.1.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  secretEnvValues: { since: '15.1.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   // Added by `@theokit/sdk` 13 (measured from the 13.0.0 tarball: its only new root export). No `src` here uses it yet; #2742 adopts it.
   offCapabilities: { since: '13.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   // Added by `@theokit/sdk` 12. The untrusted-tool-output notice; no `src` here uses it.

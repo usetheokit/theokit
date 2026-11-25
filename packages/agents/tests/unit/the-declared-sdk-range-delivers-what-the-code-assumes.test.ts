@@ -222,7 +222,7 @@ function asNumber(version: string): number {
 
 /**
  * Whether the floor leg leaves `range` out. That leg runs only the packages that claim the installed
- * version as a floor, so a bounded range whose every floor is above it (the host's `>=12.0.0 <14`
+ * version as a floor, so a bounded range whose every floor is above it (the host's `>=12.0.0 <16`
  * against 5.32.0) is not part of it. A range that excludes the version for another reason, such as
  * a ceiling at or below it, is still checked.
  */
@@ -255,12 +255,12 @@ describe('the declared SDK range delivers the parity the package advertises', ()
   })
 
   it('reads a bounded range with its floor and its ceiling, both ways', () => {
-    expect(admits('>=5.3.0 <14', '5.32.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '9.1.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '12.0.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '13.0.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '5.2.9')).toBe(false)
-    expect(admits('>=5.3.0 <14', '14.0.0')).toBe(false)
+    expect(admits('>=5.3.0 <16', '5.32.0')).toBe(true)
+    expect(admits('>=5.3.0 <16', '9.1.0')).toBe(true)
+    expect(admits('>=5.3.0 <16', '12.0.0')).toBe(true)
+    expect(admits('>=5.3.0 <16', '15.2.0')).toBe(true)
+    expect(admits('>=5.3.0 <16', '5.2.9')).toBe(false)
+    expect(admits('>=5.3.0 <16', '16.0.0')).toBe(false)
   })
 
   it('declares, in every manifest, a range that admits the version the root override installs', () => {
@@ -292,12 +292,12 @@ describe('the declared SDK range delivers the parity the package advertises', ()
   })
 
   it('leaves out of the floor leg only a range whose floor is above the installed version', () => {
-    expect(belongsToAHigherFloor('>=12.0.0 <14', '5.32.0')).toBe(true)
-    expect(belongsToAHigherFloor('>=5.32.0 <14', '5.32.0')).toBe(false)
-    expect(belongsToAHigherFloor('>=5.3.0 <14', '5.32.0')).toBe(false)
+    expect(belongsToAHigherFloor('>=12.0.0 <16', '5.32.0')).toBe(true)
+    expect(belongsToAHigherFloor('>=5.32.0 <16', '5.32.0')).toBe(false)
+    expect(belongsToAHigherFloor('>=5.3.0 <16', '5.32.0')).toBe(false)
     // A ceiling below the installed version is a refusal, not a higher floor.
     expect(belongsToAHigherFloor('>=1.0.0 <5', '5.32.0')).toBe(false)
-    expect(admits('>=12.0.0 <14', '5.32.0')).toBe(false)
+    expect(admits('>=12.0.0 <16', '5.32.0')).toBe(false)
   })
 
   it('admits no major below the one that introduced the compat root, in ANY declaration', () => {
@@ -356,7 +356,8 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(true)
     expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '12.0.0')).toBe(true)
     expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '13.0.0')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '14.0.0')).toBe(false)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '15.2.0')).toBe(true)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '16.0.0')).toBe(false)
     expect(
       floors[0]?.minor,
       `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +
