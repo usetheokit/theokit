@@ -83,7 +83,15 @@ describe('the state-directory veto', () => {
     const results = await toolResultsOf(settings, { toolCalls: [...reads, ...writes] })
     const answers = (JSON.parse(results) as { role: string; content: string }[]).filter((m) => m.role === 'tool')
     expect(answers).toHaveLength(16)
-    for (const answer of answers) expect(answer.content).toMatch(/Plugin blocked this tool call|"ok":false/)
+    // The floor refusal is the SDK's answer to a write into `.theokit`; no read may be refused by it.
+    answers.forEach((answer, i) => {
+      const isWrite = i >= paths.length
+      expect(answer.content).toMatch(
+        isWrite
+          ? /Plugin blocked this tool call|refused by the protected-path floor|"ok":false/
+          : /Plugin blocked this tool call|"ok":false/,
+      )
+    })
     const veto = await vetoOf(settings)
     for (const path of paths.slice(3)) {
       expect(await veto('read_file', { path }), path).toMatchObject({ block: true })
