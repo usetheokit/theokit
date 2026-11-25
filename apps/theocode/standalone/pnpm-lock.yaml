@@ -16,10 +16,10 @@ importers:
         version: 17.0.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)
       '@theokit/agents-pty':
         specifier: 0.2.1
-        version: 0.2.1(@theokit/sdk@13.0.0(ws@8.23.0))
+        version: 0.2.1(@theokit/sdk@15.2.0(ws@8.23.0))
       '@theokit/sdk':
-        specifier: 13.0.0
-        version: 13.0.0(ws@8.23.0)
+        specifier: 15.2.0
+        version: 15.2.0(ws@8.23.0)
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.5
@@ -937,6 +937,57 @@ packages:
 
   '@theokit/sdk@13.0.0':
     resolution: {integrity: sha512-/t1ZQfirQ3uAdVI8gbg9B+8F7UA1IX5ZntCGZxTJMuznCRYtX4XDjsq/McTlFuwA0jL6N1zh29vAFX4daeqDHw==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@lancedb/lancedb': ^0.30.0
+      '@opentelemetry/api': ^1.9.0
+      '@opentelemetry/exporter-metrics-otlp-http': ^0.223.0
+      '@opentelemetry/exporter-prometheus': ^0.223.0
+      '@opentelemetry/exporter-trace-otlp-http': ^0.223.0
+      '@opentelemetry/resources': ^2.0.0
+      '@opentelemetry/sdk-logs': ^0.223.0
+      '@opentelemetry/sdk-metrics': ^2.0.0
+      '@opentelemetry/sdk-trace-base': ^2.0.0
+      '@types/ws': '>=8.0.0'
+      better-sqlite3: ^12.0.0
+      onnxruntime-node: '>=1.17.0'
+      proper-lockfile: ^4.1.2
+      sqlite-vec: ^0.1.0
+      ws: '>=8.0.0'
+    peerDependenciesMeta:
+      '@lancedb/lancedb':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@opentelemetry/exporter-metrics-otlp-http':
+        optional: true
+      '@opentelemetry/exporter-prometheus':
+        optional: true
+      '@opentelemetry/exporter-trace-otlp-http':
+        optional: true
+      '@opentelemetry/resources':
+        optional: true
+      '@opentelemetry/sdk-logs':
+        optional: true
+      '@opentelemetry/sdk-metrics':
+        optional: true
+      '@opentelemetry/sdk-trace-base':
+        optional: true
+      '@types/ws':
+        optional: true
+      better-sqlite3:
+        optional: true
+      onnxruntime-node:
+        optional: true
+      proper-lockfile:
+        optional: true
+      sqlite-vec:
+        optional: true
+      ws:
+        optional: true
+
+  '@theokit/sdk@15.2.0':
+    resolution: {integrity: sha512-rIxp0PDrGuQemwpssoKDlPCThibd/ttnnx8vQ5WVfeSwP7f37m3bpfSIlK7N7mcAM4XwDpAYqwePVNo3CB+6PA==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@lancedb/lancedb': ^0.30.0
@@ -2786,6 +2837,12 @@ snapshots:
     transitivePeerDependencies:
       - '@theokit/sdk'
 
+  '@theokit/agents-pty@0.2.1(@theokit/sdk@15.2.0(ws@8.23.0))':
+    dependencies:
+      '@theokit/sdk-pty': 0.3.6(@theokit/sdk@15.2.0(ws@8.23.0))
+    transitivePeerDependencies:
+      - '@theokit/sdk'
+
   '@theokit/agents@17.0.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)':
     dependencies:
       '@theokit/http': 2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7)
@@ -2838,6 +2895,12 @@ snapshots:
     optionalDependencies:
       node-pty: 1.1.0
 
+  '@theokit/sdk-pty@0.3.6(@theokit/sdk@15.2.0(ws@8.23.0))':
+    dependencies:
+      '@theokit/sdk': 15.2.0(ws@8.23.0)
+    optionalDependencies:
+      node-pty: 1.1.0
+
   '@theokit/sdk-tools@0.29.0(@theokit/sdk@5.32.0(ws@8.23.0))(vitest@4.1.12)(zod@4.6.7)':
     dependencies:
       '@theokit/sdk': 5.32.0(ws@8.23.0)
@@ -2846,6 +2909,14 @@ snapshots:
       vitest: 4.1.12(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@theokit/sdk@13.0.0(ws@8.23.0)':
+    dependencies:
+      croner: 9.1.0
+      jsonrepair: 3.15.0
+      zod: 4.6.7
+    optionalDependencies:
+      ws: 8.23.0
+
+  '@theokit/sdk@15.2.0(ws@8.23.0)':
     dependencies:
       croner: 9.1.0
       jsonrepair: 3.15.0

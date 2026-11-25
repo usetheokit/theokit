@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 17.6.0, create-theokit 3.3.3, @theokit/host 0.4.0] - 2026-11-25
+
 ### Added
 
 - `@theokit/agents/config`: `loadInstructionTree` returns `found` and `chars`, and `budget.omissionNotice` appends a notice block when `maxChars` cuts; `render`, `separator` and `also` measure the ceiling on the rendered text across several bases (#2904).

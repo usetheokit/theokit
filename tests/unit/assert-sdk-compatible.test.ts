@@ -27,7 +27,7 @@ describe('assertSdkCompatible (M48 T3.2)', () => {
     expect((thrown as SdkIncompatibleError).code).toBe('SDK_INCOMPATIBLE')
     expect((thrown as SdkIncompatibleError).found).toBe('3.5.0')
     expect((thrown as Error).message).toContain('3.5.0')
-    expect((thrown as Error).message).toContain('>=5.32.0 <14')
+    expect((thrown as Error).message).toContain('>=5.32.0 <16')
   })
 
   it('test_throws_typed_error_on_5_0_0_below_the_peer_floor', () => {
@@ -39,7 +39,7 @@ describe('assertSdkCompatible (M48 T3.2)', () => {
     }
     expect(thrown).toBeInstanceOf(SdkIncompatibleError)
     expect((thrown as SdkIncompatibleError).found).toBe('5.0.0')
-    expect((thrown as SdkIncompatibleError).required).toBe('>=5.32.0 <14')
+    expect((thrown as SdkIncompatibleError).required).toBe('>=5.32.0 <16')
   })
 
   it('test_no_throw_on_sdk_10_and_11', () => {
@@ -47,20 +47,20 @@ describe('assertSdkCompatible (M48 T3.2)', () => {
       expect(() => assertSdkCompatible({ resolveVersion: () => v }), v).not.toThrow()
   })
 
-  it('test_no_throw_on_sdk_12_and_13', () => {
-    for (const v of ['12.0.0', '12.9.9', '13.0.0', '13.9.9'])
+  it('test_no_throw_on_sdk_12_to_15', () => {
+    for (const v of ['12.0.0', '12.9.9', '13.0.0', '13.9.9', '14.0.0', '15.2.0', '15.9.9'])
       expect(() => assertSdkCompatible({ resolveVersion: () => v }), v).not.toThrow()
   })
 
-  it('test_throws_typed_error_at_the_sdk_14_ceiling', () => {
+  it('test_throws_typed_error_at_the_sdk_16_ceiling', () => {
     let thrown: unknown
     try {
-      assertSdkCompatible({ resolveVersion: () => '14.0.0' })
+      assertSdkCompatible({ resolveVersion: () => '16.0.0' })
     } catch (e) {
       thrown = e
     }
     expect(thrown).toBeInstanceOf(SdkIncompatibleError)
-    expect((thrown as SdkIncompatibleError).found).toBe('14.0.0')
+    expect((thrown as SdkIncompatibleError).found).toBe('16.0.0')
   })
 
   it('test_no_throw_when_absent_and_not_required (api-only app, optional peer)', () => {
