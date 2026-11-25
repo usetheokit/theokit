@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../../src/agent/create-agent.js'
 import { agentToolOptions } from '../../src/tools/tool-registry.js'
+import { toolEventDigest } from './support/tool-event-digest.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
 
 /**
@@ -121,14 +122,14 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     const toolCalls: string[] = []
     // Every tool_call event as the stream gave it (arguments, status, output), so a failed run shows
     // what the browser returned to the model rather than only the model's answer.
-    const toolEvents: string[] = []
+    const toolEvents: unknown[] = []
     try {
       // The page shows one value. The question names what a person sees, not the element's id: the
       // browser's snapshot is the accessibility tree, which carries no ids, so a model asked for
       // "the element with id v" waited for the text "v" and never matched it (run 42781665117).
       const run = await agent.send(`Open ${page.url} in the browser and tell me the exact text the page shows.`)
       for await (const event of run.stream()) {
-        if (event.type === 'tool_call') toolEvents.push(JSON.stringify(event).slice(0, 2000))
+        if (event.type === 'tool_call') toolEvents.push(event)
         if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
       }
       const outcome = await run.wait()
@@ -139,7 +140,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     }
     console.log(`OC-60 live: model=${model} toolCalls=${JSON.stringify(toolCalls)} answer=${JSON.stringify(answer)}`)
     expect(toolCalls.some((name) => name.includes('browser_navigate')), JSON.stringify(toolCalls)).toBe(true)
-    expect(answer, `tool events: ${toolEvents.join('\n')}`).toContain(value)
+    expect(answer, `tool events:\n${toolEventDigest(toolEvents)}`).toContain(value)
   })
 
   it('leaves no browser server or its directory behind after the agent is disposed', { timeout: 180_000 }, async () => {
